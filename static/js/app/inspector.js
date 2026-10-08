@@ -221,7 +221,7 @@
 
     // ── Plan panel ─────────────────────────────────────────────────────────
 
-    const ROLE_ICON = { source: 'briefcase', account: 'piggy-bank', expense: 'shopping-bag', debt: 'cardholder', modifier: 'sliders-horizontal' };
+    const ROLE_ICON = { source: 'briefcase', account: 'piggy-bank', asset: 'house-line', expense: 'shopping-bag', debt: 'cardholder', modifier: 'sliders-horizontal' };
 
     function planPanel() {
         const nameB = bind('plan.name', {
@@ -292,6 +292,8 @@
         start: (p) => (p.role === 'debt' ? 'Already owed' : 'Plan start'),
         end: () => 'No end',
         lockUntil: () => 'Not locked',
+        bought: () => 'Already owned',
+        sold: () => 'Not sold',
     };
 
     function paramSpec(node, key) {
@@ -324,6 +326,7 @@
         return C.fieldsFor(p).filter((k) => {
             if (k === 'payMonth') return per === 'year';
             if (k === 'end') return per !== 'once';
+            if (k === 'sellCost') return !!node.params.sold;
             return true;
         });
     }
@@ -378,7 +381,8 @@
 
         const outs = plan().links.filter((l) => l.from === id);
         const ins = plan().links.filter((l) => l.to === id);
-        const sends = C.ROLES[role].hasOut ? section('Sends to',
+        // An asset that is not sold and collects no rent has nothing to send.
+        const sends = C.ROLES[role].hasOut && P.basesFor(node).length ? section('Sends to',
             outs.length
                 ? `<ul class="insp-links">${outs.map((l) => linkRow(l, Store.node(l.to))).join('')}</ul>`
                 : '<p class="insp-none">No links yet</p>') : '';
@@ -431,14 +435,24 @@
         let stats = '';
         if (role === 'account') {
             const end = nr.balance[m];
-            const docks = P.docksOf(plan(), node.id);
-            const owed = docks.reduce((a, d) => a + (r.nodes[d.id] ? r.nodes[d.id].balance[m] : 0), 0);
-            stats = (docks.length ? stat('Equity at end', money(end - owed), end - owed >= 0 ? 'up' : 'down') + stat('Owed on loans', money(owed)) : '')
-                + stat(docks.length ? 'Value at end' : 'Balance at end', money(end))
+            stats = stat('Balance at end', money(end))
                 + stat('Change', money(end - nr.balance[0], { sign: true }), end >= nr.balance[0] ? 'up' : 'down')
                 + stat('Deposits', money(nr.totals.in))
                 + stat('Growth', money(nr.totals.earnings))
                 + (nr.totals.out > 0.5 ? stat('Sent on', money(nr.totals.out)) : '');
+        } else if (role === 'asset') {
+            const end = nr.balance[m];
+            const docks = P.docksOf(plan(), node.id);
+            const owed = docks.reduce((a, d) => a + (r.nodes[d.id] ? r.nodes[d.id].balance[m] : 0), 0);
+            const sold = r.milestones.find((x) => x.code === 'sold' && x.nodeId === node.id);
+            const change = nr.totals.earnings;
+            stats = (sold ? stat('Sold', D.monthLabel(plan(), sold.month)) + stat('Sale after costs', money(nr.totals.out)) : '')
+                + (owed > 0.5 ? stat('Equity at end', money(end - owed), end - owed >= 0 ? 'up' : 'down') + stat('Owed on loans', money(owed)) : '')
+                + (sold ? '' : stat('Value at end', money(end)))
+                + (nr.totals.in > 0.5 ? stat('Paid in', money(nr.totals.in)) : '')
+                + stat(change >= 0 ? 'Appreciation' : 'Depreciation', money(Math.abs(change)), change >= 0 ? 'up' : 'down')
+                + (nr.totals.produced > 0.5 ? stat('Rent collected', money(nr.totals.produced)) : '')
+                + (nr.totals.consumed > 0.5 ? stat('Selling costs', money(nr.totals.consumed)) : '');
         } else if (role === 'debt') {
             const paidOff = r.milestones.find((x) => x.code === 'paid-off' && x.nodeId === node.id);
             stats = stat('Owed at end', money(nr.balance[m]), nr.balance[m] > 0.5 ? 'down' : '')

@@ -25,6 +25,8 @@
         if (basis === 'proceeds') return 'loan proceeds';
         if (basis === 'charges') return 'purchases';
         if (basis === 'cashback') return 'cash back';
+        if (basis === 'sale') return 'sale proceeds';
+        if (basis === 'rent') return 'rent';
         switch (p.role) {
             case 'source':  return 'income';
             case 'account': return 'deposits';
@@ -35,7 +37,8 @@
     }
 
     const INFLOW_PORT = { source: 'Pay', account: 'Deposits', expense: 'Spending', modifier: 'Passes on', debt: 'Overflow' };
-    const BASIS_PORT = { earnings: 'Earnings', balance: 'Balance', proceeds: 'Loan proceeds', charges: 'Purchases', cashback: 'Cash back' };
+    const BASIS_PORT = { earnings: 'Earnings', balance: 'Balance', proceeds: 'Loan proceeds', charges: 'Purchases', cashback: 'Cash back',
+        sale: 'Sale', rent: 'Rent' };
     const INFLOW_FLOW = { source: 'pay', account: 'deposits', expense: 'spending', modifier: 'passes', debt: 'overflow' };
 
     /** What an output port sends, as its label: 'Deposits', 'Cash back'. */
@@ -67,8 +70,12 @@
     }
 
     /** The label on a link's pill: '20%', '$1,800/mo', 'Rest', 'Above $20K'. */
+    /** Bases whose money is split the moment it arrives, so their links have
+     *  no timing of their own. */
+    const ON_ARRIVAL = new Set(['inflow', 'proceeds', 'cashback', 'sale', 'rent']);
+
     function linkShort(link, from) {
-        const onArrival = link.basis === 'inflow' || link.basis === 'proceeds' || link.basis === 'cashback';
+        const onArrival = ON_ARRIVAL.has(link.basis);
         const tag = onArrival ? '' : ` ${link.basis === 'earnings' ? 'of earnings' : 'of balance'}`;
         switch (link.mode) {
             case 'percent':
@@ -82,6 +89,7 @@
                 if (link.basis === 'earnings') return 'Rest of earnings';
                 if (link.basis === 'proceeds') return 'Proceeds';
                 if (link.basis === 'cashback') return 'Cash back';
+                if (link.basis === 'sale') return 'Sale';
                 return roleOf(from) === 'debt' ? 'Overflow' : 'Rest';
         }
     }
@@ -109,8 +117,7 @@
         const parts = [link.basis === 'charges'
             ? `Charge ${what} of ${target} to ${b(from.name)}`
             : `Send ${what} to ${target}`];
-        const onArrival = (link.basis === 'inflow' && link.mode !== 'fixed')
-            || link.basis === 'proceeds' || link.basis === 'cashback';
+        const onArrival = ON_ARRIVAL.has(link.basis) && !(link.basis === 'inflow' && link.mode === 'fixed');
         if (!onArrival) parts.push(timingWords(link));
         if (link.mode === 'fixed' && link.growth) parts.push(`growing ${b(`${Fmt.number(link.growth, 2)}%`)} a year`);
         if (link.start && link.end) parts.push(`from ${P.ymLabel(link.start)} to ${P.ymLabel(link.end)}`);
@@ -130,8 +137,13 @@
                 if (!r) return '';
                 const label = C.fieldLabel(p, 'rate');
                 const word = label === 'APY' ? 'APY' : label === 'Interest' ? 'interest'
-                    : label === 'Yield' ? 'yield' : label.startsWith('Value') ? '/yr' : 'return';
-                return word === '/yr' ? `${Fmt.pct(r, { sign: r > 0 })}${word}` : `${Fmt.pct(r)} ${word}`;
+                    : label === 'Yield' ? 'yield' : 'return';
+                return `${Fmt.pct(r)} ${word}`;
+            }
+            case 'asset': {
+                const rate = r ? `${Fmt.pct(r, { sign: r > 0 })}/yr` : '';
+                const rent = node.params.rent && C.fieldsFor(p).includes('rent') ? `${compact(node.params.rent)} rent` : '';
+                return [rate, rent].filter(Boolean).join(' · ');
             }
             case 'debt': {
                 const apr = r ? `${Fmt.pct(r)} APR` : '';
@@ -200,6 +212,18 @@
                 return {
                     level: 'warn', select: { kind: 'node', id: w.nodeId },
                     text: `${nameOf(plan, w.nodeId)} is paid less than its minimum from ${m(w.month)}.`,
+                };
+            case 'price': {
+                const short = w.amount > 0;
+                return {
+                    level: 'warn', select: { kind: 'node', id: w.nodeId },
+                    text: `${nameOf(plan, w.nodeId)} is paid ${Fmt.money(Math.abs(w.amount), { compact: true })} ${short ? 'less' : 'more'} than its value in ${m(w.month)}.`,
+                };
+            }
+            case 'underwater':
+                return {
+                    level: 'warn', select: { kind: 'node', id: w.nodeId },
+                    text: `Selling ${nameOf(plan, w.nodeId)} in ${m(w.month)} leaves ${Fmt.money(w.amount, { compact: true })} still owed on its loans.`,
                 };
             case 'debt-growing':
                 return {

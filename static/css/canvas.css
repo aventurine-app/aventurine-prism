@@ -74,6 +74,8 @@
 [data-flow="balance"]   { --flow: var(--flow-balance); }
 [data-flow="charges"]   { --flow: var(--flow-charges); }
 [data-flow="cashback"]  { --flow: var(--flow-cashback); }
+[data-flow="sale"]      { --flow: var(--flow-sale); }
+[data-flow="rent"]      { --flow: var(--flow-rent); }
 
 .link-path {
     fill: none;
@@ -285,6 +287,7 @@
 .node-bar > span { min-width: 2px; height: 100%; border-radius: 2px; background: var(--seg, var(--role-none)); }
 .node-bar > span[data-role="source"]   { --seg: var(--role-source); }
 .node-bar > span[data-role="account"]  { --seg: var(--role-account); }
+.node-bar > span[data-role="asset"]    { --seg: var(--role-asset); }
 .node-bar > span[data-role="expense"]  { --seg: var(--role-expense); }
 .node-bar > span[data-role="debt"]     { --seg: var(--role-debt); }
 .node-bar > span[data-role="modifier"] { --seg: var(--role-modifier); }

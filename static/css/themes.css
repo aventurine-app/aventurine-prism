@@ -59,6 +59,7 @@ html[data-theme="dark"],
        roles validated all pairs, CVD 10.5). */
     --role-source:   #39832f;
     --role-account:  #5d99d5;
+    --role-asset:    var(--role-account);
     --role-expense:  #d3a63e;
     --role-debt:     #d8777f;
     --role-modifier: #8053a4;
@@ -103,6 +104,7 @@ html[data-theme="colorful"] .library {
        CVD 8.2, every one >= 3:1 on the gradient's middle). */
     --role-source:   #58af76;
     --role-account:  #49a4ef;
+    --role-asset:    var(--role-account);
     --role-expense:  #d39722;
     --role-debt:     #cb4d53;
     --role-modifier: #d479bb;

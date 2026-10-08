@@ -194,6 +194,7 @@
 .spark-zero { stroke: var(--chart-grid); stroke-dasharray: 3 4; }
 .spark[data-role="source"]   { --spark: var(--role-source); }
 .spark[data-role="account"]  { --spark: var(--role-account); }
+.spark[data-role="asset"]    { --spark: var(--role-asset); }
 .spark[data-role="expense"]  { --spark: var(--role-expense); }
 .spark[data-role="debt"]     { --spark: var(--role-debt); }
 .spark[data-role="modifier"] { --spark: var(--role-modifier); }

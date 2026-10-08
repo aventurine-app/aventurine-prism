@@ -73,9 +73,129 @@ test('an account rate is an APY: 4% grows exactly 4% in twelve months', () => {
 
 test('a negative rate depreciates: a vehicle loses 15% a year', () => {
     const plan = mkPlan('2026-01', 2);
-    const car = node(plan, 'vehicle', { balance: 20000, rate: -15 });
+    const car = node(plan, 'vehicle', { value: 20000, rate: -15 });
     const r = run(plan);
     close(last(r.nodes[car.id].balance), 20000 * 0.85 * 0.85);
+});
+
+// ── Assets ───────────────────────────────────────────────────────────────────
+
+/** A docked loan, as Plan.addLoan makes one. */
+function loanUnder(plan, asset, type, params) {
+    const l = node(plan, type, params);
+    l.dock = asset.id;
+    return l;
+}
+
+test('appreciation stays in the asset: it counts toward net worth and pays nothing out', () => {
+    const plan = mkPlan('2026-01', 1);
+    const home = node(plan, 'home', { value: 400000, rate: 3 });
+    const r = run(plan);
+    close(last(r.nodes[home.id].balance), 412000);
+    close(r.totals.growth, 12000);
+    close(r.totals.unassigned, 0);
+    close(r.totals.endNetWorth, 412000);
+});
+
+test('buying a home inside the plan: the down payment and the mortgage become its value', () => {
+    const plan = mkPlan('2026-01', 1);
+    const savings = node(plan, 'savings', { balance: 100000 });
+    const home = node(plan, 'home', { value: 400000, rate: 0, bought: '2026-04' });
+    loanUnder(plan, home, 'mortgage', { balance: 320000, rate: 0, start: '2026-04' });
+    link(plan, savings, home, { basis: 'balance', mode: 'fixed', value: 80000, when: 'once', date: '2026-04' });
+    const r = run(plan);
+    const h = r.nodes[home.id];
+    close(h.balance[3], 0);                 // not owned before April
+    close(h.balance[4], 400000);
+    close(r.netWorth[4], r.netWorth[0]);    // cash became property: no change
+    assert.ok(!codes(r).includes('price'));
+    assert.ok(!codes(r).includes('unassigned'));
+    assert.ok(r.milestones.some((m) => m.code === 'bought' && m.month === 3));
+});
+
+test('a purchase paid short of the price says so', () => {
+    const plan = mkPlan('2026-01', 1);
+    const home = node(plan, 'home', { value: 400000, bought: '2026-04' });
+    loanUnder(plan, home, 'mortgage', { balance: 320000, start: '2026-04' });
+    const r = run(plan);
+    const w = r.warnings.find((x) => x.code === 'price');
+    assert.ok(w);
+    close(w.amount, 80000);
+    close(last(r.nodes[home.id].balance), 320000);
+});
+
+test('a home equity loan taken later is cash out, not value', () => {
+    const plan = mkPlan('2026-01', 1);
+    const home = node(plan, 'home', { value: 400000 });
+    loanUnder(plan, home, 'home-equity', { balance: 50000, start: '2026-06' });
+    const r = run(plan);
+    close(last(r.nodes[home.id].balance), 400000);
+    close(r.totals.unassigned, 50000);
+});
+
+test('selling pays off the docked loans first and sends the rest on', () => {
+    const plan = mkPlan('2026-01', 1);
+    const home = node(plan, 'home', { value: 400000, rate: 0, sold: '2026-06', sellCost: 6 });
+    const mortgage = loanUnder(plan, home, 'mortgage', { balance: 300000, rate: 0 });
+    const savings = node(plan, 'savings');
+    link(plan, home, savings, { basis: 'sale', mode: 'rest', when: 'once' });
+    const r = run(plan);
+    close(r.nodes[home.id].balance[6], 0);
+    close(r.nodes[mortgage.id].balance[6], 0);
+    close(last(r.nodes[savings.id].balance), 400000 * 0.94 - 300000);
+    close(r.totals.skimmed, 24000);
+    assert.ok(r.milestones.some((m) => m.code === 'sold' && m.month === 5));
+    assert.ok(r.milestones.some((m) => m.code === 'paid-off' && m.nodeId === mortgage.id));
+});
+
+test('a sale that cannot cover the loans leaves the rest owed and says so', () => {
+    const plan = mkPlan('2026-01', 1);
+    const car = node(plan, 'vehicle', { value: 10000, sold: '2026-03' });
+    const loan = loanUnder(plan, car, 'car-loan', { balance: 14000 });
+    const r = run(plan);
+    close(last(r.nodes[loan.id].balance), 4000);
+    const w = r.warnings.find((x) => x.code === 'underwater');
+    assert.ok(w);
+    close(w.amount, 4000);
+});
+
+test('money sent to a sold asset lands in Unassigned', () => {
+    const plan = mkPlan('2026-01', 1);
+    const salary = node(plan, 'salary', { amount: 1000, per: 'month' });
+    const car = node(plan, 'vehicle', { value: 10000, sold: '2026-02' });
+    const savings = node(plan, 'savings');
+    link(plan, salary, car, { mode: 'fixed', value: 100 });
+    link(plan, car, savings, { basis: 'sale', mode: 'rest', when: 'once' });
+    const r = run(plan);
+    close(last(r.nodes[car.id].balance), 0);
+    close(last(r.nodes[savings.id].balance), 10100);   // January's 100 was sold with it
+    close(r.nodes[car.id].totals.unplaced, 1100);      // February to December
+});
+
+test('a rental collects rent while owned, and rent is income', () => {
+    const plan = mkPlan('2026-01', 1);
+    const rental = node(plan, 'rental-property', { value: 300000, rent: 2000, bought: '2026-07' });
+    const checking = node(plan, 'checking');
+    const savings = node(plan, 'savings', { balance: 300000 });
+    link(plan, savings, rental, { basis: 'balance', mode: 'fixed', value: 300000, when: 'once', date: '2026-07' });
+    link(plan, rental, checking, { basis: 'rent', mode: 'rest' });
+    const r = run(plan);
+    close(last(r.nodes[checking.id].balance), 6 * 2000);
+    close(r.totals.earned, 12000);
+});
+
+test('a home has no rent even if a value is stored for it', () => {
+    const plan = mkPlan('2026-01', 1);
+    node(plan, 'home', { value: 300000, rent: 2000 });
+    const r = run(plan);
+    close(r.totals.earned, 0);
+});
+
+test('an asset sold before the plan starts is not held', () => {
+    const plan = mkPlan('2026-01', 1);
+    const car = node(plan, 'vehicle', { value: 10000, sold: '2025-06' });
+    const r = run(plan);
+    close(r.nodes[car.id].balance[0], 0);
 });
 
 test('a debt APR is charged monthly at APR/12, and an unpaid debt is flagged', () => {

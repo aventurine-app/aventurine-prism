@@ -125,6 +125,7 @@
 
 [data-role="source"]   { --tile: var(--role-source); }
 [data-role="account"]  { --tile: var(--role-account); }
+[data-role="asset"]    { --tile: var(--role-asset); }
 [data-role="expense"]  { --tile: var(--role-expense); }
 [data-role="debt"]     { --tile: var(--role-debt); }
 [data-role="modifier"] { --tile: var(--role-modifier); }

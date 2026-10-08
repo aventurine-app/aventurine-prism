@@ -5,18 +5,22 @@
 // ("roles") they are all built from.
 //
 // THE STANDARD. A module's role decides what it does to money, and nothing else
-// does. There are five:
+// does. There are six:
 //
 //   source    Income     Makes money on a schedule. Output only.
 //   account   Account    Holds a balance that grows at a rate. Counts toward
 //                        net worth.
+//   asset     Asset      Something owned that is not cash: a home, a car,
+//                        land. Its value changes at a rate and counts toward
+//                        net worth, but it pays nothing out until it is sold.
+//                        Money that arrives is spent on it and becomes value.
 //   expense   Spending   Money that arrives here leaves the plan.
 //   debt      Debt       Holds what is owed. Interest adds to it; money that
 //                        arrives pays it down.
 //   modifier  Modifier   Money passes through and changes on the way: cash back,
 //                        an employer match, a tax or a fee.
 //
-// Every preset below (sixty-odd of them) is one of those five roles with a
+// Every preset below (sixty-odd of them) is one of those six roles with a
 // name, an icon, the fields it shows and starting values. Learning the five
 // roles is learning the whole library: a Roth IRA and a CD behave alike because
 // both are accounts, and the canvas paints them alike for the same reason.
@@ -41,22 +45,26 @@
     const ROLES = {
         source:   { id: 'source',   label: 'Income',   hasIn: false, hasOut: true, holds: false },
         account:  { id: 'account',  label: 'Account',  hasIn: true,  hasOut: true, holds: true },
+        asset:    { id: 'asset',    label: 'Asset',    hasIn: true,  hasOut: true, holds: true },
         expense:  { id: 'expense',  label: 'Spending', hasIn: true,  hasOut: true, holds: false },
         debt:     { id: 'debt',     label: 'Debt',     hasIn: true,  hasOut: true, holds: true },
         modifier: { id: 'modifier', label: 'Modifier', hasIn: true,  hasOut: true, holds: false },
     };
-    const ROLE_ORDER = ['source', 'account', 'expense', 'debt', 'modifier'];
+    const ROLE_ORDER = ['source', 'account', 'asset', 'expense', 'debt', 'modifier'];
 
     // Which roles a link may run into, by the role it leaves. Nothing links
     // into a source (income has no input). Spending only routes onward to
     // other spending or to a modifier. A credit card pays for spending: its
-    // links out to spending are purchases charged to the card.
+    // links out to spending are purchases charged to the card. An asset is
+    // bought or improved with money from income, accounts and loans, and only
+    // sends money on once it is sold (or, for a rental, as rent).
     const LINK_TARGETS = {
-        source:   ['account', 'expense', 'debt', 'modifier'],
-        account:  ['account', 'expense', 'debt', 'modifier'],
+        source:   ['account', 'asset', 'expense', 'debt', 'modifier'],
+        account:  ['account', 'asset', 'expense', 'debt', 'modifier'],
+        asset:    ['account', 'expense', 'debt', 'modifier'],
         expense:  ['expense', 'modifier'],
-        debt:     ['account', 'expense', 'debt', 'modifier'],
-        modifier: ['account', 'expense', 'debt', 'modifier'],
+        debt:     ['account', 'asset', 'expense', 'debt', 'modifier'],
+        modifier: ['account', 'asset', 'expense', 'debt', 'modifier'],
     };
 
     // ── Fields ─────────────────────────────────────────────────────────────
@@ -85,11 +93,17 @@
         minPayment: { type: 'money',     label: 'Minimum payment',  min: 0,    max: 1e10, optional: true },
         cashBack:   { type: 'percent',   label: 'Cash back',        min: 0,    max: 100 },
         annualFee:  { type: 'money',     label: 'Annual fee',       min: 0,    max: 1e10, optional: true },
+        value:      { type: 'money',     label: 'Value',            min: 0,    max: 1e11 },
+        bought:     { type: 'yearmonth', label: 'Bought',           optional: true },
+        sold:       { type: 'yearmonth', label: 'Sold',             optional: true },
+        sellCost:   { type: 'percent',   label: 'Selling cost',     min: 0,    max: 50 },
+        rent:       { type: 'money',     label: 'Rent',             min: 0,    max: 1e10, suffix: '/mo' },
     };
 
     const ROLE_FIELDS = {
         source:   ['amount', 'per', 'payMonth', 'growth', 'tax', 'start', 'end'],
         account:  ['balance', 'rate', 'lockUntil', 'capYearly'],
+        asset:    ['value', 'rate', 'rent', 'bought', 'sold', 'sellCost'],
         expense:  [],
         debt:     ['balance', 'rate', 'minPayment', 'start', 'cashBack', 'annualFee'],
         modifier: ['rate', 'capYearly'],
@@ -98,6 +112,7 @@
     const ROLE_DEFAULTS = {
         source:   { amount: 0, per: 'month', payMonth: 0, growth: 0, tax: 0, start: null, end: null },
         account:  { balance: 0, rate: 0, lockUntil: null, capYearly: null },
+        asset:    { value: 0, rate: 0, rent: 0, bought: null, sold: null, sellCost: 0 },
         expense:  {},
         debt:     { balance: 0, rate: 0, minPayment: null, start: null, cashBack: 0, annualFee: null },
         modifier: { rate: 0, capYearly: null },
@@ -126,11 +141,12 @@
     //             dates always start empty; only a cadence (Every, Paid in) is set
     // fixed       values the preset pins and hides (a windfall is always 'once')
     // kind        modifiers: 'match' | 'skim'. Debts: 'card' (a credit card).
-    // loans       property accounts: the debt presets that can be attached below
-    //             the module as a loan secured by it (see plan.js, docks)
+    // loans       assets: the debt presets that can be attached below the module
+    //             as a loan secured by it (see plan.js, docks)
     // inLink      the rule a new link INTO this module starts with
     // keywords    extra search terms
     const DEBT_FIELDS = ['balance', 'rate', 'minPayment', 'start'];
+    const ASSET_FIELDS = ['value', 'rate', 'bought', 'sold', 'sellCost'];
     const P = (cat, role, id, name, icon, extra = {}) => ({ cat, role, id, name, icon, ...extra });
 
     // A new link into a spending module starts at 0 with this timing. A one-off
@@ -240,26 +256,27 @@
             labels: { rate: 'Expected return' },
             keywords: 'college education savings' }),
 
-        // Property
-        P('property', 'account', 'home', 'Home', 'house-line', {
-            fields: ['balance', 'rate'],
-            labels: { balance: 'Value', rate: 'Appreciation' },
-            loans: ['mortgage', 'personal-loan'],
+        // Property. Only a rental shows rent. A secured loan is one the
+        // asset backs, so an unsecured personal loan never docks.
+        P('property', 'asset', 'home', 'Home', 'house-line', {
+            fields: ASSET_FIELDS,
+            labels: { rate: 'Appreciation' },
+            loans: ['mortgage', 'home-equity'],
             keywords: 'house real estate property' }),
-        P('property', 'account', 'rental-property', 'Rental property', 'buildings', {
-            fields: ['balance', 'rate'],
-            labels: { balance: 'Value', rate: 'Appreciation' },
-            loans: ['mortgage', 'personal-loan'],
-            keywords: 'investment property landlord' }),
-        P('property', 'account', 'vehicle', 'Vehicle', 'car', {
-            fields: ['balance', 'rate'],
-            labels: { balance: 'Value', rate: 'Value change' },
-            loans: ['car-loan', 'personal-loan'],
-            keywords: 'car truck depreciation' }),
-        P('property', 'account', 'land', 'Land', 'mountains', {
-            fields: ['balance', 'rate'],
-            labels: { balance: 'Value', rate: 'Appreciation' },
-            loans: ['mortgage', 'personal-loan'],
+        P('property', 'asset', 'rental-property', 'Rental property', 'buildings', {
+            fields: [...ASSET_FIELDS, 'rent'],
+            labels: { rate: 'Appreciation' },
+            loans: ['mortgage', 'home-equity'],
+            keywords: 'investment property landlord rent' }),
+        P('property', 'asset', 'vehicle', 'Vehicle', 'car', {
+            fields: ASSET_FIELDS,
+            labels: { rate: 'Value change' },
+            loans: ['car-loan'],
+            keywords: 'car truck depreciation buy new car' }),
+        P('property', 'asset', 'land', 'Land', 'mountains', {
+            fields: ASSET_FIELDS,
+            labels: { rate: 'Appreciation' },
+            loans: ['mortgage'],
             keywords: 'lot acreage' }),
 
         // Spending
@@ -320,6 +337,10 @@
             fields: DEBT_FIELDS,
             labels: { balance: 'Balance owed', rate: 'APR' },
             keywords: 'home loan house' }),
+        P('debt', 'debt', 'home-equity', 'Home equity loan', 'key', {
+            fields: DEBT_FIELDS,
+            labels: { balance: 'Balance owed', rate: 'APR' },
+            keywords: 'heloc cash-out refinance borrow against home equity line' }),
         P('debt', 'debt', 'personal-loan', 'Personal loan', 'handshake', {
             fields: DEBT_FIELDS,
             labels: { balance: 'Balance owed', rate: 'APR' },
@@ -364,8 +385,6 @@
             inLink: once(12), keywords: 'one-time furniture appliance' }),
         P('events', 'expense', 'wedding', 'Wedding', 'heart', {
             inLink: once(18), keywords: 'marriage ceremony one-time' }),
-        P('events', 'expense', 'new-car', 'New car', 'car-simple', {
-            inLink: once(24), keywords: 'vehicle purchase one-time' }),
         P('events', 'expense', 'dream-trip', 'Dream trip', 'island', {
             inLink: once(12), keywords: 'vacation travel one-time' }),
         P('events', 'expense', 'emergency', 'Unexpected bill', 'siren', {

@@ -164,6 +164,10 @@
     --role-debt:     #b43933;
     --role-modifier: #8c5cb4;
 
+    /* Assets borrow the account blue: both are what the plan holds. A hue of
+       their own has to clear the dataviz validator first (CLAUDE.md, rule 10). */
+    --role-asset: var(--role-account);
+
     /* Unassigned money: no role, so it takes the neutral that recedes. */
     --role-none: var(--color-base-500);
 
@@ -179,6 +183,8 @@
     --flow-balance:   #5b63c9;
     --flow-charges:   #b9920f;
     --flow-cashback:  #cf4f92;
+    --flow-sale:      var(--role-account);
+    --flow-rent:      var(--role-source);
 
     /* Chart ramps. Accounts stack in steps of the account blue and debts in
        steps of the debt red, so a band's family says what it is and its step

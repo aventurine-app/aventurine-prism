@@ -9,10 +9,12 @@
 // One month, in order:
 //   1. Debts that start this month become owed, and their proceeds are paid
 //      out along their proceeds links.
-//   2. Balances move. Accounts earn (or lose) at their rate; debts accrue
+//   2. Balances move. Accounts earn (or lose) at their rate; assets appreciate
+//      (or depreciate), and an asset sold this month is sold; debts accrue
 //      interest. Earnings links pay out their share and the rest compounds.
-//   3. Income arrives and is split along its links. Money keeps moving through
-//      spending, modifiers and account deposit links until it comes to rest.
+//   3. Income and rent arrive and are split along their links. Money keeps
+//      moving through spending, modifiers and account deposit links until it
+//      comes to rest.
 //   4. Scheduled moves out of account balances run (withdrawals, sweeps,
 //      "everything above"), upstream accounts first, so a transfer made early
 //      in the pass is seen by the accounts below it in the same month.
@@ -22,9 +24,19 @@
 // grows by exactly 4% over twelve months. A debt's rate is an APR charged
 // monthly at APR/12, which is how cards and loans quote it.
 //
-// Conservation. Money enters only as income, an employer match, cash back,
-// growth or a loan's proceeds, and leaves only as spending, a tax or fee, or
-// debt interest. A credit card's annual fee is a fee: it is added to the
+// Assets. A home, a car or land is worth its value, not cash: nothing can be
+// withdrawn from it and its appreciation is never paid out. Money that reaches
+// an asset is spent on it and becomes value (a purchase or an improvement), so
+// buying one moves net worth from cash to property and leaves the total alone.
+// An asset with a Bought date inside the plan starts at nothing and is worth
+// what was paid for it; a loan docked under it and taken out that month funds
+// it by default. On its Sold date the value, less selling costs, pays off the
+// loans docked under it and the rest leaves through its sale links. A rental
+// collects rent while it is owned; rent is income.
+//
+// Conservation. Money enters only as income (rent included), an employer
+// match, cash back, growth or a loan's proceeds, and leaves only as spending,
+// a tax or fee (selling costs included), or debt interest. A credit card's annual fee is a fee: it is added to the
 // balance owed, so it lowers net worth the month it is charged. Money with nowhere to go lands in the Unassigned pool, which
 // counts toward net worth. So the change in net worth always equals
 //   income - withholding + match + cash back + growth - interest - spent - taxes/fees
@@ -100,9 +112,11 @@
         }
 
         const accounts = states.filter((s) => s.role === 'account');
+        const assets = states.filter((s) => s.role === 'asset');
         const debts = states.filter((s) => s.role === 'debt');
         const sources = states.filter((s) => s.role === 'source');
         const cards = states.filter((s) => s.kind === 'card');
+        const loansOn = new Map(assets.map((s) => [s.id, debts.filter((d) => d.node.dock === s.id)]));
         const flowOrder = topoOrder(states, linkStates).filter((s) => s.role === 'account');
 
         const totals = {
@@ -203,6 +217,34 @@
             return pay;
         }
 
+        /** Sell an asset: its value less selling costs pays off the loans docked
+         *  under it, and what is left goes out along its sale links. */
+        function sell(s) {
+            const gross = s.bal;
+            const cost = gross * (s.params.sellCost || 0) / 100;
+            s.consumed[t] += cost;
+            totals.skimmed[t] += cost;
+            s.bal = 0;
+            s.sold = true;
+            s.soldAt = t;
+            let net = gross - cost;
+            for (const loan of loansOn.get(s.id)) {
+                const pay = Math.min(net, loan.bal);
+                if (pay > EPS) {
+                    net -= pay;
+                    s.outflow[t] += pay;
+                    loan.inflow[t] += pay;
+                    loan.paid[t] += settle(loan, pay);
+                    totals.debtPaid[t] += pay;
+                }
+                if (loan.bal > EPS) s.underwater += loan.bal;
+            }
+            if (net > EPS) {
+                const left = allocate(s, 'sale', net);
+                if (left > EPS) park(s, left);
+            }
+        }
+
         function receive(s, amount) {
             switch (s.role) {
                 case 'account': {
@@ -224,6 +266,14 @@
                         const kept = allocate(s, 'inflow', accepted);
                         s.bal -= accepted - kept;
                     }
+                    return;
+                }
+                case 'asset': {
+                    // Bought or improved: the money becomes value. Nothing can
+                    // be put into an asset that has been sold.
+                    if (s.sold) { park(s, amount); return; }
+                    s.inflow[t] += amount;
+                    s.bal += amount;
                     return;
                 }
                 case 'expense': {
@@ -376,6 +426,12 @@
 
         // ── Opening position ───────────────────────────────────────────────
         for (const s of accounts) s.bal = s.params.balance || 0;
+        for (const s of assets) {
+            // Sold before the plan starts: never held. Bought inside it: worth
+            // nothing until it is paid for.
+            if (s.soldIdx != null && s.soldIdx < 0) s.sold = true;
+            s.bal = s.sold || s.acquires ? 0 : s.params.value || 0;
+        }
         for (const s of debts) s.bal = s.originates ? 0 : (s.params.balance || 0);
         recordBalances(0);
 
@@ -400,14 +456,18 @@
                 }
             }
 
-            // 1. New debts.
+            // 1. New debts. A loan taken out the month the asset it is docked
+            // under is bought pays for it with what its links leave.
             for (const s of debts) {
                 if (!s.originates || t !== s.startIdx) continue;
                 const principal = s.params.balance || 0;
                 s.bal += principal;
                 totals.proceeds[t] += principal;
                 const left = allocate(s, 'proceeds', principal);
-                if (left > EPS) park(s, left);
+                if (left <= EPS) continue;
+                const asset = s.node.dock ? byId.get(s.node.dock) : null;
+                if (asset && asset.acquires && asset.boughtIdx === t) receive(asset, left);
+                else park(s, left);
             }
             drain();
 
@@ -421,6 +481,17 @@
                     if (earned > EPS && !locked(s)) payEarnings(s, earned);
                 }
                 if (!locked(s)) payYearlyEarnings(s);
+            }
+            for (const s of assets) {
+                // Value changes from the month after it is bought.
+                const held = !s.sold && (s.boughtIdx == null || t > s.boughtIdx);
+                if (held && s.bal > EPS && s.monthlyRate !== 0) {
+                    const change = s.bal * s.monthlyRate;
+                    s.bal += change;
+                    s.earnings[t] = change;
+                    totals.growth[t] += change;
+                }
+                if (!s.sold && t === s.soldIdx) sell(s);
             }
             for (const s of debts) {
                 if (s.bal > EPS && s.params.rate > 0) {
@@ -444,6 +515,16 @@
                 s.gross[t] = gross;
                 s.produced[t] = net;
                 const left = allocate(s, 'inflow', net);
+                if (left > EPS) park(s, left);
+                drain();
+            }
+            for (const s of assets) {
+                const rent = s.params.rent || 0;
+                if (rent <= EPS || !s.collectsRent || s.sold) continue;
+                if (s.boughtIdx != null && t < s.boughtIdx) continue;
+                totals.earned[t] += rent;
+                s.produced[t] = rent;
+                const left = allocate(s, 'rent', rent);
                 if (left > EPS) park(s, left);
                 drain();
             }
@@ -471,6 +552,7 @@
         function recordBalances(k) {
             let worth = unassignedBal;
             for (const s of accounts) { s.balance[k] = s.bal; worth += s.bal; }
+            for (const s of assets) { s.balance[k] = s.bal; worth += s.bal; }
             for (const s of debts) { s.balance[k] = s.bal; worth -= s.bal; }
             unassigned[k] = unassignedBal;
             netWorth[k] = worth;
@@ -490,10 +572,10 @@
         const s = {
             id: node.id, node, preset, role, kind: preset.kind || null, params, index,
             bal: 0,
-            outs: role === 'account'
-                ? { inflow: [], earnings: [], balance: [] }
-                : role === 'debt' ? { inflow: [], proceeds: [], ...(preset.kind === 'card' ? { charges: [], cashback: [] } : {}) }
-                    : { inflow: [] },
+            outs: role === 'account' ? { inflow: [], earnings: [], balance: [] }
+                : role === 'asset' ? { sale: [], rent: [] }
+                    : role === 'debt' ? { inflow: [], proceeds: [], ...(preset.kind === 'card' ? { charges: [], cashback: [] } : {}) }
+                        : { inflow: [] },
             outflow: series(),
         };
         if (role === 'source') {
@@ -514,6 +596,22 @@
             s.depositsThisYear = 0;
             s.capped = 0;
             s.cappedFirst = -1;
+        }
+        if (role === 'asset') {
+            s.balance = new Float64Array(months + 1);
+            s.inflow = series();
+            s.earnings = series();     // appreciation (negative: depreciation)
+            s.produced = series();     // rent
+            s.consumed = series();     // selling costs
+            s.unplaced = series();
+            s.monthlyRate = Math.pow(1 + Math.max(-100, params.rate || 0) / 100, 1 / 12) - 1;
+            s.boughtIdx = params.bought ? idxOf(params.bought) : null;
+            s.soldIdx = params.sold ? idxOf(params.sold) : null;
+            s.acquires = s.boughtIdx != null && s.boughtIdx >= 0;
+            s.collectsRent = Catalog.fieldsFor(preset).includes('rent');
+            s.sold = false;
+            s.soldAt = -1;
+            s.underwater = 0;
         }
         if (role === 'expense') {
             s.inflow = series();
@@ -681,6 +779,23 @@
             }
             if (s.role === 'account' && s.lockIdx != null && s.lockIdx > 0 && s.lockIdx <= months) {
                 milestones.push({ code: 'unlocks', nodeId: s.id, month: s.lockIdx });
+            }
+            if (s.role === 'asset') {
+                if (s.acquires && s.boughtIdx < months) {
+                    milestones.push({ code: 'bought', nodeId: s.id, month: s.boughtIdx });
+                    // Paid for in full? Everything that reached it by the end
+                    // of the month it was bought, against its price.
+                    let paid = 0;
+                    for (let k = 0; k <= s.boughtIdx; k++) paid += s.inflow[k];
+                    const price = s.params.value || 0;
+                    if (Math.abs(price - paid) > 0.5) {
+                        warnings.push({ code: 'price', nodeId: s.id, amount: price - paid, month: s.boughtIdx });
+                    }
+                }
+                if (s.soldAt >= 0) milestones.push({ code: 'sold', nodeId: s.id, month: s.soldAt });
+                if (s.underwater > 0.005) {
+                    warnings.push({ code: 'underwater', nodeId: s.id, amount: s.underwater, month: s.soldAt });
+                }
             }
             // Percentages that add up past 100% cannot all be paid.
             for (const [basis, list] of Object.entries(s.outs)) {

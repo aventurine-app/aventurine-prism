@@ -92,10 +92,11 @@
     const label = (plan, k) => D.monthLabel(plan, k);
 
     /** Account and debt bands, assigned colours by module order (never by size)
-     *  and folded into an "other" band past the ramp's length. */
+     *  and folded into an "other" band past the ramp's length. Assets stack
+     *  with the accounts: both are what the plan holds. */
     function worthBands(plan, res, def) {
         const bands = [];
-        const accounts = plan.nodes.filter((n) => D.roleOf(n) === 'account');
+        const accounts = plan.nodes.filter((n) => ['account', 'asset'].includes(D.roleOf(n)));
         const debts = plan.nodes.filter((n) => D.roleOf(n) === 'debt');
         const fold = (list, steps, sign, color, otherLabel) => {
             const limit = steps.length;

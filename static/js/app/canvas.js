@@ -202,10 +202,26 @@
         return owed;
     }
 
+    /** An asset's state at month k: not yet bought, sold, or held. */
+    function assetPhase(node, k, start) {
+        const { bought, sold } = node.params;
+        if (sold && k > P.ymDiff(start, sold)) return 'sold';
+        if (bought && k <= P.ymDiff(start, bought)) return 'pending';
+        return 'held';
+    }
+
     function figure(node, role, nr, vp, docks, res) {
         const out = { value: '', unit: '', delta: '', deltaDir: '', negative: false, done: false };
         if (!nr || !vp) return out;
-        if (role === 'account' && docks.length) {
+        const phase = role === 'asset' ? assetPhase(node, vp.k, res.start) : null;
+        if (phase === 'sold') {
+            out.value = 'Sold';
+            out.unit = P.ymLabel(node.params.sold);
+            out.done = true;
+        } else if (phase === 'pending') {
+            out.value = Fmt.money(0);
+            out.unit = `until ${P.ymLabel(node.params.bought)}`;
+        } else if (role === 'asset' && docks.length) {
             // Equity: what the asset is worth, less what its docked loans owe.
             const v = nr.balance[vp.k] - dockedOwed(docks, res, vp.k);
             const d = v - (nr.balance[0] - dockedOwed(docks, res, 0));
@@ -216,7 +232,7 @@
                 out.delta = Fmt.money(d, { sign: true, compact: Math.abs(d) >= 1e4 });
                 out.deltaDir = d > 0 ? 'up' : 'down';
             }
-        } else if (role === 'account') {
+        } else if (role === 'account' || role === 'asset') {
             const v = nr.balance[vp.k];
             out.value = Fmt.money(v, { compact: v >= 1e6 });
             const d = v - nr.balance[0];
@@ -266,13 +282,15 @@
         if (!nr || !vp) return [];
         const upto = vp.all ? res.months : Math.max(1, vp.k);
         const sumTo = (arr) => { let s = 0; for (let i = 0; i < upto && i < arr.length; i++) s += arr[i]; return s; };
-        if (role === 'account') {
-            const docks = P.docksOf(plan, node.id);
-            if (docks.length) {
-                const owed = dockedOwed(docks, res, vp.k);
-                const value = nr.balance[vp.k];
+        if (role === 'asset') {
+            const value = nr.balance[vp.k];
+            const owed = dockedOwed(P.docksOf(plan, node.id), res, vp.k);
+            if (owed > 0.005) {
                 return [{ role: 'source', w: Math.max(0, value - owed), label: 'Equity' }, { role: 'debt', w: Math.min(owed, value), label: 'Owed' }];
             }
+            return value > 0.005 ? [{ role: 'asset', w: value, label: 'Value' }] : [];
+        }
+        if (role === 'account') {
             const balance = nr.balance[vp.k];
             const growth = Math.max(0, sumTo(nr.earnings));
             const principal = Math.max(0, balance - growth);
@@ -393,7 +411,7 @@
         put(view, 'meta', D.nodeMeta(node), (t) => { view.meta.textContent = t; });
 
         const nr = res && res.nodes[node.id];
-        const docks = role === 'account' ? P.docksOf(plan, node.id) : NO_DOCKS;
+        const docks = role === 'asset' ? P.docksOf(plan, node.id) : NO_DOCKS;
         const f = figure(node, role, nr, vp, docks, res);
         put(view, 'value', f.value, (t) => { view.value.textContent = t; });
         put(view, 'neg', f.negative, (v) => view.value.classList.toggle('is-negative', v));
@@ -935,7 +953,7 @@
     stage.addEventListener('pointerup', endAction);
     stage.addEventListener('pointercancel', endAction);
 
-    const PLURAL = { account: 'accounts', expense: 'spending', debt: 'debts', modifier: 'modifiers' };
+    const PLURAL = { account: 'accounts', asset: 'assets', expense: 'spending', debt: 'debts', modifier: 'modifiers' };
 
     /** Why a link was refused, as what IS allowed. */
     function linkRuleText(fromRole, toRole) {
@@ -953,10 +971,16 @@
     }
 
     /** A property with loans docked under it stands for them: dropping a link
-     *  on the property pays its first loan that can take it. */
+     *  on the property pays its first loan that can take it. The exception is
+     *  an asset still waiting to be paid for (bought inside the plan, nothing
+     *  linked in yet): the drop is its purchase. A loan's own strip always
+     *  takes the drop itself. */
     function resolveTarget(from, target, basis) {
         if (!target || target.dock) return target;
         const plan = Store.state.plan;
+        const awaitingPurchase = target.params.bought && !plan.links.some((l) => l.to === target.id)
+            && P.canConnect(plan, from.id, target.id, basis).ok;
+        if (awaitingPurchase) return target;
         const loan = P.docksOf(plan, target.id).find((d) => P.canConnect(plan, from.id, d.id, basis).ok);
         return loan || target;
     }
