@@ -1,0 +1,337 @@
+/* ============================================================================
+   ui.css — shared primitives: menus, the module picker, dialogs, toasts,
+   segmented controls, chips and empty states. Built by shell/ui.js.
+   ============================================================================ */
+
+/* ─── Dropdown menu ───────────────────────────────────────────────────────── */
+.menu-pop {
+    position: fixed;
+    z-index: 900;
+    min-width: 180px;
+    padding: var(--space-4);
+    background: var(--surface1);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-menu);
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    width: 100%;
+    height: 32px;
+    padding: 0 var(--space-12);
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--size-small);
+    font-weight: var(--weight-medium);
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.menu-item .icon { width: 16px; height: 16px; color: var(--text-tertiary); }
+.menu-item:hover,
+.menu-item:focus-visible { background: var(--frost-3); color: var(--text-primary); outline: none; }
+.menu-item:hover .icon { color: var(--text-primary); }
+.menu-item[data-danger] { color: var(--accent-negative); }
+.menu-item[data-danger] .icon { color: var(--accent-negative); }
+.menu-item:disabled { opacity: 0.5; cursor: not-allowed; }
+.menu-item:disabled:hover { background: transparent; }
+.menu-sep { height: 1px; margin: var(--space-4) var(--space-8); background: var(--stroke-divider); }
+
+/* ─── Module picker (search + list), opened from the canvas ───────────────── */
+.picker {
+    position: fixed;
+    z-index: 900;
+    width: 280px;
+    max-height: 360px;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface1);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-menu);
+    overflow: hidden;
+}
+.picker-search {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    padding: var(--space-8) var(--space-12);
+    border-bottom: var(--border-width) solid var(--stroke-divider);
+    color: var(--text-tertiary);
+}
+.picker-search .icon { width: 16px; height: 16px; }
+.picker-search input {
+    flex: 1;
+    min-width: 0;
+    height: 28px;
+    border: 0;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: var(--size-small);
+    outline: none;
+}
+.picker-list { padding: var(--space-4); overflow-y: auto; scrollbar-width: thin; }
+.picker-group {
+    padding: var(--space-8) var(--space-8) var(--space-4);
+    color: var(--text-tertiary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--track-widest);
+    text-transform: uppercase;
+}
+.picker-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    width: 100%;
+    height: 36px;
+    padding: 0 var(--space-8);
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--size-small);
+    font-weight: var(--weight-medium);
+    text-align: left;
+    cursor: pointer;
+}
+.picker-item:hover,
+.picker-item.is-active { background: var(--frost-3); color: var(--text-primary); }
+.picker-empty { padding: var(--space-16); color: var(--text-tertiary); font-size: var(--size-small); text-align: center; }
+
+/* ─── Role tile: the coloured square behind a module icon ─────────────────── */
+.role-tile {
+    --tile: var(--role-none);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--tile) 16%, transparent);
+    color: var(--tile);
+}
+.role-tile .icon { width: 18px; height: 18px; }
+.role-tile--lg { width: 40px; height: 40px; border-radius: 10px; }
+.role-tile--lg .icon { width: 24px; height: 24px; }
+.role-tile--sm { width: 22px; height: 22px; border-radius: 6px; }
+.role-tile--sm .icon { width: 14px; height: 14px; }
+
+[data-role="source"]   { --tile: var(--role-source); }
+[data-role="account"]  { --tile: var(--role-account); }
+[data-role="expense"]  { --tile: var(--role-expense); }
+[data-role="debt"]     { --tile: var(--role-debt); }
+[data-role="modifier"] { --tile: var(--role-modifier); }
+
+/* ─── Dialog (confirm / prompt) ───────────────────────────────────────────── */
+.dialog { width: 400px; }
+.dialog .modal-body p { margin: 0; color: var(--text-secondary); font-size: var(--size-small); line-height: var(--lh-relaxed); }
+.dialog .modal-body strong { color: var(--text-primary); }
+
+/* ─── Toast ───────────────────────────────────────────────────────────────── */
+.toast {
+    position: fixed;
+    left: 50%;
+    bottom: var(--space-24);
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    max-width: min(560px, calc(100vw - 48px));
+    padding: var(--space-12) var(--space-16);
+    background: var(--color-base-900);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-menu);
+    color: var(--color-base-050);
+    font-size: var(--size-small);
+    transform: translate(-50%, 16px);
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
+.toast .icon { width: 18px; height: 18px; }
+.toast[data-type="error"] .icon { color: #ff8a8d; }
+.toast[data-type="success"] .icon { color: #6fd18f; }
+.toast-action {
+    margin-left: var(--space-8);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-accent-300);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-superbold);
+    letter-spacing: var(--track-widest);
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+/* ─── Segmented control (view tabs) ───────────────────────────────────────── */
+.segctl {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    background: var(--segctl-track);
+    border: var(--border-width) solid var(--segctl-stroke);
+    border-radius: 10px;
+}
+.segctl-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 var(--space-12);
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-superbold);
+    letter-spacing: var(--track-widest);
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+}
+.segctl-btn .icon { width: 14px; height: 14px; }
+.segctl-btn:hover { color: var(--text-primary); background: var(--segctl-hover); }
+.segctl-btn[aria-pressed="true"],
+.segctl-btn[aria-selected="true"] { color: var(--segctl-active-text); background: var(--segctl-active); }
+.segctl-btn:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 1px; }
+
+/* The compact version: horizon chips (1Y 5Y 10Y…). */
+.segctl--chips .segctl-btn { padding: 0 var(--space-8); }
+
+/* Full-height tabs: square buttons that fill their bar, split by vertical
+   rules. The bar sets the height; this only stretches to it. */
+.segctl--rules {
+    align-self: stretch;
+    gap: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-inline: var(--border-width) solid var(--stroke-divider);
+    border-radius: 0;
+}
+.segctl--rules .segctl-btn {
+    align-self: stretch;
+    height: auto;
+    padding: 0 var(--space-16);
+    border-radius: 0;
+}
+.segctl--rules .segctl-btn + .segctl-btn { border-left: var(--border-width) solid var(--stroke-divider); }
+.segctl--rules .segctl-btn:focus-visible { outline-offset: -2px; }
+
+/* ─── Chip ────────────────────────────────────────────────────────────────── */
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 var(--space-8);
+    border-radius: 999px;
+    background: var(--frost-2);
+    color: var(--text-secondary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-semibold);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.chip .icon { width: 12px; height: 12px; }
+.chip--warn { background: var(--warning-fill); color: var(--warning); }
+.chip--good { background: color-mix(in srgb, var(--accent-positive) 14%, transparent); color: var(--accent-positive); }
+.chip--accent { background: var(--accent-wash); color: var(--accent-ink); }
+
+/* ─── Empty state ─────────────────────────────────────────────────────────── */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-16);
+    max-width: 360px;
+    padding: var(--space-32);
+    text-align: center;
+}
+.empty-state-art {
+    display: grid;
+    grid-template-columns: repeat(3, 40px);
+    gap: var(--space-8);
+}
+.empty-state-title {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: var(--size-h2);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--track-tight);
+}
+.empty-state-actions { display: flex; gap: var(--space-8); }
+
+@media (prefers-reduced-motion: reduce) {
+    .toast { transition: opacity 0.2s ease; transform: translate(-50%, 0); }
+    .segctl-btn { transition: none; }
+}
+
+/* A chip naming a role carries the role's colour as a dot. */
+.chip--role::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--tile);
+}
+
+/* ─── Month picker ────────────────────────────────────────────────────────── */
+.month-pop {
+    position: fixed;
+    z-index: 900;
+    width: 232px;
+    padding: var(--space-8);
+    background: var(--surface1);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-menu);
+}
+.month-pop-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-8);
+}
+.month-pop-head .button-icon { width: 28px; height: 28px; background: transparent; }
+.month-pop-head .button-icon .icon { width: 16px; height: 16px; }
+.month-pop-head .button-icon:hover { background: var(--frost-3); color: var(--text-primary); }
+.month-pop-year { font-size: var(--size-body); font-weight: var(--weight-bold); font-variant-numeric: tabular-nums; }
+.month-pop-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); }
+.month-pop-cell {
+    height: 32px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--size-small);
+    font-weight: var(--weight-semibold);
+    cursor: pointer;
+}
+.month-pop-cell:hover { background: var(--frost-3); color: var(--text-primary); }
+.month-pop-cell[aria-pressed="true"] { background: var(--accent-gray); color: #fff; }
+.month-pop-cell:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 1px; }
+.month-pop-clear { width: 100%; justify-content: center; margin-top: var(--space-8); }
+
+/* The field that opens it: shaped like a text input. */
+.field-month {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-8);
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+}
+.field-month .icon { width: 16px; height: 16px; color: var(--text-tertiary); }
+.field-month.is-empty { color: var(--text-tertiary); }

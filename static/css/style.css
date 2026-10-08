@@ -1,0 +1,466 @@
+/* ============================================================================
+   style.css — Aventurine Prism's design language.
+   ============================================================================
+   Tokens (colour, type, spacing, elevation) and the base layout. Every other
+   stylesheet consumes these and declares none of its own.
+
+   Aventurine Prism shares Aventurine's design system: the same neutral ramp, type,
+   spacing, radii, controls and themes, including the teal accent.
+
+     1. Colour ramps
+     2. Semantic tokens (light baseline; dark and colorful live in themes.css)
+     3. Module roles and chart colours
+     4. Typography
+     5. Component tokens
+     6. Base layout
+     7. Modal primitives
+     8. Form controls
+   ============================================================================ */
+
+@font-face {
+    font-family: 'Manrope';
+    src: url('/static/fonts/Manrope/Manrope-VariableFont_wght.ttf') format('truetype');
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'IBM Plex Mono';
+    src: url('/static/fonts/IBM_Plex_Mono/IBMPlexMono-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'IBM Plex Mono';
+    src: url('/static/fonts/IBM_Plex_Mono/IBMPlexMono-Bold.ttf') format('truetype');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+
+/* ─── 1. Colour ramps ───────────────────────────────────────────────────────
+ * Both ramps are Aventurine's, unchanged. */
+:root {
+    --color-base-050: #f2f3f2;
+    --color-base-100: #e5e6e5;
+    --color-base-200: #cdd0ce;
+    --color-base-300: #b3b7b5;
+    --color-base-400: #9ba09d;
+    --color-base-500: #7f8581;
+    --color-base-600: #666b68;
+    --color-base-700: #4d514f;
+    --color-base-800: #343735;
+    --color-base-900: #191a19;
+    --color-base-950: #0c0d0d;
+
+    --color-accent-050: #eff6f4;
+    --color-accent-100: #dfecea;
+    --color-accent-200: #bbd8d2;
+    --color-accent-300: #9bc5bd;
+    --color-accent-400: #79b2a7;
+    --color-accent-500: #5b9f92;   /* primary accent (light theme) */
+    --color-accent-600: #497e74;
+    --color-accent-700: #365e56;
+    --color-accent-800: #25413b;
+    --color-accent-900: #13201e;
+    --color-accent-950: #09100f;
+}
+
+
+/* ─── 2. Semantic tokens ────────────────────────────────────────────────────
+ * Light is the baseline; themes.css overrides for dark. The swatch selectors
+ * put the theme picker's previews in each theme's own context. */
+:root,
+.settings-theme-swatch[data-theme="light"],
+.settings-theme-swatch[data-theme="colorful"] {
+    color-scheme: light;
+
+    --text-primary:   var(--color-base-900);
+    --text-secondary: var(--color-base-700);
+    --text-tertiary:  var(--color-base-600);
+
+    /* 1 = card, 2 = control fill, 3 = hover/prominent, 4 = top elevation. */
+    --background: var(--color-base-100);
+    --surface1:   var(--color-base-050);
+    --surface2:   var(--color-base-100);
+    --surface3:   var(--color-base-200);
+    --surface4:   var(--color-base-300);
+    --border:     var(--color-base-300);
+
+    /* The accent. White text on the teal fill only reaches about 3:1, so text on
+       a filled accent is the ramp's deep end in both themes. Accent used AS text
+       or a focus ring on a light surface takes the darker --accent-ink, since
+       the fill step itself is too light against the page. */
+    --accent-primary:       var(--color-accent-500);
+    --accent-primary-hover: var(--color-accent-400);
+    --accent-ink:           var(--color-accent-700);
+    --accent-ring:          var(--color-accent-600);
+    --accent-wash:          color-mix(in srgb, var(--accent-primary) 14%, var(--surface1));
+    --button-text:          var(--color-accent-950);
+
+    --accent-neutral:        var(--color-base-800);
+    --accent-neutral-fill:   var(--color-base-800);
+    --accent-neutral-border: var(--accent-neutral-fill);
+    --accent-neutral-text:   var(--color-base-050);
+
+    /* The dark gray that stands in for the accent in the chart tabs and the
+       Preferences modal. */
+    --accent-gray:       var(--color-base-800);
+    --accent-gray-hover: var(--color-base-700);
+    --toggle-on:         var(--accent-gray);
+    --icon-button-fill:      var(--surface1);
+    --icon-button-ink:       var(--text-primary);
+    --danger-text:           #fff;
+
+    --accent-positive: #22a64a;
+    --accent-negative: #c44448;
+    --warning:         #b97a00;
+    --warning-fill:    color-mix(in srgb, var(--warning) 15%, transparent);
+    --info:            #1d4ed8;
+
+    --frost-2:     rgba(0, 0, 0, 0.05);
+    --frost-3:     rgba(0, 0, 0, 0.10);
+    --frost-caret: rgba(0, 0, 0, 0.50);
+
+    --stroke-divider: rgba(0, 0, 0, 0.08);
+    --stroke-soft:    rgba(0, 0, 0, 0.12);
+    --stroke-medium:  rgba(0, 0, 0, 0.16);
+    --stroke-strong:  rgba(0, 0, 0, 0.22);
+
+    /* Segmented control: a grey track, the active option filled with
+       dark gray. */
+    --segctl-track:       var(--surface1);
+    --segctl-hover:       var(--color-base-200);
+    --segctl-stroke:      var(--border);
+    --segctl-active:      var(--accent-gray);
+    --segctl-active-text: #fff;
+
+    /* The canvas: a page-coloured plane with a dot grid. */
+    --canvas-bg:  var(--color-base-100);
+    --canvas-dot: rgba(0, 0, 0, 0.13);
+}
+
+
+/* ─── 3. Module roles and chart colours ─────────────────────────────────────
+ * Every module wears its ROLE's colour (catalog.js): its icon tile and its ports.
+ * A link wears the colour of the module it runs into. Five roles, five hues, following Aventurine's
+ * meaning of colour: green is money arriving, gold money leaving, blue money
+ * held, red money owed, violet money changing on the way through.
+ *
+ * Picked with the dataviz validator against both surfaces, all pairs, since any
+ * two roles can sit side by side on the canvas. Light lands in the 6-8 CVD floor
+ * band, which is allowed because no module is ever colour-only: each carries
+ * its own icon, name and port layout. Dark clears the 8 target. */
+:root,
+.settings-theme-swatch[data-theme="light"],
+.settings-theme-swatch[data-theme="colorful"] {
+    --role-source:   #3a9163;
+    --role-account:  #154eb2;
+    --role-expense:  #b27d23;
+    --role-debt:     #b43933;
+    --role-modifier: #8c5cb4;
+
+    /* Unassigned money: no role, so it takes the neutral that recedes. */
+    --role-none: var(--color-base-500);
+
+    /* Output ports and the links leaving them. Each is the colour of what is
+       sent: pay and deposits borrow their module's role colour. */
+    --flow-pay:       var(--role-source);
+    --flow-deposits:  var(--role-account);
+    --flow-spending:  var(--role-expense);
+    --flow-passes:    var(--role-modifier);
+    --flow-overflow:  var(--role-none);
+    --flow-proceeds:  var(--role-debt);
+    --flow-earnings:  #1f9ea3;
+    --flow-balance:   #5b63c9;
+    --flow-charges:   #b9920f;
+    --flow-cashback:  #cf4f92;
+
+    /* Chart ramps. Accounts stack in steps of the account blue and debts in
+       steps of the debt red, so a band's family says what it is and its step
+       tells it from its neighbours (adjacent steps sit >= 0.06 apart in OKLCH
+       lightness). Assigned by module order, never by size, so a module keeps
+       its colour as the plan changes. */
+    --chart-account-1: #113375;
+    --chart-account-2: #1c4595;
+    --chart-account-3: #2b58b1;
+    --chart-account-4: #3e6dc8;
+    --chart-account-5: #5a84d4;
+    --chart-account-6: #769be0;
+    --chart-debt-1: #862723;
+    --chart-debt-2: #a83630;
+    --chart-debt-3: #c25e55;
+    --chart-debt-4: #d6867d;
+    --chart-unassigned: var(--color-base-400);
+
+    /* The headline line (net worth) is the accent, as Aventurine's charts are;
+       the cash-flow pair is the arriving green against the leaving gold. */
+    --chart-networth: var(--color-accent-600);
+    --chart-in:       var(--role-source);
+    --chart-out:      var(--role-expense);
+    --chart-grid:     var(--stroke-medium);
+}
+
+
+/* ─── 4. Typography ─────────────────────────────────────────────────────────
+ * Aventurine's scale: 1.25 modular, anchored at 15px body, Manrope throughout,
+ * IBM Plex Mono for strings read character by character (a file path). */
+:root {
+    --font-ui:      'Manrope', system-ui, sans-serif;
+    --font-numeric: 'Manrope', system-ui, sans-serif;
+    --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
+
+    --size-display: 2.5rem;
+    --size-h1:      1.5rem;
+    --size-h2:      1.125rem;
+    --size-h3:      1rem;
+    --size-body:    0.9375rem;
+    --size-small:   0.8125rem;
+    --size-micro:   0.6875rem;
+
+    --weight-light:     300;
+    --weight-regular:   400;
+    --weight-medium:    500;
+    --weight-semibold:  600;
+    --weight-bold:      700;
+    --weight-superbold: 900;
+
+    --lh-tight:   1.15;
+    --lh-snug:    1.3;
+    --lh-normal:  1.5;
+    --lh-relaxed: 1.65;
+
+    --track-tighter: -0.02em;
+    --track-tight:   -0.01em;
+    --track-wide:    0.04em;
+    --track-wider:   0.07em;
+    --track-widest:  0.1em;
+}
+
+
+/* ─── 5. Component tokens ─────────────────────────────────────────────────── */
+:root {
+    --space-4:   4px;
+    --space-8:   8px;
+    --space-12: 12px;
+    --space-16: 16px;
+    --space-20: 20px;
+    --space-24: 24px;
+    --space-32: 32px;
+    --space-48: 48px;
+    --space-64: 64px;
+
+    --border-width:   1px;
+    --control-height: 32px;
+    --radius-control: 8px;
+    --radius-card:    10px;
+    --radius-panel:   12px;
+
+    /* Elevation ladder: card → popover → menu → modal. */
+    --shadow-card:    0 1px 2px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.06);
+    --shadow-popover: 0 4px 14px rgba(0, 0, 0, 0.22);
+    --shadow-menu:    0 8px 24px rgba(0, 0, 0, 0.28);
+    --shadow-modal:   0 20px 50px rgba(0, 0, 0, 0.5);
+    --scrim:          rgba(0, 0, 0, 0.55);
+
+    --sidebar-width:   224px;
+    --inspector-width: 300px;
+}
+
+
+/* ─── 6. Base layout ──────────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+    margin: 0;
+    background-color: var(--background);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: var(--size-body);
+    font-weight: var(--weight-regular);
+    line-height: var(--lh-normal);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+/* Every element that sets display: flex outranks the UA's [hidden] rule. */
+[hidden] { display: none !important; }
+
+.body_container {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* One thin scrollbar treatment for every scrolling panel. */
+.scroll-y {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--surface4) transparent;
+}
+
+.icon { width: 1em; height: 1em; flex-shrink: 0; display: block; }
+
+
+/* ─── 7. Modal primitives ───────────────────────────────────────────────────
+ * Every dialog: the same scrim, frame, header and close button. */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-32);
+    background: var(--scrim);
+}
+
+.modal {
+    width: 560px;
+    max-width: calc(100vw - 64px);
+    max-height: calc(100vh - 96px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--surface1);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-modal);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-16) var(--space-24);
+    border-bottom: var(--border-width) solid var(--border);
+}
+
+.modal-title {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: var(--size-h2);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--track-tight);
+}
+
+.modal-close {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-tertiary);
+    font-size: var(--size-h3);
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+.modal-close:hover { background: var(--surface3); color: var(--text-primary); }
+.modal-close:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; }
+
+.modal-body {
+    padding: var(--space-20) var(--space-24);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--surface4) var(--surface1);
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-8);
+    padding: var(--space-16) var(--space-24);
+    border-top: var(--border-width) solid var(--border);
+}
+
+
+/* ─── 8. Form controls ──────────────────────────────────────────────────────
+ * One text-field shape for every input and select in the app. */
+.field-input,
+.field-select {
+    height: var(--control-height);
+    min-width: 0;
+    padding: 0 var(--space-12);
+    background: var(--surface2);
+    border: var(--border-width) solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: var(--size-small);
+    font-variant-numeric: tabular-nums;
+    caret-color: var(--frost-caret);
+    outline: none;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.field-input:hover,
+.field-select:hover { border-color: var(--text-tertiary); }
+.field-input:focus,
+.field-select:focus { border-color: var(--accent-ring); }
+.field-input::placeholder { color: var(--text-tertiary); }
+.field-select { padding-right: var(--space-8); cursor: pointer; }
+.field-input[aria-invalid="true"] { border-color: var(--accent-negative); }
+
+input[type="month"].field-input { padding-right: var(--space-8); }
+input[type="month"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.6;
+}
+:root[data-theme="dark"] input[type="month"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+
+/* A field with a unit stuck to it: "$ [ 1,800 ]", "[ 4.5 ] %". */
+.field-affix {
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+}
+.field-affix > .field-input { flex: 1; width: 100%; }
+.field-affix-text {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 var(--space-8);
+    background: var(--surface3);
+    border: var(--border-width) solid var(--border);
+    color: var(--text-secondary);
+    font-size: var(--size-small);
+    white-space: nowrap;
+}
+.field-affix-text:first-child { border-radius: 6px 0 0 6px; border-right: 0; }
+.field-affix-text:last-child  { border-radius: 0 6px 6px 0; border-left: 0; }
+.field-affix > .field-input:not(:first-child) { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.field-affix > .field-input:not(:last-child)  { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+
+/* The eyebrow: a micro all-caps label over a section. */
+.eyebrow {
+    margin: 0;
+    color: var(--text-tertiary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--track-widest);
+    text-transform: uppercase;
+}

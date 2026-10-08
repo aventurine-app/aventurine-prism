@@ -1,0 +1,139 @@
+/* ============================================================================
+   buttons.css — the button system, as in Aventurine.
+   ============================================================================
+     .button-primary    accent fill, uppercase micro label: the one main action
+     .button-secondary  outlined neutral sibling
+     .button-icon       control-height square with a glyph
+     .button-danger     outlined red, fills on hover: destructive actions
+     .button-ghost      text-only, for low-weight actions inside panels
+   ============================================================================ */
+
+.button-primary,
+.button-secondary,
+.button-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-8);
+    height: var(--control-height);
+    padding: 0 var(--space-16);
+    border-radius: var(--radius-control);
+    font-family: var(--font-ui);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-superbold);
+    letter-spacing: var(--track-widest);
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease,
+                border-color 0.15s ease, transform 0.1s ease;
+}
+.button-primary .icon,
+.button-secondary .icon,
+.button-danger .icon { width: 16px; height: 16px; }
+
+.button-primary {
+    background: var(--accent-primary);
+    border: 0;
+    color: var(--button-text);
+}
+.button-primary:not(:disabled):hover { background: var(--accent-primary-hover); }
+
+.button-secondary {
+    background: transparent;
+    background-clip: padding-box;
+    border: var(--border-width) solid var(--accent-neutral-border);
+    color: var(--accent-neutral);
+}
+.button-secondary:not(:disabled):hover {
+    background-color: var(--accent-neutral-fill);
+    color: var(--accent-neutral-text);
+}
+.button-secondary:disabled { color: var(--text-tertiary); border-color: var(--border); }
+
+.button-danger {
+    background: transparent;
+    border: var(--border-width) solid var(--accent-negative);
+    color: var(--accent-negative);
+}
+.button-danger:not(:disabled):hover { background: var(--accent-negative); color: var(--danger-text); }
+
+.button-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--control-height);
+    height: var(--control-height);
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-control);
+    background-color: var(--icon-button-fill);
+    color: var(--icon-button-ink);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+.button-icon .icon { width: 18px; height: 18px; }
+.button-icon:not(:disabled):hover,
+.button-icon[aria-pressed="true"],
+.button-icon[aria-expanded="true"] {
+    background-color: var(--accent-neutral-fill);
+    color: var(--accent-neutral-text);
+}
+
+.button-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-8);
+    height: 28px;
+    padding: 0 var(--space-8);
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--size-small);
+    font-weight: var(--weight-semibold);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+.button-ghost .icon { width: 16px; height: 16px; }
+.button-ghost:not(:disabled):hover { background: var(--frost-3); color: var(--text-primary); }
+
+/* Shared states. */
+.button-primary:focus-visible,
+.button-secondary:focus-visible,
+.button-danger:focus-visible,
+.button-icon:focus-visible,
+.button-ghost:focus-visible {
+    outline: 2px solid var(--accent-ring);
+    outline-offset: 2px;
+}
+
+.button-primary:not(:disabled):active,
+.button-secondary:not(:disabled):active,
+.button-danger:not(:disabled):active,
+.button-icon:not(:disabled):active,
+.button-ghost:not(:disabled):active { transform: translateY(1px); }
+
+.button-primary:disabled,
+.button-secondary:disabled,
+.button-danger:disabled,
+.button-icon:disabled,
+.button-ghost:disabled { cursor: not-allowed; opacity: 0.55; }
+
+/* A button busy with an async action: label dimmed, a spinner in front. */
+.is-busy { position: relative; pointer-events: none; }
+.is-busy::before {
+    content: '';
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+    .button-primary, .button-secondary, .button-danger, .button-icon, .button-ghost { transition: none; }
+    .is-busy::before { animation-duration: 2s; }
+}

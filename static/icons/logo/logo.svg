@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- A cut gem on the brand teal. The pavilion (lower half) sits a
+       step darker than the crown, the same family as Aventurine's mark. -->
+  <rect width="64" height="64" rx="6" fill="#5b9f92"/>
+  <path d="M28.46 16.54Q32 13 35.54 16.54L47.46 28.46Q51 32 47.46 35.54L35.54 47.46Q32 51 28.46 47.46L16.54 35.54Q13 32 16.54 28.46Z" fill="#bbd8d2"/>
+  <path d="M14.77 32Q14.77 30.23 16.54 28.46L28.46 16.54Q32 13 35.54 16.54L47.46 28.46Q49.23 30.23 49.23 32Z" fill="#eff6f4"/>
+</svg>

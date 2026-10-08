@@ -1,0 +1,191 @@
+<!-- Shared window chrome: the frameless title bar (with the plan tabs) and the
+     Preferences and password dialogs. Spliced into pages/*.html by the app://
+     protocol handler (electron/main.js). The tabs are built by app/tabs.js,
+     Preferences is wired by shell/settings.js. -->
+    <div class="titlebar">
+        <div class="titlebar-lead">
+            <img class="titlebar-icon" src="/static/icons/logo/logo.svg" alt="" draggable="false">
+            <span class="titlebar-name">Aventurine Prism</span>
+        </div>
+        <nav class="tabs" id="tabs" aria-label="Plans"></nav>
+        <div class="titlebar-drag"></div>
+        <div class="save-state" id="save-state" data-state="saved" aria-live="polite" hidden>Saved</div>
+        <div class="titlebar-controls">
+            <button class="titlebar-btn titlebar-btn-min" data-action="min" aria-label="Minimize" tabindex="-1">
+                <svg viewBox="0 0 12 12" fill="none"><path d="M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <button class="titlebar-btn titlebar-btn-max" data-action="max" aria-label="Maximize" tabindex="-1">
+                <svg class="tb-glyph-default" viewBox="0 0 12 12" fill="none"><rect x="2.5" y="2.5" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>
+                <svg class="tb-glyph-mac" viewBox="0 0 12 12" fill="none"><path d="M6 2.5v7M2.5 6h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <button class="titlebar-btn titlebar-btn-close" data-action="close" aria-label="Close" tabindex="-1">
+                <svg viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="prefs" hidden>
+        <div class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="prefs-title">
+            <div class="modal-header">
+                <h2 class="modal-title" id="prefs-title">Preferences</h2>
+                <button class="modal-close" type="button" data-close aria-label="Close">×</button>
+            </div>
+            <div class="settings-tabs" role="tablist" aria-label="Preferences sections">
+                <button class="settings-tab" type="button" role="tab" data-tab="appearance" aria-selected="true">Appearance</button>
+                <button class="settings-tab" type="button" role="tab" data-tab="format" aria-selected="false" tabindex="-1">Format</button>
+                <button class="settings-tab" type="button" role="tab" data-tab="security" aria-selected="false" tabindex="-1">Security</button>
+                <button class="settings-tab" type="button" role="tab" data-tab="about" aria-selected="false" tabindex="-1">About</button>
+            </div>
+            <div class="modal-body">
+
+                <div class="settings-panel" role="tabpanel" data-panel="appearance">
+                    <div class="settings-card">
+                        <div class="settings-row settings-row--stack">
+                            <div class="settings-row-name">Surface</div>
+                            <div class="theme-options">
+                                <button class="theme-btn" type="button" data-theme-choice="colorful">
+                                    <div class="settings-theme-swatch" data-theme="colorful"></div>
+                                    <span class="theme-label">Colorful</span>
+                                </button>
+                                <button class="theme-btn" type="button" data-theme-choice="">
+                                    <div class="settings-theme-swatch" data-theme="light"></div>
+                                    <span class="theme-label">Light</span>
+                                </button>
+                                <button class="theme-btn" type="button" data-theme-choice="dark">
+                                    <div class="settings-theme-swatch" data-theme="dark"></div>
+                                    <span class="theme-label">Dark</span>
+                                </button>
+                                <button class="theme-btn" type="button" data-theme-choice="system">
+                                    <div class="settings-theme-swatch settings-theme-swatch--system"></div>
+                                    <span class="theme-label">System</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <div class="settings-row-name">Flow Animation</div>
+                            <div class="seg-switch" data-pref="flow-motion">
+                                <button class="seg-switch-btn" type="button" data-value="on">On</button>
+                                <button class="seg-switch-btn" type="button" data-value="off">Off</button>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <div class="settings-row-name">Interface Zoom</div>
+                            <select class="field-select" data-pref="ui-zoom" aria-label="Interface zoom">
+                                <option value="0.8">80%</option>
+                                <option value="0.9">90%</option>
+                                <option value="1">100%</option>
+                                <option value="1.1">110%</option>
+                                <option value="1.25">125%</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-panel" role="tabpanel" data-panel="format" hidden>
+                    <div class="settings-card">
+                        <div class="settings-row">
+                            <div class="settings-row-name">Currency Symbol</div>
+                            <input class="field-input" type="text" maxlength="3" autocomplete="off" spellcheck="false" data-pref="currency-symbol" aria-label="Currency symbol" style="width: 72px; text-align: center;">
+                        </div>
+                        <div class="settings-row">
+                            <div class="settings-row-name">Symbol Position</div>
+                            <div class="seg-switch" data-pref="symbol-position">
+                                <button class="seg-switch-btn" type="button" data-value="prefix">Before</button>
+                                <button class="seg-switch-btn" type="button" data-value="suffix">After</button>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <div class="settings-row-name">Number Format</div>
+                            <select class="field-select" data-pref="number-format" aria-label="Number format">
+                                <option value="us">1,234.56</option>
+                                <option value="eu">1.234,56</option>
+                                <option value="space">1 234,56</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-panel" role="tabpanel" data-panel="security" hidden>
+                    <div class="settings-section">
+                        <div class="settings-section-header">Plans File</div>
+                        <div class="settings-card">
+                            <div class="settings-row settings-row--stack">
+                                <div class="settings-row-name">Location</div>
+                                <div class="settings-path" data-file-path>—</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-section-header">Encryption</div>
+                        <div class="settings-card">
+                            <div class="settings-row">
+                                <div class="settings-row-name">Status</div>
+                                <div class="settings-value" data-enc-status>—</div>
+                            </div>
+                            <div class="settings-row" data-enc-row="encrypt" hidden>
+                                <div class="settings-row-name">Encrypt Plans File</div>
+                                <button class="button-secondary" type="button" data-enc-action="encrypt">Encrypt…</button>
+                            </div>
+                            <div class="settings-row" data-enc-row="change" hidden>
+                                <div class="settings-row-name">Change Password</div>
+                                <button class="button-secondary" type="button" data-enc-action="change">Change…</button>
+                            </div>
+                            <div class="settings-row" data-enc-row="lock" hidden>
+                                <div class="settings-row-name">Lock Now</div>
+                                <button class="button-secondary" type="button" data-enc-lock>Lock</button>
+                            </div>
+                            <div class="settings-row" data-enc-row="decrypt" hidden>
+                                <div class="settings-row-name">Remove Encryption</div>
+                                <button class="button-danger" type="button" data-enc-action="decrypt">Remove…</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-panel" role="tabpanel" data-panel="about" hidden>
+                    <div class="settings-section">
+                        <div class="settings-section-header">Aventurine Prism</div>
+                        <div class="settings-card">
+                            <div class="settings-row">
+                                <div class="settings-row-name">Version</div>
+                                <div class="settings-value" data-app-version>—</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- One encryption action at a time; shell/settings.js shows only the
+         fields that action needs. The password is never stored: losing it
+         loses the file's contents. -->
+    <div class="modal-overlay" id="pw-modal" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pw-title" style="width: 420px;">
+            <div class="modal-header">
+                <h2 class="modal-title" id="pw-title">Encryption</h2>
+                <button class="modal-close" type="button" data-close aria-label="Close">×</button>
+            </div>
+            <form class="modal-body" id="pw-form" autocomplete="off">
+                <label class="pw-field" data-pw="current" hidden>
+                    <span class="pw-label">Current password</span>
+                    <input class="field-input" type="password" name="current" autocomplete="current-password">
+                </label>
+                <label class="pw-field" data-pw="new" hidden>
+                    <span class="pw-label">New password</span>
+                    <input class="field-input" type="password" name="password" autocomplete="new-password">
+                </label>
+                <label class="pw-field" data-pw="confirm" hidden>
+                    <span class="pw-label">Confirm new password</span>
+                    <input class="field-input" type="password" name="confirm" autocomplete="new-password">
+                </label>
+                <div class="pw-warning" data-pw="warning" hidden>If you lose this password, the plans file cannot be opened and its plans cannot be recovered.</div>
+                <p class="form-error" data-pw-error hidden></p>
+            </form>
+            <div class="modal-footer">
+                <button class="button-secondary" type="button" data-close>Cancel</button>
+                <button class="button-primary" type="submit" form="pw-form" data-pw-submit>Apply</button>
+            </div>
+        </div>
+    </div>

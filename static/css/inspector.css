@@ -1,0 +1,247 @@
+/* ============================================================================
+   inspector.css — the right-hand panel. It edits whatever is selected: a
+   module (its fields, its links, its outlook), a link (its rule, written as a
+   sentence), or, with nothing selected, the plan itself.
+   ============================================================================ */
+
+.inspector {
+    width: var(--inspector-width);
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--surface1);
+    border-left: var(--border-width) solid var(--stroke-divider);
+}
+.inspector[data-collapsed="true"] { display: none; }
+
+.insp-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--surface4) transparent;
+}
+
+.insp-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    padding: var(--space-20) var(--space-20) var(--space-16);
+}
+
+.insp-titles {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.insp-name {
+    width: 100%;
+    height: 30px;
+    margin-left: -6px;
+    padding: 0 6px;
+    border: var(--border-width) solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: var(--size-h2);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--track-tight);
+    outline: none;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.insp-name:hover { border-color: var(--border); }
+.insp-name:focus { border-color: var(--accent-ring); background: var(--surface2); }
+
+.insp-sub { display: flex; align-items: center; gap: var(--space-8); }
+
+.insp-section {
+    padding: var(--space-16) var(--space-20);
+    border-top: var(--border-width) solid var(--stroke-divider);
+}
+.insp-section > .eyebrow { margin-bottom: var(--space-12); }
+
+/* Label column + control column. */
+.insp-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr);
+    align-items: center;
+    gap: var(--space-12) var(--space-12);
+}
+.insp-label {
+    color: var(--text-secondary);
+    font-size: var(--size-small);
+    font-weight: var(--weight-medium);
+    line-height: var(--lh-snug);
+}
+.insp-control { display: flex; gap: var(--space-4); min-width: 0; }
+.insp-static { align-self: center; color: var(--text-primary); font-size: var(--size-small); font-weight: var(--weight-semibold); }
+.insp-control > .field-input,
+.insp-control > .field-select,
+.insp-control > .field-affix { flex: 1; width: 100%; }
+.insp-clear {
+    flex-shrink: 0;
+    width: var(--control-height);
+    height: var(--control-height);
+}
+
+/* ── The rule sentence (links) ──────────────────────────────────────────── */
+.sentence {
+    margin: 0;
+    padding: var(--space-16);
+    border-radius: var(--radius-card);
+    background: var(--surface3);
+    color: var(--text-secondary);
+    font-size: var(--size-body);
+    line-height: var(--lh-relaxed);
+}
+.sentence b { color: var(--text-primary); font-weight: var(--weight-bold); }
+
+.link-ends {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+}
+.link-ends-arrow {
+    display: flex;
+    width: 28px;
+    justify-content: center;
+    color: var(--text-tertiary);
+}
+.link-ends-arrow .icon { width: 14px; height: 14px; transform: rotate(90deg); }
+.link-end {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-12);
+    max-width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-primary);
+    font-size: var(--size-body);
+    font-weight: var(--weight-semibold);
+    cursor: pointer;
+}
+.link-end span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-end:hover span:last-child { text-decoration: underline; }
+
+/* ── Link lists (Sends to / Receives from) ──────────────────────────────── */
+.insp-links { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.insp-link {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    width: 100%;
+    min-height: 44px;
+    padding: var(--space-4) var(--space-8);
+    border: 0;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--size-small);
+    font-weight: var(--weight-semibold);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+.insp-link:hover { background: var(--frost-3); color: var(--text-primary); }
+.insp-link:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
+.insp-link-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.insp-link-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.insp-link-amount {
+    color: var(--text-tertiary);
+    font-size: var(--size-micro);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.insp-link .icon-caret { width: 14px; height: 14px; color: var(--text-tertiary); }
+.insp-link--static { cursor: default; }
+.insp-link--static:hover { background: transparent; color: var(--text-secondary); }
+.insp-none { margin: 0; color: var(--text-tertiary); font-size: var(--size-small); }
+
+/* ── Figures ────────────────────────────────────────────────────────────── */
+.insp-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-12) var(--space-16);
+    margin-top: var(--space-12);
+}
+.stat-label {
+    color: var(--text-tertiary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--track-wide);
+}
+.stat-value {
+    color: var(--text-primary);
+    font-size: var(--size-body);
+    font-weight: var(--weight-semibold);
+    font-variant-numeric: tabular-nums;
+}
+.stat-value.is-up { color: var(--accent-positive); }
+.stat-value.is-down { color: var(--accent-negative); }
+
+.spark { display: block; width: 100%; height: 64px; overflow: visible; }
+.spark-area { fill: var(--spark, var(--accent-gray)); fill-opacity: 0.14; }
+.spark-line { fill: none; stroke: var(--spark, var(--accent-gray)); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.spark-zero { stroke: var(--chart-grid); stroke-dasharray: 3 4; }
+.spark[data-role="source"]   { --spark: var(--role-source); }
+.spark[data-role="account"]  { --spark: var(--role-account); }
+.spark[data-role="expense"]  { --spark: var(--role-expense); }
+.spark[data-role="debt"]     { --spark: var(--role-debt); }
+.spark[data-role="modifier"] { --spark: var(--role-modifier); }
+
+/* ── Issues ─────────────────────────────────────────────────────────────── */
+.issues { display: flex; flex-direction: column; gap: var(--space-8); margin: 0; padding: 0; list-style: none; }
+.issue {
+    display: flex;
+    gap: var(--space-8);
+    align-items: flex-start;
+    padding: var(--space-8) var(--space-12);
+    border-radius: var(--radius-control);
+    background: var(--warning-fill);
+    color: var(--text-primary);
+    font-size: var(--size-small);
+    line-height: var(--lh-snug);
+}
+.issue .icon { width: 16px; height: 16px; margin-top: 1px; color: var(--warning); }
+.issue--info { background: var(--frost-2); }
+.issue--info .icon { color: var(--text-tertiary); }
+button.issue { width: 100%; border: 0; text-align: left; cursor: pointer; }
+button.issue:hover { filter: brightness(0.97); }
+button.issue:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 1px; }
+
+.insp-actions { display: flex; gap: var(--space-8); flex-wrap: wrap; }
+
+/* Plan-level summary card */
+.worth-line {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-8);
+    font-variant-numeric: tabular-nums;
+}
+.worth-from { color: var(--text-tertiary); font-size: var(--size-small); font-weight: var(--weight-semibold); }
+.worth-to { color: var(--text-primary); font-size: var(--size-h1); font-weight: var(--weight-semibold); letter-spacing: var(--track-tight); }
+
+.role-counts { display: flex; flex-wrap: wrap; gap: var(--space-8); }
+.role-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 var(--space-8) 0 4px;
+    border-radius: 999px;
+    background: var(--frost-2);
+    color: var(--text-secondary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-bold);
+}
+.role-count .role-tile { width: 18px; height: 18px; border-radius: 50%; }
+.role-count .role-tile .icon { width: 11px; height: 11px; }

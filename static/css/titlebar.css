@@ -1,0 +1,279 @@
+/* ============================================================================
+   titlebar.css — the frameless window's title bar, which also holds the plan
+   tabs. Same bar as Aventurine (surface3, 40px, platform-dressed window
+   controls); the centre carries the tabs instead of a file name.
+   ============================================================================ */
+
+:root { --titlebar-frost: rgba(255, 255, 255, 0.60); }
+html[data-theme="dark"] { --titlebar-frost: rgba(255, 255, 255, 0.10); }
+
+.titlebar {
+    position: relative;
+    z-index: 20;
+    display: flex;
+    align-items: stretch;
+    height: 40px;
+    flex-shrink: 0;
+    background: var(--surface3);
+    color: var(--text-tertiary);
+    user-select: none;
+}
+/* The gray rule along the bar's bottom edge. The tabs sit above it, so the
+   active tab's open bottom covers it and the tab joins the canvas. */
+.titlebar::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: var(--stroke-divider);
+}
+
+/* As wide as the module library below, so the tabs start where the canvas does. */
+.titlebar-lead {
+    display: flex;
+    align-items: center;
+    width: var(--sidebar-width);
+    flex-shrink: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: width 0.18s ease;
+    -webkit-app-region: drag;
+}
+
+:root.has-rail .titlebar-name { display: none; }
+
+.titlebar-icon {
+    width: 22px;
+    height: 22px;
+    /* Centred on the library's icon column (28px), expanded or collapsed. */
+    margin: 0 var(--space-8) 0 calc(28px - 11px);
+    flex: none;
+    pointer-events: none;
+}
+
+.titlebar-name {
+    color: var(--text-primary);
+    font-size: var(--size-small);
+    font-weight: var(--weight-bold);
+    pointer-events: none;
+}
+
+.titlebar-drag {
+    flex: 1;
+    min-width: var(--space-48);
+    -webkit-app-region: drag;
+}
+
+/* ── Plan tabs ──────────────────────────────────────────────────────────── */
+.tabs {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-4);
+    min-width: 0;
+    padding-top: var(--space-4);
+    position: relative;
+    z-index: 1;
+    -webkit-app-region: no-drag;
+}
+
+.tabs-list {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+}
+.tabs-list::-webkit-scrollbar { display: none; }
+
+.tab {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    height: 32px;
+    flex-shrink: 0;
+    max-width: 220px;
+    min-width: 96px;
+    padding: 0 var(--space-8) 0 var(--space-12);
+    border: 0;
+    border-radius: var(--radius-control) var(--radius-control) 0 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--size-small);
+    font-weight: var(--weight-semibold);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+.tab:hover { background: var(--titlebar-frost); color: var(--text-primary); }
+.tab[aria-selected="true"] {
+    background: var(--background);
+    color: var(--text-primary);
+    border: var(--border-width) solid var(--stroke-divider);
+    background-clip: padding-box;
+    border-bottom: 0;
+}
+.tab:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
+
+.tab-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+}
+
+.tab-rename {
+    flex: 1;
+    min-width: 0;
+    height: 24px;
+    padding: 0 var(--space-4);
+    border: var(--border-width) solid var(--accent-ring);
+    border-radius: 4px;
+    background: var(--surface1);
+    color: var(--text-primary);
+    font-size: var(--size-small);
+    font-weight: var(--weight-semibold);
+    outline: none;
+}
+
+.tab-menu {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+.tab-menu .icon { width: 14px; height: 14px; }
+.tab:hover .tab-menu,
+.tab[aria-selected="true"] .tab-menu,
+.tab-menu:focus-visible,
+.tab-menu[aria-expanded="true"] { opacity: 1; }
+.tab-menu:hover { background: var(--frost-3); color: var(--text-primary); }
+
+/* Dragging a tab to reorder it. */
+.tab.is-dragging { opacity: 0.5; }
+.tab.is-drop-before { box-shadow: inset 2px 0 0 var(--accent-primary); }
+.tab.is-drop-after  { box-shadow: inset -2px 0 0 var(--accent-primary); }
+
+.tab-new {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    width: 28px;
+    height: 28px;
+    margin-left: var(--space-4);
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+.tab-new .icon { width: 16px; height: 16px; }
+.tab-new:hover { background: var(--titlebar-frost); color: var(--text-primary); }
+.tab-new:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
+
+/* Save state, right of the tabs: a dot and a word. */
+.save-state {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 var(--space-12);
+    color: var(--text-tertiary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--track-wide);
+    white-space: nowrap;
+    -webkit-app-region: no-drag;
+}
+.save-state::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-positive);
+}
+.save-state[data-state="saving"]::before { background: var(--warning); }
+.save-state[data-state="error"] { color: var(--accent-negative); }
+.save-state[data-state="error"]::before { background: var(--accent-negative); }
+
+/* ── Window controls (Windows/Linux default; macOS traffic lights below) ── */
+.titlebar-controls {
+    display: flex;
+    align-items: stretch;
+    -webkit-app-region: no-drag;
+}
+
+.titlebar-btn {
+    width: 46px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+.titlebar-btn svg { width: 10px; height: 10px; }
+.titlebar-btn:hover { background: var(--titlebar-frost); color: var(--text-primary); }
+.titlebar-btn-close:hover { background: #c42b1c; color: #fff; }
+.titlebar-btn:focus { outline: none; }
+.titlebar-btn:focus-visible { box-shadow: inset 0 0 0 1px var(--stroke-strong); }
+
+.tb-glyph-mac { display: none; }
+
+/* The traffic lights sit over the left of the lead block, so they do not push
+   the tabs off the canvas edge. The icon steps right to clear them. */
+[data-platform="mac"] { --mac-controls-width: 72px; }
+[data-platform="mac"] .titlebar-controls {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--mac-controls-width);
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px 0 12px;
+}
+[data-platform="mac"] .titlebar-icon { margin-left: calc(var(--mac-controls-width) + var(--space-12)); }
+[data-platform="mac"] .titlebar-btn {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.2);
+    color: rgba(0, 0, 0, 0.55);
+}
+[data-platform="mac"] .titlebar-btn-close { background: #ff5f57; order: 0; }
+[data-platform="mac"] .titlebar-btn-min   { background: #febc2e; order: 1; }
+[data-platform="mac"] .titlebar-btn-max   { background: #28c840; order: 2; }
+[data-platform="mac"] .titlebar-btn:hover { color: rgba(0, 0, 0, 0.55); }
+[data-platform="mac"] .titlebar-btn-close:hover { background: #ff5f57; }
+[data-platform="mac"] .titlebar-btn-min:hover   { background: #febc2e; }
+[data-platform="mac"] .titlebar-btn-max:hover   { background: #28c840; }
+[data-platform="mac"] .titlebar-btn svg { width: 7px; height: 7px; opacity: 0; transition: opacity 100ms ease; }
+[data-platform="mac"] .titlebar-controls:hover .titlebar-btn svg { opacity: 1; }
+[data-platform="mac"] .tb-glyph-default { display: none; }
+[data-platform="mac"] .tb-glyph-mac { display: block; }
+
+@media (prefers-reduced-motion: reduce) {
+    .tab, .tab-menu, .tab-new, .titlebar-btn { transition: none; }
+}

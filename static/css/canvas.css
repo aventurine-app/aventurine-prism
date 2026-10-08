@@ -1,0 +1,599 @@
+/* ============================================================================
+   canvas.css — the sandbox: a pannable, zoomable dot-grid plane holding the
+   plan's modules (HTML cards) and the links between them (SVG curves).
+   Geometry constants (card size, port positions) are mirrored in
+   app/canvas.js as NODE_W / NODE_H; change both together.
+   ============================================================================ */
+
+.workbench {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.stage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    background-color: var(--canvas-bg);
+    background-image: radial-gradient(circle, var(--canvas-dot) 1.1px, transparent 1.6px);
+    background-size: var(--grid, 24px) var(--grid, 24px);
+    background-position: var(--grid-x, 0) var(--grid-y, 0);
+    cursor: default;
+    outline: none;
+    touch-action: none;
+}
+.stage.is-panning { cursor: grabbing; }
+.stage.is-space { cursor: grab; }
+.marquee {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 4;
+    pointer-events: none;
+    border: 1px solid var(--accent-ring);
+    border-radius: var(--radius-control);
+    background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+}
+.stage.is-drop-target { box-shadow: inset 0 0 0 2px var(--accent-ring); }
+
+.canvas-world {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    transform-origin: 0 0;
+    /* No will-change: it pins the raster scale, so zooming stretches a bitmap and blurs. */
+}
+
+.canvas-links {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    overflow: visible;
+    pointer-events: none;
+}
+
+/* ── Links ──────────────────────────────────────────────────────────────── */
+/* A link wears the colour of the output port it leaves from. */
+.link { --link: var(--role-none); }
+.link[data-flow] { --link: var(--flow); }
+[data-flow="pay"]       { --flow: var(--flow-pay); }
+[data-flow="deposits"]  { --flow: var(--flow-deposits); }
+[data-flow="spending"]  { --flow: var(--flow-spending); }
+[data-flow="passes"]    { --flow: var(--flow-passes); }
+[data-flow="overflow"]  { --flow: var(--flow-overflow); }
+[data-flow="proceeds"]  { --flow: var(--flow-proceeds); }
+[data-flow="earnings"]  { --flow: var(--flow-earnings); }
+[data-flow="balance"]   { --flow: var(--flow-balance); }
+[data-flow="charges"]   { --flow: var(--flow-charges); }
+[data-flow="cashback"]  { --flow: var(--flow-cashback); }
+
+.link-path {
+    fill: none;
+    stroke: var(--link);
+    stroke-width: 3px;
+    stroke-linecap: round;
+    stroke-opacity: 0.75;
+    transition: stroke-opacity 0.15s ease;
+}
+.link-hit {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 16px;
+    pointer-events: stroke;
+    cursor: pointer;
+}
+/* Money moving: light dots running along the curve, source to target. */
+.link-flow {
+    fill: none;
+    stroke: var(--surface1);
+    stroke-opacity: 0.85;
+    stroke-linecap: round;
+    stroke-width: 1.5px;
+    stroke-dasharray: 0.5 14;
+    animation: link-flow 1.4s linear infinite;
+    pointer-events: none;
+}
+@keyframes link-flow { to { stroke-dashoffset: -14.5; } }
+:root[data-motion="off"] .link-flow { display: none; }
+.stage.flow-limited .link-flow:not(.is-related) { display: none; }
+.link-flow.is-idle,
+.link-flow.is-dim { display: none; }
+.link.is-idle .link-path { stroke-dasharray: 4 6; stroke-opacity: 0.5; }
+.link:hover .link-path,
+.link.is-hover .link-path { stroke-opacity: 1; }
+/* A link being inspected (selected, or touching the selected module) is thicker. */
+.link.is-active .link-path { stroke-width: 6px; stroke-opacity: 1; }
+.link-flow.is-active { stroke-width: 2.5px; }
+.link.is-dim .link-path { stroke-opacity: 0.18; }
+
+.link-ghost {
+    fill: none;
+    stroke: var(--flow, var(--accent-ring));
+    stroke-width: 2;
+    stroke-dasharray: 6 6;
+    stroke-linecap: round;
+}
+
+/* ── Link labels ────────────────────────────────────────────────────────── */
+.canvas-labels { position: absolute; left: 0; top: 0; }
+
+.link-label {
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 22px;
+    padding: 0 var(--space-8);
+    border: var(--border-width) solid var(--border);
+    border-radius: 999px;
+    background: var(--surface1);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    color: var(--text-secondary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-bold);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    cursor: pointer;
+    transform: translate(-50%, -50%);
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+.link-label::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--link);
+}
+.link-label:hover { border-color: var(--stroke-strong); color: var(--text-primary); }
+.link-label.is-selected { border-color: var(--accent-gray); color: var(--text-primary); }
+.link-label.is-short { border-color: var(--warning); }
+.link-label.is-dim { opacity: 0.3; }
+.link-label:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; }
+
+/* ── Module cards ───────────────────────────────────────────────────────── */
+.node {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 208px;
+    height: 112px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    padding: var(--space-12) var(--space-12) var(--space-12);
+    background: var(--surface1);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-card);
+    color: var(--text-primary);
+    cursor: grab;
+    user-select: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.node:hover { border-color: var(--stroke-strong); }
+/* The ring is drawn by ::after so it can wrap the whole module: the card plus
+   any docked loans and the strip under it (--extent is set by canvas.js). */
+.node:focus-visible { outline: none; }
+.node:focus-visible::after,
+.node.is-selected::after {
+    content: '';
+    position: absolute;
+    left: -4px;
+    right: -4px;
+    top: -4px;
+    box-sizing: border-box;
+    height: calc(var(--extent, 112px) + 6px);
+    border: 2px solid var(--accent-ring);
+    border-radius: calc(var(--radius-panel) + 4px);
+    pointer-events: none;
+}
+.node.is-selected { z-index: 2; }
+.node.is-dragging { cursor: grabbing; box-shadow: var(--shadow-popover); z-index: 3; }
+.node.is-dim { opacity: 0.35; }
+.node.is-target { border-color: var(--accent-ring); box-shadow: 0 0 0 4px var(--accent-wash), var(--shadow-card); }
+
+.node-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-width: 0;
+}
+.node-head .role-tile { width: 32px; height: 32px; border-radius: 9px; }
+.node-head .role-tile .icon { width: 20px; height: 20px; }
+
+.node-titles {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+.node-name {
+    overflow: hidden;
+    color: var(--text-primary);
+    font-size: var(--size-small);
+    font-weight: var(--weight-bold);
+    line-height: var(--lh-snug);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.node-meta {
+    overflow: hidden;
+    color: var(--text-tertiary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--track-wide);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.node-figure {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    margin-top: auto;
+}
+.node-value {
+    overflow: hidden;
+    font-family: var(--font-numeric);
+    font-size: 1.25rem;
+    font-weight: var(--weight-semibold);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--track-tighter);
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.node-value.is-negative { color: var(--accent-negative); }
+.node-unit {
+    color: var(--text-tertiary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-semibold);
+    white-space: nowrap;
+}
+.node-delta {
+    margin-left: auto;
+    font-size: var(--size-micro);
+    font-weight: var(--weight-bold);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.node-delta.is-up { color: var(--accent-positive); }
+.node-delta.is-down { color: var(--accent-negative); }
+
+/* Where the module's money goes: one segment per link in its target's colour,
+   grey for what lands in Unassigned. Accounts and debts show progress
+   instead. */
+.node-bar {
+    display: flex;
+    gap: 2px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--frost-2);
+    overflow: hidden;
+}
+.node-bar > span { min-width: 2px; height: 100%; border-radius: 2px; background: var(--seg, var(--role-none)); }
+.node-bar > span[data-role="source"]   { --seg: var(--role-source); }
+.node-bar > span[data-role="account"]  { --seg: var(--role-account); }
+.node-bar > span[data-role="expense"]  { --seg: var(--role-expense); }
+.node-bar > span[data-role="debt"]     { --seg: var(--role-debt); }
+.node-bar > span[data-role="modifier"] { --seg: var(--role-modifier); }
+.node-bar > span[data-role="none"]     { --seg: var(--role-none); opacity: 0.45; }
+
+.node-flag {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--warning);
+    box-shadow: 0 0 0 2px var(--canvas-bg);
+    color: #1c1300;
+}
+.node-flag .icon { width: 12px; height: 12px; }
+
+/* On a docked loan the badge sits inside the card, clear of the asset above. */
+.node.is-docked .node-flag,
+.node.is-docked .node-check { top: 4px; right: 4px; }
+
+.node-check {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent-positive);
+    box-shadow: 0 0 0 2px var(--canvas-bg);
+    color: #fff;
+}
+.node-check .icon { width: 12px; height: 12px; }
+
+/* ── Ports ──────────────────────────────────────────────────────────────── */
+/* The input port sits on the vertical centre. Output ports are placed down the
+   right edge by canvas.js (one per thing the module can send), each filled
+   with the colour of what it sends. */
+.node-port {
+    position: absolute;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    margin-top: -7px;
+    border: 2px solid var(--tile);
+    border-radius: 50%;
+    background: var(--surface1);
+    transition: transform 0.12s ease, background-color 0.12s ease;
+}
+.node-port--in  { left: -8px; }
+.node-port--out { right: -8px; cursor: crosshair; border-color: var(--flow); background: var(--flow); }
+.node-port--out::after {
+    /* A bigger invisible hit area than the visible dot. */
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+}
+.node:hover .node-port,
+.node.is-selected .node-port { transform: scale(1.15); }
+.node-port--out:hover { transform: scale(1.35); }
+.node-port-label {
+    /* Named only while it is useful: hovering the card, selected, or linking. */
+    position: absolute;
+    left: 100%;
+    top: 50%;
+    margin-left: 10px;
+    padding: 1px 6px;
+    border-radius: var(--radius-control);
+    background: var(--surface1);
+    border: var(--border-width) solid var(--border);
+    color: var(--text-secondary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-bold);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(-50%);
+    transition: opacity 0.12s ease;
+}
+.node:hover .node-port-label,
+.node.is-selected .node-port-label,
+.stage.is-linking .node-port-label { opacity: 1; }
+.node.is-target .node-port--in { background: var(--accent-ring); border-color: var(--accent-ring); transform: scale(1.4); }
+
+/* ── Docks and strips under a card ──────────────────────────────────────── */
+/* A loan secured by a property is a debt card snapped under it, and the strip
+   under the last piece of a stack is "+ debt" on a property, a card slot on
+   spending, and what a card pays for. Together they read as ONE card: the top
+   card's own outline is handed to a frame (::before) that spans the whole
+   stack, and the pieces inside are divided by a single line. A docked loan's
+   height (72px) is DOCK_H in plan.js; --extent is the stack's full height. */
+.node-foot {
+    position: absolute;
+    left: 0;
+    right: 0;
+    /* --foot-top is measured from the card's outer edge; this box is placed
+       from its padding edge, one border lower. */
+    top: calc(var(--foot-top, 112px) - var(--border-width));
+}
+.node-foot[hidden] { display: none; }
+.node.has-foot,
+.node.has-docks {
+    border-color: transparent;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+.node.has-foot::before,
+.node.has-docks::before {
+    content: '';
+    position: absolute;
+    left: -1px;
+    right: -1px;
+    top: -1px;
+    z-index: -1;
+    /* Pseudo-elements do not inherit the global border-box, so say it. */
+    box-sizing: border-box;
+    height: var(--extent, 112px);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface1);
+    box-shadow: var(--shadow-card);
+    pointer-events: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.node.has-foot:hover::before,
+.node.has-docks:hover::before { border-color: var(--stroke-strong); }
+.node.has-foot.is-target::before,
+.node.has-docks.is-target::before { border-color: var(--accent-ring); box-shadow: 0 0 0 4px var(--accent-wash), var(--shadow-card); }
+
+.node.is-docked {
+    --dock-tint: color-mix(in srgb, var(--role-debt) 6%, var(--surface1));
+    height: 72px;
+    padding: var(--space-8) var(--space-12);
+    gap: var(--space-4);
+    /* Side and top edges continue the frame's outline. The left one stays
+       transparent so the loan's accent bar, painted under it, reaches the
+       frame's outer edge. */
+    border: var(--border-width) solid var(--border);
+    border-left-color: transparent;
+    border-bottom-width: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background:
+        linear-gradient(var(--role-debt), var(--role-debt)) left top / 4px 100% no-repeat border-box,
+        var(--dock-tint);
+    animation: dock-in 0.22s ease-out;
+}
+/* With no strip below it, the last loan of a full stack closes the frame. */
+.node.is-docked.ends-stack {
+    border-bottom-width: var(--border-width);
+    border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+}
+/* A docked loan is an element inside its property's, not a second card on the
+   canvas: one outline, one place to click, nothing to overlap. */
+.node.is-docked.is-target { box-shadow: inset 0 0 0 2px var(--accent-ring); }
+/* Selecting a loan tints it; it has no ring of its own to float apart from the stack. */
+.node.is-docked.is-selected { --dock-tint: color-mix(in srgb, var(--role-debt) 16%, var(--surface1)); }
+.node.is-docked.is-selected::after,
+.node.is-docked:focus-visible::after { display: none; }
+.node.is-docked .node-bar { display: none; }
+.node.is-docked .node-head .role-tile { width: 28px; height: 28px; border-radius: 8px; }
+.node.is-docked .node-head .role-tile .icon { width: 18px; height: 18px; }
+@keyframes dock-in { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 -20px -20px -20px); } }
+
+.node-foot-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-8);
+    width: 100%;
+    height: 32px;
+    border: 0;
+    border-top: var(--border-width) solid var(--border);
+    border-radius: 0 0 calc(var(--radius-panel) - 1px) calc(var(--radius-panel) - 1px);
+    background: transparent;
+    color: var(--text-tertiary);
+    font-size: var(--size-small);
+    font-weight: var(--weight-bold);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+.node-foot-btn:hover { background: var(--surface2); color: var(--text-primary); }
+.node-foot-btn:focus-visible { outline: none; background: var(--surface2); color: var(--text-primary); }
+.node-slot.is-on {
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--role-debt) 8%, var(--surface1));
+}
+.card-glyph {
+    position: relative;
+    flex: none;
+    width: 26px;
+    height: 16px;
+    border: 1.6px dashed currentColor;
+    border-radius: 4px;
+}
+.card-glyph::after { content: ''; position: absolute; left: 0; right: 0; top: 3px; height: 3px; background: currentColor; }
+.node-slot.is-on .card-glyph { border-style: solid; color: var(--role-debt); }
+
+.node-tray {
+    display: flex;
+    gap: var(--space-4);
+    min-height: 30px;
+    padding: 5px var(--space-8);
+    overflow: hidden;
+    border: 0;
+    border-top: 1px solid var(--border);
+    border-radius: 0 0 calc(var(--radius-panel) - 1px) calc(var(--radius-panel) - 1px);
+    background: transparent;
+}
+.o-chip {
+    flex: none;
+    max-width: 96px;
+    overflow: hidden;
+    padding: 0 var(--space-8);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--role-expense) 14%, var(--surface1));
+    border: 1px solid color-mix(in srgb, var(--role-expense) 40%, var(--border));
+    color: var(--text-secondary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-bold);
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* A debt's input port is where a payment link lands. */
+.node[data-role="debt"] .node-port--in { cursor: pointer; }
+.node[data-role="debt"] .node-port--in::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; }
+
+/* ── Floating islands over the canvas ───────────────────────────────────── */
+.island {
+    position: absolute;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: var(--space-4);
+    background: var(--surface1);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-card);
+}
+.island .button-icon { width: 30px; height: 30px; background: transparent; }
+.island .button-icon .icon { width: 17px; height: 17px; }
+.island .button-icon:not(:disabled):hover { background: var(--frost-3); color: var(--text-primary); }
+.island .button-icon[aria-pressed="true"] { background: var(--surface3); color: var(--text-primary); }
+.island-sep { width: 1px; height: 18px; margin: 0 var(--space-4); background: var(--stroke-divider); }
+
+.island--tools  { left: var(--space-16); top: var(--space-16); }
+.island--zoom   { left: var(--space-16); bottom: var(--space-16); }
+.island--time {
+    left: 50%;
+    top: var(--space-16);
+    transform: translateX(-50%);
+    gap: var(--space-8);
+    padding: var(--space-8) var(--space-12);
+    color: var(--text-primary);
+    font-size: var(--size-small);
+    font-weight: var(--weight-bold);
+    pointer-events: none;
+}
+.island--time .icon { width: 16px; height: 16px; }
+
+.zoom-level {
+    min-width: 46px;
+    padding: 0 var(--space-4);
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-bold);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 6px;
+    height: 30px;
+}
+.zoom-level:hover { background: var(--frost-3); color: var(--text-primary); }
+
+/* ── Empty plan ─────────────────────────────────────────────────────────── */
+.canvas-empty {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+.canvas-empty .empty-state {
+    pointer-events: auto;
+    background: var(--surface1);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-card);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .link-flow { animation: none; display: none; }
+    .node, .node-port, .link-path, .link-label { transition: none; }
+    .node.is-docked { animation: none; }
+}

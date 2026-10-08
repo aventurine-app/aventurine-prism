@@ -1,0 +1,216 @@
+/* ============================================================================
+   settings.css — Preferences (Appearance, Format, Security, About), the
+   password form, and the lock screen. Same cards, rows and swatches as
+   Aventurine's Preferences.
+   ============================================================================ */
+
+.settings-modal {
+    width: 640px;
+    height: min(620px, calc(100vh - 96px));
+
+    /* No teal in Preferences: the accent tokens resolve to dark gray here. */
+    --accent-primary:       var(--accent-gray);
+    --accent-primary-hover: var(--accent-gray-hover);
+    --accent-ink:           var(--text-primary);
+    --accent-ring:          var(--text-secondary);
+    --accent-wash:          var(--surface3);
+    --button-text:          #fff;
+}
+
+.settings-tabs {
+    display: flex;
+    gap: var(--space-4);
+    padding: var(--space-12) var(--space-24) 0;
+    border-bottom: var(--border-width) solid var(--border);
+}
+.settings-tab {
+    position: relative;
+    height: 36px;
+    padding: 0 var(--space-12);
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--size-small);
+    font-weight: var(--weight-semibold);
+    cursor: pointer;
+}
+.settings-tab:hover { color: var(--text-primary); }
+.settings-tab[aria-selected="true"] { color: var(--text-primary); }
+.settings-tab[aria-selected="true"]::after {
+    content: '';
+    position: absolute;
+    left: var(--space-8);
+    right: var(--space-8);
+    bottom: -1px;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+    background: var(--accent-primary);
+}
+.settings-tab:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
+
+.settings-panel { display: flex; flex-direction: column; gap: var(--space-16); }
+
+.settings-section { display: flex; flex-direction: column; gap: var(--space-8); }
+.settings-section-header {
+    padding-left: 2px;
+    color: var(--text-tertiary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--track-widest);
+    text-transform: uppercase;
+}
+
+.settings-card {
+    background: var(--surface1);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-card);
+    overflow: hidden;
+}
+
+.settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-16);
+    padding: var(--space-16) var(--space-20);
+}
+.settings-row + .settings-row { border-top: var(--border-width) solid var(--border); }
+.settings-row--stack { flex-direction: column; align-items: flex-start; }
+.settings-row-name { color: var(--text-primary); font-weight: var(--weight-medium); }
+.settings-value {
+    color: var(--text-secondary);
+    font-size: var(--size-small);
+    text-align: right;
+}
+.settings-path {
+    max-width: 100%;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: var(--size-small);
+    word-break: break-all;
+    user-select: text;
+}
+
+/* Theme swatches: background band, surface, accent strip. */
+.theme-options { display: flex; flex-wrap: wrap; gap: 10px; }
+.theme-btn {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--surface2);
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.15s ease;
+}
+.theme-btn:hover { border-color: var(--text-tertiary); }
+.theme-btn[aria-pressed="true"] { border-color: var(--accent-primary); }
+.theme-btn:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; }
+.settings-theme-swatch {
+    position: relative;
+    width: 76px;
+    height: 46px;
+    background-color: var(--surface1);
+}
+.settings-theme-swatch::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 35%;
+    background: var(--background);
+}
+.settings-theme-swatch::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 7px;
+    background: var(--accent-primary);
+}
+.settings-theme-swatch[data-theme="colorful"] {
+    background-image: linear-gradient(to bottom, var(--color-base-700), var(--color-base-900));
+    background-repeat: no-repeat;
+    background-size: 24% 100%;
+}
+.settings-theme-swatch--system { background: linear-gradient(105deg, #f2f3f2 0 50%, #191a19 50% 100%); }
+.settings-theme-swatch--system::before { display: none; }
+.theme-label {
+    padding: 5px 0 6px;
+    color: var(--text-secondary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--track-wide);
+    text-align: center;
+}
+
+/* Two-option switch. */
+.seg-switch {
+    display: inline-flex;
+    height: var(--control-height);
+    border: var(--border-width) solid var(--accent-primary);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--surface1);
+    flex-shrink: 0;
+}
+.seg-switch-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 var(--space-16);
+    border: 0;
+    background: transparent;
+    color: var(--accent-ink);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-superbold);
+    letter-spacing: var(--track-widest);
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.seg-switch-btn:hover { background: var(--accent-wash); }
+.seg-switch-btn[aria-pressed="true"] { background: var(--accent-primary); color: var(--button-text); }
+.seg-switch-btn:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -3px; }
+
+/* Password form fields. */
+.pw-field { display: flex; flex-direction: column; gap: 6px; }
+.pw-field + .pw-field { margin-top: var(--space-12); }
+.pw-label { color: var(--text-secondary); font-size: var(--size-small); font-weight: var(--weight-medium); }
+.pw-warning {
+    margin-top: var(--space-16);
+    padding: var(--space-12);
+    border-radius: var(--radius-control);
+    background: var(--warning-fill);
+    color: var(--text-primary);
+    font-size: var(--size-small);
+    line-height: var(--lh-normal);
+}
+.form-error { margin: var(--space-12) 0 0; color: var(--accent-negative); font-size: var(--size-small); }
+
+/* ── Lock screen ────────────────────────────────────────────────────────── */
+.lockscreen {
+    position: fixed;
+    inset: 40px 0 0 0;
+    z-index: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--background);
+}
+.lock-card {
+    width: 380px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    padding: var(--space-32);
+    background: var(--surface1);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-card);
+}
+.lock-card .role-tile { --tile: var(--accent-primary); }
+.lock-title { margin: 0; font-size: var(--size-h2); font-weight: var(--weight-semibold); letter-spacing: var(--track-tight); }
+.lock-path { color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--size-micro); word-break: break-all; }
+.lock-form { display: flex; flex-direction: column; gap: var(--space-12); }
+.lock-form .field-input { height: 36px; font-size: var(--size-body); }
+.lock-form .button-primary { height: 36px; }

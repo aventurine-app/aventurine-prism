@@ -1,0 +1,90 @@
+# electron-builder config — same layout and posture as Aventurine's.
+#
+# Layout note (load-bearing): package.json lives in electron/, but main.js
+# serves pages/ and static/ from the REPO ROOT (PROJECT_ROOT =
+# path.resolve(__dirname, '..')). In a packaged app __dirname is
+# .../resources/app.asar, so PROJECT_ROOT resolves to .../resources, which is
+# exactly where extraResources land.
+#
+# Aventurine Prism has no native modules (the plans file is JSON, encrypted with Node's
+# own crypto), so there is no ABI to park and nothing to unpack from the asar.
+
+appId: com.aventurineapp.prism
+productName: Aventurine Prism
+copyright: Copyright © 2026 Aventurine
+
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - main.js
+  - preload.js
+  - backend/**/*
+  - package.json
+
+extraResources:
+  - from: ../pages
+    to: pages
+  - from: ../static
+    to: static
+
+asar: true
+npmRebuild: false
+
+# No publish config and no updater. Aventurine Prism never phones home; users update by
+# installing a newer build.
+
+linux:
+  target:
+    - AppImage
+    - rpm
+    - deb
+  icon: build/icon.png
+  category: Office;Finance
+  synopsis: Financial outlook simulator
+  description: >
+    Aventurine Prism, a private, offline sandbox for simulating where your money goes:
+    income, accounts, spending, debts and their links, run month by month over
+    the years you choose.
+  desktop:
+    entry:
+      # Must equal Electron's runtime WM_CLASS (package.json "name").
+      StartupWMClass: aventurine-prism
+
+appImage:
+  artifactName: ${name}-${version}.${arch}.${ext}
+
+rpm:
+  artifactName: ${name}-${version}.${arch}.${ext}
+
+# Windows installers are not Authenticode-signed yet (the same recorded gap as
+# Aventurine): users see a SmartScreen "unknown publisher" warning on first
+# install.
+win:
+  target:
+    - nsis
+  icon: build/icon.ico
+  artifactName: ${name}-${version}-setup.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Aventurine Prism
+
+# macOS must be built on macOS. Ad-hoc signed, not notarized (no Apple
+# Developer ID yet), as Aventurine.
+mac:
+  target:
+    - dmg
+  icon: build/icon.png
+  category: public.app-category.finance
+  identity: '-'
+  hardenedRuntime: false
+  notarize: false
+
+dmg:
+  artifactName: ${name}-${version}-${arch}.${ext}

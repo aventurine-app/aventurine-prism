@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Aventurine Prism</title>
+    <!-- @include head -->
+    <link rel="stylesheet" href="/static/css/library.css">
+    <link rel="stylesheet" href="/static/css/canvas.css">
+    <link rel="stylesheet" href="/static/css/inspector.css">
+    <link rel="stylesheet" href="/static/css/outlook.css">
+</head>
+<body>
+    <!-- @include chrome -->
+
+    <!-- The workspace: the module library, the canvas over the outlook panel,
+         and the inspector. Hidden until the plans have loaded (or the file is
+         unlocked), so nothing paints half-built. -->
+    <div class="body_container" id="app" hidden>
+        <aside class="library" id="library" aria-label="Modules"></aside>
+
+        <main class="workbench">
+            <div class="stage" id="stage" tabindex="0" aria-label="Plan canvas">
+                <!-- The world is the one transformed layer: links (SVG), the
+                     moving dots on them, the labels, then the module cards.
+                     Camera moves change only its transform. -->
+                <div class="canvas-world" id="world">
+                    <svg class="canvas-links" id="links" aria-hidden="true"></svg>
+                    <svg class="canvas-links" id="flows" aria-hidden="true"></svg>
+                    <div class="canvas-labels" id="labels"></div>
+                    <div class="canvas-nodes" id="nodes"></div>
+                </div>
+            </div>
+            <section class="outlook" id="outlook" aria-label="Outlook"></section>
+        </main>
+
+        <aside class="inspector" id="inspector" aria-label="Inspector"></aside>
+    </div>
+
+    <div class="lockscreen" id="lockscreen" hidden></div>
+
+    <!-- @include scripts -->
+    <script src="/static/js/app/describe.js"></script>
+    <script src="/static/js/app/example.js"></script>
+    <script src="/static/js/app/store.js"></script>
+    <script src="/static/js/app/tabs.js"></script>
+    <script src="/static/js/app/library.js"></script>
+    <script src="/static/js/app/canvas.js"></script>
+    <script src="/static/js/app/inspector.js"></script>
+    <script src="/static/js/app/chart.js"></script>
+    <script src="/static/js/app/outlook.js"></script>
+    <script src="/static/js/app/lock.js"></script>
+    <script src="/static/js/app/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,109 @@
+/* ============================================================================
+   themes.css — the surface themes, as in Aventurine.
+   ============================================================================
+   Light is the :root baseline in style.css. Dark overrides it here. Colorful is
+   light with the sidebar flipped to a dark gradient, which here is the module
+   library, so the tiles' role colours sit on a dark shelf. The theme lands on
+   <html data-theme> before first paint (shell/theme-init.js). */
+
+
+/* ─── Dark ─────────────────────────────────────────────────────────────────── */
+html[data-theme="dark"],
+.settings-theme-swatch[data-theme="dark"] {
+    color-scheme: dark;
+
+    --text-primary:   var(--color-base-100);
+    --text-secondary: var(--color-base-300);
+    --text-tertiary:  var(--color-base-400);
+
+    --background: var(--color-base-950);
+    --surface1:   var(--color-base-900);
+    --surface2:   var(--color-base-900);
+    --surface3:   var(--color-base-800);
+    --surface4:   var(--color-base-600);
+    --border:     var(--color-base-800);
+
+    /* The accent rests a rung lighter on dark, and its hover lifts toward the
+       light end as on light. Ink and ring come from the light end too. */
+    --accent-primary:       var(--color-accent-400);
+    --accent-primary-hover: var(--color-accent-300);
+    --accent-ink:           var(--color-accent-300);
+    --accent-ring:          var(--color-accent-400);
+    --accent-wash:          color-mix(in srgb, var(--accent-primary) 18%, var(--surface1));
+
+    --accent-neutral:        var(--color-base-300);
+    --accent-neutral-fill:   var(--stroke-medium);
+    --accent-neutral-border: var(--stroke-medium);
+    --accent-gray:           var(--color-base-600);
+    --accent-gray-hover:     var(--color-base-500);
+    --toggle-on:             var(--color-base-400);
+
+    --warning: #f5a524;
+    --info:    #4177ff;
+
+    --frost-2:     rgba(255, 255, 255, 0.05);
+    --frost-3:     rgba(255, 255, 255, 0.10);
+    --frost-caret: rgba(255, 255, 255, 0.80);
+
+    --stroke-divider: rgba(255, 255, 255, 0.06);
+    --stroke-soft:    rgba(255, 255, 255, 0.12);
+    --stroke-medium:  rgba(255, 255, 255, 0.20);
+    --stroke-strong:  rgba(255, 255, 255, 0.25);
+
+    --segctl-hover: var(--color-base-700);
+
+    --canvas-bg:  var(--color-base-950);
+    --canvas-dot: rgba(255, 255, 255, 0.11);
+
+    /* Roles and ramps re-picked against the dark surface (see style.css §3;
+       roles validated all pairs, CVD 10.5). */
+    --role-source:   #39832f;
+    --role-account:  #5d99d5;
+    --role-expense:  #d3a63e;
+    --role-debt:     #d8777f;
+    --role-modifier: #8053a4;
+    --role-none:     var(--color-base-500);
+
+    --chart-account-1: #234993;
+    --chart-account-2: #305eb7;
+    --chart-account-3: #4b77cc;
+    --chart-account-4: #6991dc;
+    --chart-account-5: #8cabe4;
+    --chart-account-6: #afc5ec;
+    --chart-debt-1: #9d352f;
+    --chart-debt-2: #bc4a41;
+    --chart-debt-3: #ce7067;
+    --chart-debt-4: #de958c;
+    --chart-unassigned: var(--color-base-600);
+    --chart-networth:   var(--color-accent-300);
+}
+
+
+/* ─── Colorful ───────────────────────────────────────────────────────────────
+ * Declares no page-level tokens: everything outside the library falls through
+ * to the light baseline, so Colorful cannot drift from Light. Inside the
+ * library the tokens it already reads are re-pointed to a dark gradient. */
+html[data-theme="colorful"] .library {
+    --surface1: var(--color-base-900);
+    --surface2: rgba(255, 255, 255, 0.08);
+    background-image: linear-gradient(to bottom, var(--color-base-700), var(--color-base-900));
+
+    --text-primary:   #fff;
+    --text-secondary: rgba(255, 255, 255, 0.85);
+    --text-tertiary:  rgba(255, 255, 255, 0.66);
+    --frost-2:        rgba(255, 255, 255, 0.06);
+    --frost-3:        rgba(255, 255, 255, 0.14);
+    --border:         rgba(255, 255, 255, 0.18);
+    --stroke-divider: rgba(255, 255, 255, 0.10);
+    --frost-caret:    rgba(255, 255, 255, 0.80);
+    --surface4:       rgba(255, 255, 255, 0.30);
+    color-scheme: dark;
+
+    /* The role colours, re-picked for the dark shelf (validator: all pairs,
+       CVD 8.2, every one >= 3:1 on the gradient's middle). */
+    --role-source:   #58af76;
+    --role-account:  #49a4ef;
+    --role-expense:  #d39722;
+    --role-debt:     #cb4d53;
+    --role-modifier: #d479bb;
+}
