@@ -83,6 +83,14 @@
 .insp-control > .field-input,
 .insp-control > .field-select,
 .insp-control > .field-affix { flex: 1; width: 100%; }
+
+/* A row whose control needs the panel's full width (the Send modes, up to
+   five of them): the label sits above it. */
+.insp-label--wide,
+.insp-control--wide { grid-column: 1 / -1; }
+.insp-label--wide { margin-bottom: calc(var(--space-4) - var(--space-12)); }
+.insp-control--wide > .segctl { flex: 1; min-width: 0; }
+.insp-control--wide .segctl-btn { flex: 1; justify-content: center; padding: 0 var(--space-4); }
 .insp-clear {
     flex-shrink: 0;
     width: var(--control-height);

@@ -30,6 +30,9 @@
 //          fixed    value (a currency amount) each time the link fires
 //          rest     whatever is left of the basis after the other links
 //          above    accounts only: the part of the balance over `value`
+//          due      into a debt only: the payment it asks for this month. A
+//                   loan's scheduled payment (from its term), or a card's
+//                   whole balance (paid in full)
 //
 //   basis  inflow    money arriving at the source. For income that is the
 //                    paycheck; for spending, the spending; for a debt, what is
@@ -143,9 +146,9 @@
     // ── Link rule space ────────────────────────────────────────────────────
     // Which modes each basis offers, per source role. Order is display order.
     const RULES = {
-        source:   { inflow: ['percent', 'fixed', 'rest'] },
+        source:   { inflow: ['due', 'percent', 'fixed', 'rest'] },
         expense:  { inflow: ['percent', 'fixed', 'rest'] },
-        modifier: { inflow: ['percent', 'fixed', 'rest'] },
+        modifier: { inflow: ['due', 'percent', 'fixed', 'rest'] },
         debt:     {
             inflow:   ['percent', 'fixed', 'rest'],
             proceeds: ['percent', 'rest'],
@@ -155,7 +158,7 @@
         account:  {
             inflow:   ['percent', 'rest'],
             earnings: ['percent', 'rest'],
-            balance:  ['percent', 'fixed', 'rest', 'above'],
+            balance:  ['due', 'percent', 'fixed', 'rest', 'above'],
         },
         asset:    {
             sale:     ['percent', 'rest'],
@@ -166,7 +169,7 @@
     /** The `when` values a rule offers. The first is the default. */
     function timingsFor(basis, mode) {
         if (basis === 'proceeds' || basis === 'sale') return ['once'];
-        if (basis === 'rent') return ['monthly'];
+        if (basis === 'rent' || mode === 'due') return ['monthly'];
         if (basis === 'cashback') return ['monthly'];
         if (basis === 'charges') return ['monthly', 'yearly', 'once'];
         if (basis === 'inflow') return mode === 'fixed' ? ['monthly', 'yearly', 'once'] : ['monthly'];
@@ -192,9 +195,23 @@
             && ((b !== 'charges' && b !== 'cashback') || p.kind === 'card'));
     }
 
-    function modesFor(node, basis) {
+    /** The modes a link on `basis` offers. 'due' only reaches a debt, so a
+     *  known target that is not one drops it. */
+    function modesFor(node, basis, to = null) {
         const p = Catalog.preset(node.type);
-        return (p && RULES[p.role][basis]) || [];
+        const modes = (p && RULES[p.role][basis]) || [];
+        return !to || roleOf(to) === 'debt' ? modes : modes.filter((m) => m !== 'due');
+    }
+
+    /** A loan's monthly payment: the level payment that clears `balance` over
+     *  its years left at its APR. Without a term it is the minimum payment the
+     *  plan was saved with, or nothing. A card has no schedule (see 'due'). */
+    function loanPayment(params) {
+        const principal = params.balance || 0;
+        const n = params.term ? Math.max(1, Math.round(params.term * 12)) : 0;
+        if (!n) return params.minPayment || 0;
+        const r = (params.rate || 0) / 1200;
+        return r > 0 ? principal * r / (1 - Math.pow(1 + r, -n)) : principal / n;
     }
 
     function roleOf(node) {
@@ -373,11 +390,11 @@
                 return Object.assign(rule, { mode: 'percent', value: 50 });
             case 'balance': {
                 if (tp.role === 'asset') return Object.assign(rule, purchaseRule(plan, to));
-                const min = Number(to.params.minPayment) || 0;
+                if (tp.role === 'debt') return Object.assign(rule, { mode: 'due' });
                 const buy = tp.inLink;
                 if (buy) return Object.assign(rule, { mode: 'fixed', value: buy.value, when: buy.when, month: buy.month || 1,
                     date: buy.relDate != null ? ymAdd(plan.settings.start, buy.relDate) : null });
-                return Object.assign(rule, { mode: 'fixed', value: tp.role === 'debt' ? min : 500 });
+                return Object.assign(rule, { mode: 'fixed', value: 500 });
             }
             case 'proceeds':
             case 'sale':
@@ -445,13 +462,12 @@
             }
         }
 
-        // Paying a debt starts at its minimum payment, the amount most people
-        // pay first.
+        // Paying a debt pays what it asks for: a loan's scheduled payment, a
+        // card's balance in full. Either can be changed to a fixed amount.
         if (tp.role === 'debt') {
             const basis = fp.role === 'account' ? 'balance' : 'inflow';
-            if (RULES[fp.role][basis] && RULES[fp.role][basis].includes('fixed')) {
-                const min = Number(to.params.minPayment) || 0;
-                return Object.assign(rule, { basis, mode: 'fixed', value: min });
+            if (RULES[fp.role][basis] && RULES[fp.role][basis].includes('due')) {
+                return Object.assign(rule, { basis, mode: 'due' });
             }
         }
         // A workplace contribution is usually a slice of pay.
@@ -498,12 +514,12 @@
         return { id: newId('l'), from: fromId, to: toId, ...defaultRule(plan, from, to, basis) };
     }
 
-    /** Bring a link's rule back inside the space its source allows, after the
-     *  source or the rule changed. Keeps every field it can. */
-    function fitRule(link, from) {
+    /** Bring a link's rule back inside the space its source and target allow,
+     *  after either or the rule changed. Keeps every field it can. */
+    function fitRule(link, from, to = null) {
         const bases = basesFor(from);
         if (!bases.includes(link.basis)) link.basis = bases[0] || 'inflow';
-        const modes = modesFor(from, link.basis);
+        const modes = modesFor(from, link.basis, to);
         if (!modes.includes(link.mode)) link.mode = modes.includes('percent') ? 'percent' : modes[0];
         const timings = timingsFor(link.basis, link.mode);
         if (!timings.includes(link.when)) link.when = timings[0];
@@ -568,6 +584,7 @@
             switch (spec.type) {
                 case 'money':
                 case 'percent':
+                case 'number':
                     if ((v == null || v === '') && spec.optional) { out[key] = null; break; }
                     out[key] = cleanNumber(v, spec.min, spec.max, key);
                     break;
@@ -588,7 +605,7 @@
         return out;
     }
 
-    const MODES = ['percent', 'fixed', 'rest', 'above'];
+    const MODES = ['percent', 'fixed', 'rest', 'above', 'due'];
     const BASES = ['inflow', 'earnings', 'balance', 'proceeds', 'charges', 'cashback', 'sale', 'rent'];
     const WHENS = ['monthly', 'yearly', 'once'];
 
@@ -615,7 +632,7 @@
         if (!Catalog.LINK_TARGETS[roleOf(from)].includes(roleOf(to))) {
             fail(`link ${i} joins modules that cannot be linked`);
         }
-        fitRule(link, from);
+        fitRule(link, from, to);
         if (!portTargets(from, link.basis).includes(roleOf(to))) {
             fail(`link ${i} sends ${link.basis} to a module that cannot take it`);
         }
@@ -743,7 +760,7 @@
     return {
         PLAN_VERSION, LIMITS, GEOM, MAX_DOCKS, MONTHS, RULES, PlanError,
         ymParse, ymFormat, ymNow, ymAdd, ymDiff, ymLabel,
-        newId, roleOf, basesFor, modesFor, timingsFor, portsFor, portTargets,
+        newId, roleOf, basesFor, modesFor, timingsFor, portsFor, portTargets, loanPayment,
         createPlan, createNode, canConnect, createLink, defaultRule, fitRule,
         docksOf, loanOptions, canDock, relayout, addLoan, dockLoan, undockLoan, equityOf,
         validatePlan, cloneWithNewIds,

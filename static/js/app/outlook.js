@@ -311,7 +311,7 @@
             let lastIdx = -1;
             for (let m = r.flow.length - 1; m >= 0; m--) if (r.flow[m] > 0.005) { lastIdx = m; break; }
             html += `<tr><td>${escapeHtml(from.name)} → ${escapeHtml(to.name)}</td>
-                <td>${escapeHtml(D.linkShort(l, from))}</td>
+                <td>${escapeHtml(D.linkShort(l, from, to))}</td>
                 <td>${escapeHtml(Fmt.money(total))}</td>
                 <td>${escapeHtml(Fmt.money(total / months))}</td>
                 <td>${first >= 0 ? escapeHtml(label(plan, first)) : 'Never'}</td>

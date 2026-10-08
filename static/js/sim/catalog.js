@@ -73,6 +73,7 @@
     //
     //   money      a currency amount
     //   percent    a percentage, entered as 22 for 22%
+    //   number     a plain quantity, shown with its `suffix`
     //   choice     one of `options` ([value, label] pairs)
     //   month      a calendar month, 1-12 (0 = no specific month)
     //   yearmonth  'YYYY-MM', or null when optional and left blank
@@ -91,6 +92,7 @@
         lockUntil:  { type: 'yearmonth', label: 'Locked until',     optional: true },
         capYearly:  { type: 'money',     label: 'Yearly limit',     min: 0,    max: 1e10, optional: true },
         minPayment: { type: 'money',     label: 'Minimum payment',  min: 0,    max: 1e10, optional: true },
+        term:       { type: 'number',    label: 'Years left',       min: 0.1,  max: 50,   optional: true, suffix: 'yrs' },
         cashBack:   { type: 'percent',   label: 'Cash back',        min: 0,    max: 100 },
         annualFee:  { type: 'money',     label: 'Annual fee',       min: 0,    max: 1e10, optional: true },
         value:      { type: 'money',     label: 'Value',            min: 0,    max: 1e11 },
@@ -105,7 +107,7 @@
         account:  ['balance', 'rate', 'lockUntil', 'capYearly'],
         asset:    ['value', 'rate', 'rent', 'bought', 'sold', 'sellCost'],
         expense:  [],
-        debt:     ['balance', 'rate', 'minPayment', 'start', 'cashBack', 'annualFee'],
+        debt:     ['balance', 'rate', 'term', 'minPayment', 'start', 'cashBack', 'annualFee'],
         modifier: ['rate', 'capYearly'],
     };
 
@@ -114,7 +116,7 @@
         account:  { balance: 0, rate: 0, lockUntil: null, capYearly: null },
         asset:    { value: 0, rate: 0, rent: 0, bought: null, sold: null, sellCost: 0 },
         expense:  {},
-        debt:     { balance: 0, rate: 0, minPayment: null, start: null, cashBack: 0, annualFee: null },
+        debt:     { balance: 0, rate: 0, term: null, minPayment: null, start: null, cashBack: 0, annualFee: null },
         modifier: { rate: 0, capYearly: null },
     };
 
@@ -145,7 +147,10 @@
     //             as a loan secured by it (see plan.js, docks)
     // inLink      the rule a new link INTO this module starts with
     // keywords    extra search terms
-    const DEBT_FIELDS = ['balance', 'rate', 'minPayment', 'start'];
+    // Installment loans are repaid over a term, so their payment is worked out
+    // from it (plan.js, loanPayment) rather than typed in. A minimum payment
+    // belongs to revolving credit: the card.
+    const DEBT_FIELDS = ['balance', 'rate', 'term', 'start'];
     const ASSET_FIELDS = ['value', 'rate', 'bought', 'sold', 'sellCost'];
     const P = (cat, role, id, name, icon, extra = {}) => ({ cat, role, id, name, icon, ...extra });
 

@@ -13,6 +13,10 @@ const Plan = require('../../static/js/sim/plan.js');
 // Choice fields have no empty value, so a module may pick how often it pays.
 const FIELD_CADENCE = new Set(['per', 'payMonth']);
 
+const close = (actual, expected, tol = 1e-6) =>
+    assert.ok(Math.abs(actual - expected) <= tol * Math.max(1, Math.abs(expected)),
+        `expected ${expected}, got ${actual}`);
+
 function planWith(...types) {
     const plan = Plan.createPlan({ name: 'T', start: '2026-01', years: 5 });
     const nodes = types.map((t, i) => {
@@ -101,6 +105,24 @@ test('a debt dated inside the plan offers its proceeds first', () => {
     assert.equal(l.basis, 'inflow');
 });
 
+test('"due" is offered only into a debt, and a saved one elsewhere is refitted', () => {
+    const { plan, nodes: [salary, loan, savings] } = planWith('salary', 'car-loan', 'savings');
+    assert.ok(Plan.modesFor(salary, 'inflow', loan).includes('due'));
+    assert.ok(!Plan.modesFor(salary, 'inflow', savings).includes('due'));
+    const l = Plan.createLink(plan, salary.id, savings.id);
+    l.mode = 'due';
+    plan.links.push(l);
+    const v = Plan.validatePlan(JSON.parse(JSON.stringify(plan)));
+    assert.notEqual(v.links[0].mode, 'due');
+});
+
+test('a loan payment levels out over its years left', () => {
+    close(Plan.loanPayment({ balance: 300000, rate: 6, term: 30 }), 1798.65, 1e-5);
+    close(Plan.loanPayment({ balance: 12000, rate: 0, term: 1 }), 1000);
+    close(Plan.loanPayment({ balance: 5000, rate: 9, minPayment: 150 }), 150);
+    close(Plan.loanPayment({ balance: 5000, rate: 9 }), 0);
+});
+
 test('fitRule keeps a rule inside what its source allows', () => {
     const { nodes: [salary] } = planWith('salary');
     const l = { mode: 'above', basis: 'balance', when: 'once', value: 5 };
@@ -152,13 +174,12 @@ test('cloneWithNewIds gives a plan that shares no id with the original', () => {
     assert.doesNotThrow(() => Plan.validatePlan(copy));
 });
 
-test('default rules: a debt asks for its minimum payment, a match for a slice of pay', () => {
+test('default rules: a debt is paid what it asks for, a match a slice of pay', () => {
     const { plan, nodes: [salary, loan, match, savings] } = planWith('salary', 'car-loan', 'employer-match', 'savings');
-    loan.params.minPayment = 400;
     const pay = Plan.createLink(plan, salary.id, loan.id);
-    assert.deepEqual([pay.mode, pay.value, pay.when], ['fixed', 400, 'monthly']);
+    assert.deepEqual([pay.mode, pay.when], ['due', 'monthly']);
     const fromSavings = Plan.createLink(plan, savings.id, loan.id);
-    assert.deepEqual([fromSavings.basis, fromSavings.mode, fromSavings.value], ['balance', 'fixed', 400]);
+    assert.deepEqual([fromSavings.basis, fromSavings.mode], ['balance', 'due']);
     const contribute = Plan.createLink(plan, salary.id, match.id);
     assert.deepEqual([contribute.mode, contribute.value], ['percent', 6]);
 });
@@ -203,7 +224,7 @@ test('a link drawn from a port starts on that port with a sensible rule', () => 
     const earn = Plan.createLink(plan, checking.id, savings.id, 'earnings');
     assert.deepEqual([earn.basis, earn.mode, earn.value], ['earnings', 'percent', 50]);
     const bal = Plan.createLink(plan, checking.id, card.id, 'balance');
-    assert.deepEqual([bal.basis, bal.mode], ['balance', 'fixed']);
+    assert.deepEqual([bal.basis, bal.mode], ['balance', 'due']);
     const back = Plan.createLink(plan, card.id, savings.id);
     assert.deepEqual([back.basis, back.mode], ['cashback', 'rest']);
 });

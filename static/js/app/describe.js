@@ -74,10 +74,19 @@
      *  no timing of their own. */
     const ON_ARRIVAL = new Set(['inflow', 'proceeds', 'cashback', 'sale', 'rent']);
 
-    function linkShort(link, from) {
+    /** A 'due' link's amount: a card's whole balance, a loan's payment. */
+    const dueWords = (to, short) => {
+        const card = to && presetOf(to).kind === 'card';
+        if (short) return card ? 'Full balance' : 'Payment due';
+        return card ? 'the full balance' : 'the payment due';
+    };
+
+    function linkShort(link, from, to = null) {
         const onArrival = ON_ARRIVAL.has(link.basis);
         const tag = onArrival ? '' : ` ${link.basis === 'earnings' ? 'of earnings' : 'of balance'}`;
         switch (link.mode) {
+            case 'due':
+                return dueWords(to, true);
             case 'percent':
                 return `${Fmt.number(link.value, 2)}%${tag}${onArrival ? '' : timingShort(link).replace('/mo', '')}`.trim();
             case 'fixed':
@@ -111,13 +120,16 @@
             case 'above':
                 what = `everything above ${b(Fmt.money(link.value))}`;
                 break;
+            case 'due':
+                what = b(dueWords(to, false));
+                break;
             default:
                 what = link.basis === 'balance' ? 'the whole balance' : `the rest of the ${noun}`;
         }
         const parts = [link.basis === 'charges'
             ? `Charge ${what} of ${target} to ${b(from.name)}`
             : `Send ${what} to ${target}`];
-        const onArrival = ON_ARRIVAL.has(link.basis) && !(link.basis === 'inflow' && link.mode === 'fixed');
+        const onArrival = ON_ARRIVAL.has(link.basis) && !(link.basis === 'inflow' && (link.mode === 'fixed' || link.mode === 'due'));
         if (!onArrival) parts.push(timingWords(link));
         if (link.mode === 'fixed' && link.growth) parts.push(`growing ${b(`${Fmt.number(link.growth, 2)}%`)} a year`);
         if (link.start && link.end) parts.push(`from ${P.ymLabel(link.start)} to ${P.ymLabel(link.end)}`);
@@ -148,7 +160,9 @@
             case 'debt': {
                 const apr = r ? `${Fmt.pct(r)} APR` : '';
                 const back = p.kind === 'card' && node.params.cashBack ? `${Fmt.pct(node.params.cashBack)} back` : '';
-                return [apr, back].filter(Boolean).join(' · ');
+                const payment = p.kind === 'card' ? 0 : P.loanPayment(node.params);
+                const due = payment > 0.005 ? `${compact(payment)}/mo` : '';
+                return [apr, back, due].filter(Boolean).join(' · ');
             }
             case 'modifier':
                 if (p.kind === 'match') return `+${Fmt.pct(r)} match`;

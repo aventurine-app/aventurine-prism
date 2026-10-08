@@ -428,6 +428,74 @@ test('a paid-off debt passes later payments on: the snowball', () => {
     assert.deepEqual(paidOff, [[small.id, 1], [big.id, 11]]);
 });
 
+test('a loan with a term is paid its scheduled payment and clears on time', () => {
+    const plan = mkPlan('2026-01', 3);
+    const pay = node(plan, 'other-income', { amount: 2000, per: 'month' });
+    const loan = node(plan, 'car-loan', { balance: 20000, rate: 7, term: 3 });
+    const savings = node(plan, 'savings');
+    link(plan, pay, loan, { mode: 'due' });
+    link(plan, pay, savings, { mode: 'rest' });
+    const r = run(plan);
+    const due = Plan.loanPayment({ balance: 20000, rate: 7, term: 3 });
+    close(r.links.l_0.flow[0], due);
+    close(r.nodes[loan.id].payment, due);
+    assert.ok(Math.abs(last(r.nodes[loan.id].balance)) < 1e-4);
+    assert.ok(!codes(r).includes('underpaid'));
+    assert.ok(!codes(r).includes('short'));
+});
+
+test('payments stop at payoff and the freed money falls to the payer\'s rest', () => {
+    const plan = mkPlan('2026-01', 1);
+    const pay = node(plan, 'other-income', { amount: 1000, per: 'month' });
+    const loan = node(plan, 'personal-loan', { balance: 1000, rate: 0 });
+    const savings = node(plan, 'savings');
+    link(plan, pay, loan, { mode: 'fixed', value: 400 });
+    link(plan, pay, savings, { mode: 'rest' });
+    const r = run(plan);
+    close(r.nodes[loan.id].totals.paid, 1000);           // 400 + 400 + 200
+    close(last(r.nodes[savings.id].balance), 12000 - 1000);
+    close(r.totals.unassigned, 0);
+    assert.ok(!codes(r).includes('short'));
+});
+
+test('withdrawals from a balance stop at payoff too', () => {
+    const plan = mkPlan('2026-01', 1);
+    const checking = node(plan, 'checking', { balance: 5000 });
+    const loan = node(plan, 'student-loan', { balance: 900, rate: 0 });
+    link(plan, checking, loan, { basis: 'balance', mode: 'fixed', value: 500 });
+    const r = run(plan);
+    close(last(r.nodes[checking.id].balance), 4100);
+    close(r.totals.unassigned, 0);
+});
+
+test('"due" pays a card in full: no interest is ever charged', () => {
+    const plan = mkPlan('2026-01', 1);
+    const pay = node(plan, 'other-income', { amount: 3000, per: 'month' });
+    const card = node(plan, 'credit-card', { balance: 0, rate: 24 });
+    const dining = node(plan, 'dining');
+    const savings = node(plan, 'savings');
+    link(plan, card, dining, { basis: 'charges', mode: 'fixed', value: 800 });
+    link(plan, pay, card, { mode: 'due' });
+    link(plan, pay, savings, { mode: 'rest' });
+    const r = run(plan);
+    close(r.nodes[card.id].totals.interest, 0);
+    close(last(r.nodes[card.id].balance), 0);
+    close(last(r.nodes[savings.id].balance), 12 * 2200);
+});
+
+test('two payers on "due" split one payment, they do not each pay it', () => {
+    const plan = mkPlan('2026-01', 1);
+    const a = node(plan, 'other-income', { amount: 300, per: 'month' });
+    const b = node(plan, 'freelance', { amount: 1000, per: 'month' });
+    const loan = node(plan, 'car-loan', { balance: 24000, rate: 0, term: 2 });
+    link(plan, a, loan, { mode: 'due' });
+    link(plan, b, loan, { mode: 'due' });
+    const r = run(plan);
+    close(r.nodes[loan.id].paid[0], 1000);
+    close(r.links.l_0.flow[0], 300);
+    close(r.links.l_1.flow[0], 700);
+});
+
 test('payments under the minimum are flagged', () => {
     const plan = mkPlan('2026-01', 1);
     const pay = node(plan, 'other-income', { amount: 1000, per: 'month' });

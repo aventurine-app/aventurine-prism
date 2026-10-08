@@ -34,6 +34,14 @@
 // loans docked under it and the rest leaves through its sale links. A rental
 // collects rent while it is owned; rent is income.
 //
+// Paying debts. A payment never exceeds what is owed: once a debt is paid off,
+// the money its links would have sent stays with the payer and falls through
+// to the payer's later links (its rest, usually savings). A debt that has its
+// own Overflow links is the exception: that is a snowball, and the freed
+// payments go on along them instead. A 'due' link pays what the debt asks for
+// this month: a loan's scheduled payment (from its years left) or a card's
+// whole balance.
+//
 // Conservation. Money enters only as income (rent included), an employer
 // match, cash back, growth or a loan's proceeds, and leaves only as spending,
 // a tax or fee (selling costs included), or debt interest. A credit card's annual fee is a fee: it is added to the
@@ -61,9 +69,10 @@
     // month the remainder is parked in Unassigned and the plan is flagged.
     const MAX_ARRIVALS_PER_MONTH = 20000;
 
-    // Evaluation order inside one basis: fixed amounts are paid first, then
-    // percentages (each of the full amount), then "above", then the rest.
-    const MODE_ORDER = { fixed: 0, percent: 1, above: 2, rest: 3 };
+    // Evaluation order inside one basis: payments due are paid first, then
+    // fixed amounts, then percentages (each of the full amount), then "above",
+    // then the rest.
+    const MODE_ORDER = { due: 0, fixed: 1, percent: 2, above: 3, rest: 4 };
 
     const PER_MONTH = { week: 52 / 12, biweek: 26 / 12, month: 1 };
 
@@ -162,7 +171,31 @@
         function transfer(L, amount) {
             L.flow[t] += amount;
             L.from.outflow[t] += amount;
+            if (L.to.role === 'debt') L.to.pending += amount;
             queue.push(L.to, amount);
+        }
+
+        /** What a debt asks for this month, less what 'due' links have already
+         *  sent. Worked out once a month, after interest and card purchases. */
+        function dueLeft(d) {
+            if (d.dueMonth !== t) {
+                d.dueMonth = t;
+                d.dueLeft = d.kind === 'card' ? d.owedBeforePay : Math.min(d.scheduled, d.owedBeforePay);
+            }
+            return d.dueLeft;
+        }
+
+        /** How much more a debt can take this month: what it owes less what is
+         *  already on its way to it. Unlimited for a snowball (Overflow links),
+         *  whose overpayments move on. */
+        function room(d) {
+            if (d.outs.inflow.some(activeAt)) return Infinity;
+            return Math.max(0, d.bal - d.pending);
+        }
+
+        /** A link's wanted amount, held to what its target debt can take. */
+        function capToDebt(L, want) {
+            return L.to.role === 'debt' ? Math.min(want, room(L.to)) : want;
         }
 
         /** Split `amount` arriving at `s` across its links on `basis`.
@@ -178,6 +211,9 @@
                     if (!firesNow(L)) continue;
                     if (L.givenMonth !== t) { L.givenMonth = t; L.given = 0; }
                     want = fixedValue(L) - L.given;
+                } else if (L.mode === 'due') {
+                    if (L.to.role !== 'debt') continue;
+                    want = dueLeft(L.to);
                 } else if (L.mode === 'percent') {
                     want = amount * L.value / 100;
                 } else if (L.mode === 'rest') {
@@ -185,9 +221,11 @@
                 } else {
                     continue;   // 'above' only applies to a balance
                 }
+                want = capToDebt(L, want);
                 if (want <= EPS) continue;
                 const give = Math.min(want, remaining);
                 if (L.mode === 'fixed') L.given += give;
+                if (L.mode === 'due') L.to.dueLeft -= give;
                 // A fixed amount can still be topped up by a later arrival this
                 // month, so its shortfall is settled at month end instead.
                 if (L.mode === 'percent' && want - give > EPS) noteShort(L, want - give);
@@ -284,6 +322,7 @@
                     return;
                 }
                 case 'debt': {
+                    s.pending = Math.max(0, s.pending - amount);
                     s.inflow[t] += amount;
                     const pay = settle(s, amount);
                     s.paid[t] += pay;
@@ -402,12 +441,14 @@
                         L.givenMonth = t;
                         L.given = 0;
                         break;
+                    case 'due':     want = L.to.role === 'debt' ? dueLeft(L.to) : 0; break;
                     case 'percent': want = base * L.value / 100; break;
                     case 'above':   want = Math.max(0, s.bal - L.value); break;
                     default:        want = s.bal;
                 }
-                const give = Math.min(want, s.bal);
+                const give = Math.min(capToDebt(L, want), s.bal);
                 if (L.mode === 'fixed') L.given = give;
+                if (L.mode === 'due') L.to.dueLeft -= give;
                 if (give > EPS) {
                     s.bal -= give;
                     transfer(L, give);
@@ -418,6 +459,8 @@
         function settleFixedShortfalls() {
             for (const L of linkStates) {
                 if (L.mode !== 'fixed' || L.basis === 'earnings' || !activeAt(L) || !firesNow(L)) continue;
+                // A payment to a debt that is paid off is not short: nothing is owed.
+                if (L.to.role === 'debt' && L.to.bal <= EPS) continue;
                 const given = L.givenMonth === t ? L.given : 0;
                 const missing = fixedValue(L) - given;
                 if (missing > EPS) noteShort(L, missing);
@@ -537,10 +580,12 @@
             }
 
             settleFixedShortfalls();
+            // Underpaid: a loan paid less than its scheduled payment, a card
+            // less than its minimum.
             for (const s of debts) {
-                const min = s.params.minPayment;
-                if (min && s.owedBeforePay > EPS && s.underpaidFirst < 0
-                    && s.paid[t] + EPS < Math.min(min, s.owedBeforePay)) {
+                const required = Math.min(s.owedBeforePay,
+                    s.kind === 'card' ? s.params.minPayment || 0 : s.scheduled);
+                if (required > EPS && s.underpaidFirst < 0 && s.paid[t] + EPS < required) {
                     s.underpaidFirst = t;
                 }
             }
@@ -630,6 +675,10 @@
             s.paidOffAt = -1;
             s.underpaidFirst = -1;
             s.owedBeforePay = 0;
+            s.scheduled = preset.kind === 'card' ? 0 : Plan.loanPayment(params);
+            s.pending = 0;          // payments queued but not yet arrived
+            s.dueMonth = -1;
+            s.dueLeft = 0;
             if (s.kind === 'card') {
                 s.charged = series();
                 s.cashback = series();
@@ -742,6 +791,7 @@
 
         for (const s of states) {
             const out = { role: s.role, kind: s.kind, outflow: s.outflow };
+            if (s.role === 'debt' && s.scheduled > 0) out.payment = s.scheduled;
             for (const key of ['balance', 'inflow', 'earnings', 'gross', 'produced',
                 'consumed', 'interest', 'paid', 'unplaced', 'charged', 'cashback', 'fees']) {
                 if (s[key]) out[key] = s[key];

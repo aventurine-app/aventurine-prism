@@ -41,8 +41,9 @@
         return `<section class="insp-section"><p class="eyebrow">${esc(title)}</p>${body}</section>`;
     }
 
-    function row(label, control, { id } = {}) {
-        return `<label class="insp-label" ${id ? `for="${id}"` : ''}>${esc(label)}</label><div class="insp-control">${control}</div>`;
+    function row(label, control, { id, wide = false } = {}) {
+        const w = wide ? ' insp-label--wide' : '';
+        return `<label class="insp-label${w}" ${id ? `for="${id}"` : ''}>${esc(label)}</label><div class="insp-control${wide ? ' insp-control--wide' : ''}">${control}</div>`;
     }
 
     let uid = 0;
@@ -66,9 +67,12 @@
                 html = `<span class="field-affix"><input class="field-input" type="text" inputmode="decimal" ${attrs}>
                     <span class="field-affix-text">%${spec.suffix ? esc(spec.suffix) : ''}</span></span>`;
                 break;
-            case 'number':
-                html = `<input class="field-input" type="text" inputmode="numeric" ${attrs}>`;
+            case 'number': {
+                const input = `<input class="field-input" type="text" inputmode="${spec.decimals ? 'decimal' : 'numeric'}" ${attrs}
+                    ${spec.optional ? 'placeholder="None"' : ''}>`;
+                html = spec.suffix ? `<span class="field-affix">${input}<span class="field-affix-text">${esc(spec.suffix)}</span></span>` : input;
                 break;
+            }
             case 'text':
                 html = `<input class="${spec.className || 'field-input'}" type="text" maxlength="${P.LIMITS.name}" ${attrs}>`;
                 break;
@@ -140,7 +144,7 @@
                     return;
                 }
                 v = Math.min(spec.max ?? Infinity, Math.max(spec.min ?? -Infinity, v));
-                if (spec.type === 'number') v = Math.round(v);
+                if (spec.type === 'number' && !spec.decimals) v = Math.round(v);
             }
         } else if (spec.type === 'text') {
             // eslint-disable-next-line no-control-regex
@@ -309,6 +313,7 @@
         switch (f.type) {
             case 'money': return { ...base, type: 'money' };
             case 'percent': return { ...base, type: 'percent', suffix: f.suffix };
+            case 'number': return { ...base, type: 'number', suffix: f.suffix, decimals: true };
             case 'choice': return { ...base, type: 'select', options: f.options, rebuild: true };
             case 'month': return {
                 ...base, type: 'select', numeric: true,
@@ -358,7 +363,7 @@
                 <span class="insp-link-name">${esc(other.name)}</span>
                 <span class="insp-link-amount" data-flow="${esc(l.id)}">${esc(flowText(l.id))}</span>
             </span>
-            <span class="chip${short ? ' chip--warn' : ''}">${esc(D.linkShort(l, Store.node(l.from)))}</span>
+            <span class="chip${short ? ' chip--warn' : ''}">${esc(D.linkShort(l, Store.node(l.from), Store.node(l.to)))}</span>
             ${iconSvg('caret-right', { cls: 'icon-caret' })}
         </button></li>`;
     }
@@ -455,7 +460,8 @@
                 + (nr.totals.consumed > 0.5 ? stat('Selling costs', money(nr.totals.consumed)) : '');
         } else if (role === 'debt') {
             const paidOff = r.milestones.find((x) => x.code === 'paid-off' && x.nodeId === node.id);
-            stats = stat('Owed at end', money(nr.balance[m]), nr.balance[m] > 0.5 ? 'down' : '')
+            stats = (nr.payment ? stat('Payment', `${money(nr.payment)}/mo`) : '')
+                + stat('Owed at end', money(nr.balance[m]), nr.balance[m] > 0.5 ? 'down' : '')
                 + stat('Paid off', paidOff ? D.monthLabel(plan(), paidOff.month + 1) : 'Not in this plan')
                 + stat('Paid', money(nr.totals.paid))
                 + stat('Interest', money(nr.totals.interest));
@@ -489,7 +495,7 @@
 
     // ── Link panel ─────────────────────────────────────────────────────────
 
-    const MODE_LABEL = { percent: '%', fixed: null, rest: 'Rest', above: 'Above' };
+    const MODE_LABEL = { due: 'Due', percent: '%', fixed: null, rest: 'Rest', above: 'Above' };
     const WHEN_LABEL = { monthly: 'Every month', yearly: 'Every year', once: 'Once' };
 
     function linkPanel(link) {
@@ -497,10 +503,11 @@
         const to = Store.node(link.to);
         const id = link.id;
         const L = () => Store.link(id) || link;
-        const setL = (fn) => (pl, v) => { const l = pl.links.find((x) => x.id === id); fn(l, v); P.fitRule(l, pl.nodes.find((n) => n.id === l.from)); };
+        const ends = (pl, l) => [pl.nodes.find((n) => n.id === l.from), pl.nodes.find((n) => n.id === l.to)];
+        const setL = (fn) => (pl, v) => { const l = pl.links.find((x) => x.id === id); fn(l, v); P.fitRule(l, ...ends(pl, l)); };
 
         const bases = P.basesFor(from);
-        const modes = P.modesFor(from, link.basis);
+        const modes = P.modesFor(from, link.basis, to);
         const timings = P.timingsFor(link.basis, link.mode);
         const sym = Fmt.symbolParts().symbol;
 
@@ -508,7 +515,8 @@
         // The output port the link leaves from is fixed when it is drawn.
         if (bases.length > 1) rule += row('From', `<span class="insp-static">${esc(D.portLabel(from, link.basis))}</span>`);
         rule += row('Send', `<div class="segctl" role="group" aria-label="Send">${modes.map((m) =>
-            `<button class="segctl-btn" type="button" data-mode="${m}" aria-pressed="${link.mode === m}">${esc(MODE_LABEL[m] || sym)}</button>`).join('')}</div>`);
+            `<button class="segctl-btn" type="button" data-mode="${m}" aria-pressed="${link.mode === m}">${esc(MODE_LABEL[m] || sym)}</button>`).join('')}</div>`,
+        { wide: modes.length > 3 });
         if (link.mode === 'percent') {
             rule += field('Percent', 'link.value', {
                 type: 'percent', min: 0, max: 100,
@@ -727,9 +735,14 @@
                 }
                 if (next === 'percent' && (l.mode !== 'percent')) l.value = Math.min(l.value || 25, 100) || 25;
                 if (next === 'fixed' && l.mode === 'percent') l.value = 500;
+                // From 'due' to a fixed amount: start at the payment it was making.
+                if (next === 'fixed' && l.mode === 'due') {
+                    const target = pl.nodes.find((n) => n.id === l.to);
+                    l.value = Math.round(P.loanPayment(target.params)) || 500;
+                }
                 if (next === 'above' && l.mode !== 'above') l.value = 10000;
                 l.mode = next;
-                P.fitRule(l, pl.nodes.find((n) => n.id === l.from));
+                P.fitRule(l, pl.nodes.find((n) => n.id === l.from), pl.nodes.find((n) => n.id === l.to));
                 return true;
             });
             rebuild();

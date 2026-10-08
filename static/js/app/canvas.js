@@ -571,7 +571,7 @@
             view.flow.classList.toggle('is-idle', idle);
         });
 
-        const text = vp && !vp.all ? Fmt.money(amount, { compact: amount >= 1e4 }) : D.linkShort(link, from);
+        const text = vp && !vp.all ? Fmt.money(amount, { compact: amount >= 1e4 }) : D.linkShort(link, from, to);
         put(view, 'text', text, (t) => { view.label.textContent = t; });
         put(view, 'short', !!(lr && lr.short > 0.005), (v) => view.label.classList.toggle('is-short', v));
         put(view, 'title', `${from.name} to ${to.name}`, (t) => view.label.setAttribute('aria-label', t));
