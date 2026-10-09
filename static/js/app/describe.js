@@ -106,7 +106,8 @@
     /** The full rule as HTML, numbers and names in <b>. Names are escaped. */
     function linkSentence(link, from, to) {
         const b = (s) => `<b>${escapeHtml(s)}</b>`;
-        const noun = basisNoun(from, link.basis);
+        const pretax = Store.state.plan && P.isPretax(Store.state.plan, link);
+        const noun = pretax ? 'pay before tax' : basisNoun(from, link.basis);
         const target = b(to.name);
         let what;
         switch (link.mode) {
@@ -130,6 +131,8 @@
             ? `Charge ${what} of ${target} to ${b(from.name)}`
             : `Send ${what} to ${target}`];
         const onArrival = ON_ARRIVAL.has(link.basis) && !(link.basis === 'inflow' && (link.mode === 'fixed' || link.mode === 'due'));
+        // A percent or rest already says "of the pay before tax".
+        if (pretax && (link.mode === 'fixed' || link.mode === 'due')) parts.push('before tax');
         if (!onArrival) parts.push(timingWords(link));
         if (link.mode === 'fixed' && link.growth) parts.push(`growing ${b(`${Fmt.number(link.growth, 2)}%`)} a year`);
         if (link.start && link.end) parts.push(`from ${P.ymLabel(link.start)} to ${P.ymLabel(link.end)}`);

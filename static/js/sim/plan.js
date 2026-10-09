@@ -203,6 +203,20 @@
         return !to || roleOf(to) === 'debt' ? modes : modes.filter((m) => m !== 'due');
     }
 
+    /** Whether income sent along `link` is a pre-tax contribution: it leaves
+     *  an income module for a pre-tax account (401(k), HSA, Traditional IRA),
+     *  or for an employer match that feeds one. */
+    function isPretax(plan, link) {
+        const from = nodeById(plan, link.from);
+        const to = nodeById(plan, link.to);
+        if (roleOf(from) !== 'source' || !to) return false;
+        const tp = Catalog.preset(to.type);
+        if (tp.pretax) return true;
+        if (tp.kind !== 'match') return false;
+        return plan.links.some((l) => l.from === to.id
+            && (Catalog.preset((nodeById(plan, l.to) || {}).type) || {}).pretax);
+    }
+
     /** A loan's monthly payment: the level payment that clears `balance` over
      *  its years left at its APR. Without a term it is the minimum payment the
      *  plan was saved with, or nothing. A card has no schedule (see 'due'). */
@@ -760,7 +774,7 @@
     return {
         PLAN_VERSION, LIMITS, GEOM, MAX_DOCKS, MONTHS, RULES, PlanError,
         ymParse, ymFormat, ymNow, ymAdd, ymDiff, ymLabel,
-        newId, roleOf, basesFor, modesFor, timingsFor, portsFor, portTargets, loanPayment,
+        newId, roleOf, basesFor, modesFor, timingsFor, portsFor, portTargets, loanPayment, isPretax,
         createPlan, createNode, canConnect, createLink, defaultRule, fitRule,
         docksOf, loanOptions, canDock, relayout, addLoan, dockLoan, undockLoan, equityOf,
         validatePlan, cloneWithNewIds,

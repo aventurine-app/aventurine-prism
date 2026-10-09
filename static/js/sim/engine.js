@@ -34,6 +34,11 @@
 // loans docked under it and the rest leaves through its sale links. A rental
 // collects rent while it is owned; rent is income.
 //
+// Pre-tax contributions. Income sent to a 401(k), an HSA or a Traditional IRA
+// (directly or through an employer match) is taken from gross pay before
+// withholding, so only what is left is taxed. Those links split gross pay;
+// every other link from income splits take-home pay.
+//
 // Paying debts. A payment never exceeds what is owed: once a debt is paid off,
 // the money its links would have sent stays with the payer and falls through
 // to the payer's later links (its rest, usually savings). A debt that has its
@@ -111,7 +116,10 @@
                 givenMonth: -1, given: 0,   // fixed links: paid so far this month
                 acc: 0,                     // yearly earnings links: owed so far
             };
-            from.outs[link.basis].push(L);
+            // A source keeps its pre-tax links apart: they split gross pay.
+            const group = link.basis === 'inflow' && from.role === 'source' && Plan.isPretax(plan, link)
+                ? 'pretax' : link.basis;
+            from.outs[group].push(L);
             linkStates.push(L);
         }
         for (const s of states) {
@@ -552,11 +560,14 @@
             for (const s of sources) {
                 const gross = sourceGross(s, t, cal);
                 if (gross <= EPS) continue;
-                const net = gross * (1 - Math.min(95, s.params.tax || 0) / 100);
+                const pretax = gross - allocate(s, 'pretax', gross);
+                const taxable = gross - pretax;
+                const net = taxable * (1 - Math.min(95, s.params.tax || 0) / 100);
                 totals.earned[t] += gross;
-                totals.withheld[t] += gross - net;
+                totals.withheld[t] += taxable - net;
                 s.gross[t] = gross;
-                s.produced[t] = net;
+                s.pretax[t] = pretax;
+                s.produced[t] = pretax + net;
                 const left = allocate(s, 'inflow', net);
                 if (left > EPS) park(s, left);
                 drain();
@@ -624,7 +635,9 @@
             outflow: series(),
         };
         if (role === 'source') {
+            s.outs.pretax = [];
             s.gross = series();
+            s.pretax = series();
             s.produced = series();
             s.unplaced = series();
             s.startIdx = params.start ? idxOf(params.start) : 0;
@@ -792,7 +805,7 @@
         for (const s of states) {
             const out = { role: s.role, kind: s.kind, outflow: s.outflow };
             if (s.role === 'debt' && s.scheduled > 0) out.payment = s.scheduled;
-            for (const key of ['balance', 'inflow', 'earnings', 'gross', 'produced',
+            for (const key of ['balance', 'inflow', 'earnings', 'gross', 'pretax', 'produced',
                 'consumed', 'interest', 'paid', 'unplaced', 'charged', 'cashback', 'fees']) {
                 if (s[key]) out[key] = s[key];
             }
@@ -800,6 +813,7 @@
                 in: s.inflow ? sum(s.inflow) : 0,
                 out: sum(s.outflow),
                 produced: s.produced ? sum(s.produced) : 0,
+                pretax: s.role === 'source' ? sum(s.pretax) : 0,
                 consumed: s.consumed ? sum(s.consumed) : 0,
                 charged: s.charged ? sum(s.charged) : 0,
                 cashback: s.cashback ? sum(s.cashback) : 0,

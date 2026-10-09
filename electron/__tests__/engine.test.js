@@ -563,6 +563,44 @@ test('a payment from income pays a card off, and overpaying passes the rest on',
     close(last(r.nodes[savings.id].balance), 9000);
 });
 
+test('a 401(k) contribution comes out of gross pay, before withholding', () => {
+    const plan = mkPlan('2026-01', 1);
+    const salary = node(plan, 'salary', { amount: 100000, per: 'year', tax: 22 });
+    const k = node(plan, '401k');
+    const savings = node(plan, 'savings');
+    link(plan, salary, k, { mode: 'percent', value: 6 });
+    link(plan, salary, savings, { mode: 'rest' });
+    const r = run(plan);
+    close(last(r.nodes[k.id].balance), 6000);
+    close(r.totals.withheld, 94000 * 0.22);
+    close(last(r.nodes[savings.id].balance), 94000 * 0.78);
+    close(r.nodes[salary.id].totals.pretax, 6000);
+});
+
+test('contributions through an employer match are pre-tax too', () => {
+    const plan = mkPlan('2026-01', 1);
+    const salary = node(plan, 'salary', { amount: 100000, per: 'year', tax: 20 });
+    const match = node(plan, 'employer-match', { rate: 50 });
+    const k = node(plan, '401k');
+    link(plan, salary, match, { mode: 'percent', value: 6 });
+    link(plan, match, k, { mode: 'rest' });
+    link(plan, salary, node(plan, 'living'), { mode: 'rest' });
+    const r = run(plan);
+    close(last(r.nodes[k.id].balance), 9000);
+    close(r.totals.withheld, 94000 * 0.2);
+});
+
+test('a Roth IRA is paid from take-home pay', () => {
+    const plan = mkPlan('2026-01', 1);
+    const salary = node(plan, 'salary', { amount: 100000, per: 'year', tax: 22 });
+    const roth = node(plan, 'roth-ira');
+    link(plan, salary, roth, { mode: 'percent', value: 6 });
+    link(plan, salary, node(plan, 'living'), { mode: 'rest' });
+    const r = run(plan);
+    close(r.totals.withheld, 22000);
+    close(last(r.nodes[roth.id].balance), 78000 * 0.06);
+});
+
 test('an employer match stops at its yearly limit and restarts in January', () => {
     const plan = mkPlan('2026-01', 2);
     const pay = node(plan, 'other-income', { amount: 10000, per: 'month' });

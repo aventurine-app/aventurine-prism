@@ -475,10 +475,13 @@
             }
         } else if (role === 'source') {
             const gross = total(nr.gross);
+            const pretax = nr.totals.pretax;
+            const takeHome = nr.totals.produced - pretax;
             stats = stat('Earned', money(gross))
+                + (pretax > 0.5 ? stat('Before tax', money(pretax)) : '')
                 + (gross - nr.totals.produced > 0.5 ? stat('Withheld', money(gross - nr.totals.produced)) : '')
-                + stat('Take-home', money(nr.totals.produced))
-                + stat('Average', `${money(nr.totals.produced / m)}/mo`);
+                + stat('Take-home', money(takeHome))
+                + stat('Average', `${money(takeHome / m)}/mo`);
         } else if (role === 'expense') {
             stats = stat('Spent here', money(nr.totals.consumed))
                 + stat('Average', `${money(nr.totals.in / m)}/mo`)

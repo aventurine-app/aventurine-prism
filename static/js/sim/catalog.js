@@ -143,6 +143,8 @@
     //             dates always start empty; only a cadence (Every, Paid in) is set
     // fixed       values the preset pins and hides (a windfall is always 'once')
     // kind        modifiers: 'match' | 'skim'. Debts: 'card' (a credit card).
+    // pretax      accounts paid from gross pay: income sent here is taken before
+    //             withholding (see engine.js, pre-tax contributions)
     // loans       assets: the debt presets that can be attached below the module
     //             as a loan secured by it (see plan.js, docks)
     // inLink      the rule a new link INTO this module starts with
@@ -246,15 +248,18 @@
 
         // Retirement
         P('retirement', 'account', '401k', '401(k)', 'plant', {
+            pretax: true,
             labels: { rate: 'Expected return' },
             keywords: '401k 403b workplace retirement' }),
         P('retirement', 'account', 'trad-ira', 'Traditional IRA', 'tree', {
+            pretax: true,
             labels: { rate: 'Expected return' },
             keywords: 'ira retirement' }),
         P('retirement', 'account', 'roth-ira', 'Roth IRA', 'tree-evergreen', {
             labels: { rate: 'Expected return' },
             keywords: 'roth ira retirement' }),
         P('retirement', 'account', 'hsa', 'HSA', 'heartbeat', {
+            pretax: true,
             labels: { rate: 'Expected return' },
             keywords: 'health savings account medical' }),
         P('retirement', 'account', '529', '529 plan', 'graduation-cap', {

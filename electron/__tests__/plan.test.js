@@ -116,6 +116,19 @@ test('"due" is offered only into a debt, and a saved one elsewhere is refitted',
     assert.notEqual(v.links[0].mode, 'due');
 });
 
+test('pre-tax links: income into a 401(k), HSA or Traditional IRA, or a match that feeds one', () => {
+    const { plan, nodes: [salary, k, roth, match, hsa, savings] } = planWith('salary', '401k', 'roth-ira', 'employer-match', 'hsa', 'savings');
+    const into = (a, b) => { const l = Plan.createLink(plan, a.id, b.id); plan.links.push(l); return l; };
+    assert.equal(Plan.isPretax(plan, into(salary, k)), true);
+    assert.equal(Plan.isPretax(plan, into(salary, hsa)), true);
+    assert.equal(Plan.isPretax(plan, into(salary, roth)), false);
+    const toMatch = into(salary, match);
+    assert.equal(Plan.isPretax(plan, toMatch), false);
+    into(match, k);
+    assert.equal(Plan.isPretax(plan, toMatch), true);
+    assert.equal(Plan.isPretax(plan, into(savings, k)), false);   // only pay is pre-tax
+});
+
 test('a loan payment levels out over its years left', () => {
     close(Plan.loanPayment({ balance: 300000, rate: 6, term: 30 }), 1798.65, 1e-5);
     close(Plan.loanPayment({ balance: 12000, rate: 0, term: 1 }), 1000);

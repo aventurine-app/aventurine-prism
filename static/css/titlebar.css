@@ -42,21 +42,12 @@ html[data-theme="dark"] { --titlebar-frost: rgba(255, 255, 255, 0.10); }
     -webkit-app-region: drag;
 }
 
-:root.has-rail .titlebar-name { display: none; }
-
 .titlebar-icon {
     width: 22px;
     height: 22px;
     /* Centred on the library's icon column (28px), expanded or collapsed. */
     margin: 0 var(--space-8) 0 calc(28px - 11px);
     flex: none;
-    pointer-events: none;
-}
-
-.titlebar-name {
-    color: var(--text-primary);
-    font-size: var(--size-small);
-    font-weight: var(--weight-bold);
     pointer-events: none;
 }
 
