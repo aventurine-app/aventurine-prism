@@ -125,7 +125,7 @@
     // role is what it does; most categories hold one role, Events holds two.
     const CATEGORIES = [
         { id: 'income',     name: 'Income',     icon: 'briefcase' },
-        { id: 'cash',       name: 'Cash',       icon: 'bank' },
+        { id: 'banking',    name: 'Banking',    icon: 'bank' },
         { id: 'investing',  name: 'Investing',  icon: 'chart-line-up' },
         { id: 'retirement', name: 'Retirement', icon: 'plant' },
         { id: 'property',   name: 'Property',   icon: 'house-line' },
@@ -180,31 +180,31 @@
         P('income', 'source', 'other-income', 'Other income', 'coins', {
             keywords: 'misc allowance support alimony royalties' }),
 
-        // Cash
-        P('cash', 'account', 'checking', 'Checking', 'wallet', {
+        // Banking
+        P('banking', 'account', 'checking', 'Checking', 'wallet', {
             fields: ['balance', 'rate'],
             keywords: 'bank debit everyday' }),
-        P('cash', 'account', 'savings', 'Savings', 'piggy-bank', {
+        P('banking', 'account', 'savings', 'Savings', 'piggy-bank', {
             fields: ['balance', 'rate'],
             labels: { rate: 'APY' },
             keywords: 'bank save' }),
-        P('cash', 'account', 'hysa', 'High-yield savings', 'vault', {
+        P('banking', 'account', 'hysa', 'High-yield savings', 'vault', {
             fields: ['balance', 'rate'],
             labels: { rate: 'APY' },
             keywords: 'hysa online bank save interest' }),
-        P('cash', 'account', 'money-market', 'Money market', 'coin-vertical', {
+        P('banking', 'account', 'money-market', 'Money market', 'coin-vertical', {
             fields: ['balance', 'rate'],
             labels: { rate: 'APY' },
             keywords: 'mmf mma fund' }),
-        P('cash', 'account', 'emergency-fund', 'Emergency fund', 'lifebuoy', {
+        P('banking', 'account', 'emergency-fund', 'Emergency fund', 'lifebuoy', {
             fields: ['balance', 'rate'],
             labels: { rate: 'APY' },
             keywords: 'rainy day safety' }),
-        P('cash', 'account', 'cd', 'Certificate of deposit', 'certificate', {
+        P('banking', 'account', 'cd', 'Certificate of deposit', 'certificate', {
             fields: ['balance', 'rate', 'lockUntil'],
             labels: { rate: 'APY', lockUntil: 'Matures' },
             keywords: 'cd term deposit' }),
-        P('cash', 'account', 'cash', 'Cash on hand', 'money-wavy', {
+        P('banking', 'account', 'cash', 'Cash on hand', 'money-wavy', {
             fields: ['balance'],
             keywords: 'wallet physical' }),
 

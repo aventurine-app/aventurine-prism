@@ -156,7 +156,7 @@
             cashback: ['percent', 'rest'],
         },
         account:  {
-            inflow:   ['percent', 'rest'],
+            inflow:   ['percent', 'fixed', 'rest'],
             earnings: ['percent', 'rest'],
             balance:  ['due', 'percent', 'fixed', 'rest', 'above'],
         },
@@ -405,9 +405,7 @@
             case 'balance': {
                 if (tp.role === 'asset') return Object.assign(rule, purchaseRule(plan, to));
                 if (tp.role === 'debt') return Object.assign(rule, { mode: 'due' });
-                const buy = tp.inLink;
-                if (buy) return Object.assign(rule, { mode: 'fixed', value: buy.value, when: buy.when, month: buy.month || 1,
-                    date: buy.relDate != null ? ymAdd(plan.settings.start, buy.relDate) : null });
+                if (tp.inLink) return Object.assign(rule, priceRule(plan, tp.inLink));
                 return Object.assign(rule, { mode: 'fixed', value: 500 });
             }
             case 'proceeds':
@@ -416,8 +414,18 @@
             case 'cashback':
                 return rule;
             default:
+                if (tp.inLink && modesFor(from, basis, to).includes('fixed')) {
+                    return Object.assign(rule, priceRule(plan, tp.inLink));
+                }
                 return existing.some((l) => l.mode === 'rest') ? Object.assign(rule, { mode: 'percent', value: 25 }) : rule;
         }
+    }
+
+    /** Paying a target with a usual price (a preset's `inLink`): that amount,
+     *  on its timing. */
+    function priceRule(plan, buy) {
+        return { mode: 'fixed', value: buy.value, when: buy.when, month: buy.month || 1,
+            date: buy.relDate != null ? ymAdd(plan.settings.start, buy.relDate) : null };
     }
 
     /** Paying for an asset: its price, once, the month it is bought (or the
@@ -450,10 +458,7 @@
         if (tp.inLink) {
             const basis = fp.role === 'account' ? 'balance' : 'inflow';
             if (RULES[fp.role][basis] && RULES[fp.role][basis].includes('fixed')) {
-                Object.assign(rule, { basis, mode: 'fixed', value: tp.inLink.value, when: tp.inLink.when });
-                if (tp.inLink.month) rule.month = tp.inLink.month;
-                if (tp.inLink.relDate != null) rule.date = ymAdd(plan.settings.start, tp.inLink.relDate);
-                return rule;
+                return Object.assign(rule, { basis }, priceRule(plan, tp.inLink));
             }
         }
 

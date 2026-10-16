@@ -32,11 +32,11 @@
     const compareWith = new Map();
     const compareCache = new Map();   // plan id → { updatedAt, results }
     const LENGTHS = [1, 3, 5, 10, 20, 30];
-    // Ramp steps in assignment order: the middle of the ramp first, so a plan
-    // with two or three accounts draws in mid blues rather than the darkest
-    // step. Still monotone between neighbours.
-    const ACCOUNT_STEPS = [3, 4, 5, 6, 2, 1];
-    const DEBT_STEPS = [2, 3, 4, 1];
+    // Net worth bands: at most this many per family before the rest fold
+    // into "Other", coloured from the --chart-rainbow-1..12 stops.
+    const ACCOUNT_BANDS = 6;
+    const DEBT_BANDS = 4;
+    const RAINBOW_STOPS = 12;
 
     root.innerHTML = `
         <div class="outlook-grip" aria-hidden="true"></div>
@@ -91,32 +91,40 @@
 
     const label = (plan, k) => D.monthLabel(plan, k);
 
-    /** Account and debt bands, assigned colours by module order (never by size)
-     *  and folded into an "other" band past the ramp's length. Assets stack
-     *  with the accounts: both are what the plan holds. */
+    /** Bands as the chart shows them, top to bottom. They stack away from
+     *  zero in array order, so that is the positives reversed, then the debts. */
+    const topDown = (bands) => [...bands.filter((b) => b.sign > 0).reverse(), ...bands.filter((b) => b.sign < 0)];
+
+    /** Account and debt bands in module order (never by size), folded into
+     *  an "other" band past each family's limit. Assets stack with the
+     *  accounts: both are what the plan holds. Colours run as a rainbow down
+     *  the stack, red at the top to violet at the bottom, spread evenly over
+     *  the bands drawn. */
     function worthBands(plan, res, def) {
         const bands = [];
         const accounts = plan.nodes.filter((n) => ['account', 'asset'].includes(D.roleOf(n)));
         const debts = plan.nodes.filter((n) => D.roleOf(n) === 'debt');
-        const fold = (list, steps, sign, color, otherLabel) => {
-            const limit = steps.length;
+        const fold = (list, limit, sign, otherLabel) => {
             list.forEach((n, i) => {
                 const values = balances(res.nodes[n.id].balance, def);
                 if (i < limit - 1 || list.length === limit) {
-                    bands.push({ label: n.name, color: `${color}${steps[i]}`, values, sign, id: n.id });
+                    bands.push({ label: n.name, values, sign, id: n.id });
                 } else if (i === limit - 1) {
-                    bands.push({ label: otherLabel, color: `${color}${steps[i]}`, values: Float64Array.from(values), sign, other: true });
+                    bands.push({ label: otherLabel, values: Float64Array.from(values), sign, other: true });
                 } else {
                     const other = bands[bands.length - 1];
                     for (let k = 0; k < values.length; k++) other.values[k] += values[k];
                 }
             });
         };
-        fold(accounts, ACCOUNT_STEPS, 1, '--chart-account-', 'Other accounts');
+        fold(accounts, ACCOUNT_BANDS, 1, 'Other accounts');
         if (res.unassigned.some((v) => v > 0.005)) {
-            bands.push({ label: 'Unassigned', color: '--chart-unassigned', values: balances(res.unassigned, def), sign: 1 });
+            bands.push({ label: 'Unassigned', values: balances(res.unassigned, def), sign: 1 });
         }
-        fold(debts, DEBT_STEPS, -1, '--chart-debt-', 'Other debts');
+        fold(debts, DEBT_BANDS, -1, 'Other debts');
+        const stack = topDown(bands);
+        const span = Math.max(stack.length - 1, 1);
+        stack.forEach((b, i) => { b.color = `--chart-rainbow-${1 + Math.round((i * (RAINBOW_STOPS - 1)) / span)}`; });
         return bands;
     }
 
@@ -144,8 +152,8 @@
         const rows = [
             ['Take-home income', sumTo(F.earned) - sumTo(F.withheld), '--chart-in'],
             ['Spent', sumTo(F.spent), '--chart-out'],
-            ['Growth', sumTo(F.growth), '--chart-account-4'],
-            ['Interest paid', sumTo(F.interest), '--chart-debt-2'],
+            ['Growth', sumTo(F.growth), '--chart-growth'],
+            ['Interest paid', sumTo(F.interest), '--chart-interest'],
             ['Cash back and match', sumTo(F.cashback) + sumTo(F.match), '--role-modifier'],
             ['Taxes and fees', sumTo(F.skimmed), '--role-none'],
             ['Unassigned', res.unassigned[k] * def[k], '--chart-unassigned'],
@@ -197,10 +205,11 @@
         const bands = worthBands(plan, res, def);
         const worth = balances(res.netWorth, def);
         const ghost = compareSeries(plan, res, def);
+        const listed = topDown(bands);
         legend([
             { label: 'Net worth', color: '--chart-networth', line: true },
             ...(ghost ? [{ label: ghost.label, color: ghost.color, dashed: true }] : []),
-            ...bands,
+            ...listed,
         ]);
         Chart.draw(box, {
             kind: 'area',
@@ -214,7 +223,7 @@
             tooltip: (k) => ({
                 title: label(plan, k),
                 rows: [
-                    ...bands.filter((b) => b.values[k] > 0.5).map((b) => ({
+                    ...listed.filter((b) => b.values[k] > 0.5).map((b) => ({
                         label: b.label, color: b.color, value: Fmt.money(b.sign < 0 ? -b.values[k] : b.values[k]),
                     })),
                     { label: 'Net worth', color: '--chart-networth', value: Fmt.money(worth[k]), total: true },
@@ -246,9 +255,9 @@
         const net = Float64Array.from(income, (v, i) => v + growth[i] - spent[i] - cost[i]);
         const bars = [
             { label: 'Income', color: '--chart-in', values: income, sign: 1 },
-            { label: 'Growth', color: '--chart-account-4', values: growth, sign: 1 },
+            { label: 'Growth', color: '--chart-growth', values: growth, sign: 1 },
             { label: 'Spending', color: '--chart-out', values: spent, sign: -1 },
-            { label: 'Interest and losses', color: '--chart-debt-2', values: cost, sign: -1 },
+            { label: 'Interest and losses', color: '--chart-interest', values: cost, sign: -1 },
         ].filter((b) => b.values.some((v) => v > 0.5));
         legend([...bars, { label: 'Net change', color: '--chart-networth', line: true }]);
         const periodLabel = (i) => yearly

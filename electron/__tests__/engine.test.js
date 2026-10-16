@@ -342,6 +342,20 @@ test('deposit links pass arriving money straight through a checking account', ()
     close(last(r.nodes[checking.id].balance), 36000);
 });
 
+test('a fixed deposit link pays its amount from what arrives and says when deposits fall short', () => {
+    const plan = mkPlan('2026-01', 1);
+    const pay = node(plan, 'other-income', { amount: 4000, per: 'month', end: '2026-06' });
+    const checking = node(plan, 'checking', { balance: 10000, rate: 0 });
+    const rent = node(plan, 'rent');
+    link(plan, pay, checking);
+    const l = link(plan, checking, rent, { basis: 'inflow', mode: 'fixed', value: 1500 });
+    const r = run(plan);
+    close(r.links[l.id].total, 9000);
+    close(last(r.nodes[checking.id].balance), 10000 + 2500 * 6);
+    const short = r.warnings.find((w) => w.code === 'short' && w.linkId === l.id);
+    close(short.amount, 9000);
+});
+
 test('earnings links send a share of growth and compound the rest', () => {
     const plan = mkPlan('2026-01', 1);
     const brokerage = node(plan, 'brokerage', { balance: 100000, rate: 12 });

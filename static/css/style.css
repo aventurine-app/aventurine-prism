@@ -186,28 +186,31 @@
     --flow-sale:      var(--role-account);
     --flow-rent:      var(--role-source);
 
-    /* Chart ramps. Accounts stack in steps of the account blue and debts in
-       steps of the debt red, so a band's family says what it is and its step
-       tells it from its neighbours (adjacent steps sit >= 0.06 apart in OKLCH
-       lightness). Assigned by module order, never by size, so a module keeps
-       its colour as the plan changes. */
-    --chart-account-1: #113375;
-    --chart-account-2: #1c4595;
-    --chart-account-3: #2b58b1;
-    --chart-account-4: #3e6dc8;
-    --chart-account-5: #5a84d4;
-    --chart-account-6: #769be0;
-    --chart-debt-1: #862723;
-    --chart-debt-2: #a83630;
-    --chart-debt-3: #c25e55;
-    --chart-debt-4: #d6867d;
-    --chart-unassigned: var(--color-base-400);
+    /* Net worth bands: a rainbow, red at the top of the stack down to
+       violet at the bottom, spread evenly over however many bands the plan
+       draws (outlook.js, worthBands). Unassigned always sits on top, so it
+       is always the red. The same stops serve both themes. */
+    --chart-rainbow-1: #e34841;   /* red */
+    --chart-rainbow-2: #e96f43;   /* red-orange */
+    --chart-rainbow-3: #ed914d;   /* orange */
+    --chart-rainbow-4: #f1b45a;   /* amber */
+    --chart-rainbow-5: #edd964;   /* yellow */
+    --chart-rainbow-6: #a5d75b;   /* lime */
+    --chart-rainbow-7: #52bf69;   /* green */
+    --chart-rainbow-8: #53b9a7;   /* teal */
+    --chart-rainbow-9: #4eacc8;   /* cyan */
+    --chart-rainbow-10: #3578d9;  /* blue */
+    --chart-rainbow-11: #5754dc;  /* indigo */
+    --chart-rainbow-12: #9a49e0;  /* violet */
+    --chart-unassigned: var(--chart-rainbow-1);
 
     /* The headline line (net worth) is the accent, as Aventurine's charts are;
        the cash-flow pair is the arriving green against the leaving gold. */
     --chart-networth: var(--color-accent-600);
     --chart-in:       var(--role-source);
     --chart-out:      var(--role-expense);
+    --chart-growth:   #3e6dc8;
+    --chart-interest: #a83630;
     --chart-grid:     var(--stroke-medium);
 }
 

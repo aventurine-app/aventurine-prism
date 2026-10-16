@@ -1,0 +1,35 @@
+name: test
+
+# Lint and the backend suite on every push and pull request. Neither needs
+# Electron to run, only host Node.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Install dependencies
+        working-directory: electron
+        run: npm ci
+
+      - name: Lint
+        working-directory: electron
+        run: npm run lint
+
+      - name: Test
+        working-directory: electron
+        run: npm test

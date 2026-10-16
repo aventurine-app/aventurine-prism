@@ -242,6 +242,13 @@ test('a link drawn from a port starts on that port with a sensible rule', () => 
     assert.deepEqual([back.basis, back.mode], ['cashback', 'rest']);
 });
 
+test('a deposits link into Rent can send a fixed amount, and starts as one', () => {
+    const { plan, nodes: [checking, rent] } = planWith('checking', 'rent');
+    assert.deepEqual(Plan.modesFor(checking, 'inflow', rent), ['percent', 'fixed', 'rest']);
+    const l = Plan.createLink(plan, checking.id, rent.id, 'inflow');
+    assert.deepEqual([l.basis, l.mode, l.when], ['inflow', 'fixed', 'monthly']);
+});
+
 test('validatePlan rejects a link that leaves a port for a role it cannot reach', () => {
     const { plan, nodes: [card, savings] } = planWith('credit-card', 'savings');
     const l = Plan.createLink(plan, card.id, savings.id, 'cashback');

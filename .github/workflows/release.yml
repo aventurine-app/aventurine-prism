@@ -1,0 +1,166 @@
+name: release
+
+# Cut a release by pushing a version tag, e.g.:
+#   git tag v0.1.1 && git push origin v0.1.1
+#
+# Builds the Linux, Windows and macOS installers and attaches them to a DRAFT
+# GitHub Release. Publishing the draft is a manual step.
+#
+# Three jobs. `build` (Linux + Windows, one ubuntu runner) and `build-mac` hand
+# their output up as workflow artifacts; `release` collects both and creates the
+# release. macOS cannot be cross-built (hdiutil, codesign). Windows can: Wine
+# runs rcedit on the Linux host.
+#
+# Aventurine Prism has no native modules, so there is no ABI to park and no
+# postinstall step to worry about.
+#
+# The app ships no updater. Users update by installing a newer build.
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Read-only by default. Only `release` writes, and it asks for that itself.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: electron/package-lock.json
+
+      # Best-effort, like the Windows build below: a Wine problem must not stop
+      # the Linux installers. `wine` itself is load-bearing (electron-builder
+      # spawns the plain binary; wine64 does not provide it).
+      - name: Install Wine (Windows cross-build toolchain)
+        continue-on-error: true
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends wine wine64 wine32
+          wine --version
+
+      - name: Install dependencies
+        working-directory: electron
+        run: npm ci
+
+      - name: Build Linux installers
+        working-directory: electron
+        run: npm run dist:linux -- --publish never
+
+      - name: Build Windows installer
+        continue-on-error: true
+        working-directory: electron
+        run: npm run dist:win -- --publish never
+
+      # `if: always()` so the Linux installers still upload when the Windows
+      # step failed. *.exe does not match *.exe.blockmap.
+      - name: Upload installers as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prism-installers-${{ github.ref_name }}
+          path: |
+            electron/dist/*.AppImage
+            electron/dist/*.rpm
+            electron/dist/*.deb
+            electron/dist/*.exe
+          if-no-files-found: error
+
+  # Best-effort: a failure here costs the release its .dmg and nothing else.
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Install dependencies
+        working-directory: electron
+        run: npm ci
+
+      # Ad-hoc signed, not notarized (no Apple Developer ID). Gatekeeper blocks
+      # a downloaded build until it is opened from the right-click menu.
+      # CSC auto-discovery stays off so a stray runner keychain identity is
+      # never picked over the configured ad-hoc one.
+      - name: Build macOS installers
+        working-directory: electron
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npm run dist:mac -- --publish never
+
+      - name: Upload macOS installers as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: prism-installers-mac-${{ github.ref_name }}
+          path: electron/dist/*.dmg
+          if-no-files-found: error
+
+  # The only job that touches the Release. `if: always()` so a failed
+  # best-effort build costs the release that one file, not the release.
+  release:
+    needs: [build, build-mac]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Collect the built installers
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          path: installers
+          pattern: prism-installers-*
+          merge-multiple: true
+
+      # Create the release, or upload into it if it exists (a re-run to pick up
+      # a fixed Windows build). --clobber replaces same-named assets.
+      - name: Attach the installers to the release
+        id: attach
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(installers/*.AppImage installers/*.rpm installers/*.deb installers/*.exe installers/*.dmg)
+
+          echo "count=${#files[@]}" >> "$GITHUB_OUTPUT"
+          echo "Attaching ${#files[@]} file(s) to $TAG:"
+          if [ ${#files[@]} -gt 0 ]; then
+            printf '  %s\n' "${files[@]}"
+          fi
+
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, uploading into it."
+            if [ ${#files[@]} -gt 0 ]; then
+              gh release upload "$TAG" --repo "$REPO" --clobber "${files[@]}"
+            fi
+          else
+            gh release create "$TAG" \
+              --repo "$REPO" \
+              --draft \
+              --title "$TAG" \
+              --generate-notes \
+              "${files[@]}"
+          fi
+
+      # A release with no installers is a broken toolchain, not an intended
+      # source-only release. Fail the run so it shows red.
+      - name: Fail if no installers were attached
+        if: steps.attach.outputs.count == '0'
+        run: |
+          echo "::error::No installers were attached to ${{ github.ref_name }}. Check the build jobs above."
+          exit 1

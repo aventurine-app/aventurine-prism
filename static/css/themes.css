@@ -65,17 +65,8 @@ html[data-theme="dark"],
     --role-modifier: #8053a4;
     --role-none:     var(--color-base-500);
 
-    --chart-account-1: #234993;
-    --chart-account-2: #305eb7;
-    --chart-account-3: #4b77cc;
-    --chart-account-4: #6991dc;
-    --chart-account-5: #8cabe4;
-    --chart-account-6: #afc5ec;
-    --chart-debt-1: #9d352f;
-    --chart-debt-2: #bc4a41;
-    --chart-debt-3: #ce7067;
-    --chart-debt-4: #de958c;
-    --chart-unassigned: var(--color-base-600);
+    --chart-growth:   #6991dc;
+    --chart-interest: #bc4a41;
     --chart-networth:   var(--color-accent-300);
 }
 
