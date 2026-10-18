@@ -19,8 +19,12 @@
 
     const RAIL_KEY = 'library-rail';
     const COLLAPSED_KEY = 'library-collapsed';
-    let collapsed = new Set();
-    try { collapsed = new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '[]')); } catch { /* defaults */ }
+    // Every category starts collapsed until the user opens one.
+    let collapsed = new Set(C.CATEGORIES.map((cat) => cat.id));
+    try {
+        const saved = localStorage.getItem(COLLAPSED_KEY);
+        if (saved !== null) collapsed = new Set(JSON.parse(saved));
+    } catch { /* defaults */ }
 
     root.innerHTML = `
         <div class="library-head">

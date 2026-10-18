@@ -26,7 +26,7 @@ app.whenReady().then(async () => {
         const { createWorkspace } = require('../backend/workspace');
         const { dispatch } = require('../backend/routes');
 
-        const file = path.join(tmp, 'plans.citrine');
+        const file = path.join(tmp, 'plans.prism');
         const ws = createWorkspace({ filePath: file });
         ws.init();
         const ctx = { workspace: ws, dialogs: {} };

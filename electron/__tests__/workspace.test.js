@@ -19,7 +19,7 @@ test.after(() => { for (const d of tmpDirs) fs.rmSync(d, { recursive: true, forc
 function tmpFile() {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'citrine-test-'));
     tmpDirs.push(dir);
-    return path.join(dir, 'plans.citrine');
+    return path.join(dir, 'plans.prism');
 }
 
 function open(file) {

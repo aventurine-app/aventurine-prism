@@ -5,7 +5,7 @@
 // <head> (the CSP forbids inline scripts), so the first frame is already the
 // right theme.
 //
-// 'color-theme': 'colorful' (the default when nothing is stored), '' (light),
+// 'color-theme': '' (light, the default when nothing is stored), 'colorful',
 // 'dark', or 'system' (follow the OS; settings.js tracks changes live).
 // 'flow-motion': 'off' stops the dots that run along links.
 // 'ui-zoom': the interface scale as a factor, 1 when nothing is stored.
@@ -21,7 +21,7 @@
         zoom = Number(localStorage.getItem('ui-zoom'));
     } catch { /* storage unavailable: defaults apply */ }
 
-    const t = stored === null ? 'colorful' : stored;
+    const t = stored === null ? '' : stored;
     const effective = t === 'system'
         ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : '')
         : t;

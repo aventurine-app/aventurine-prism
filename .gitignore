@@ -1,4 +1,8 @@
 # Local data — never commit plans files or their backups.
+*.prism
+*.prism.bak
+*.prism.tmp-*
+*.prism.unreadable-*
 *.citrine
 *.citrine.bak
 *.citrine.tmp-*

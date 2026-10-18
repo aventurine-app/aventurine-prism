@@ -68,7 +68,21 @@ let mainWindow = null;
 function plansFilePath() {
     const dataDir = process.env.CITRINE_DATA_DIR || path.join(app.getPath('userData'), 'data');
     process.env.CITRINE_DATA_DIR = dataDir;
-    return process.env.CITRINE_FILE_PATH || path.join(dataDir, 'plans.citrine');
+    if (process.env.CITRINE_FILE_PATH) return process.env.CITRINE_FILE_PATH;
+    const filePath = path.join(dataDir, 'plans.prism');
+    migrateLegacyPlansFile(dataDir, filePath);
+    return filePath;
+}
+
+/** v0.1.0 named the plans file plans.citrine. Move it (and its .bak) to the
+ *  new name once, and only when nothing exists at the new name yet. */
+function migrateLegacyPlansFile(dataDir, filePath) {
+    const legacy = path.join(dataDir, 'plans.citrine');
+    if (fs.existsSync(filePath) || !fs.existsSync(legacy)) return;
+    fs.renameSync(legacy, filePath);
+    if (fs.existsSync(`${legacy}.bak`) && !fs.existsSync(`${filePath}.bak`)) {
+        fs.renameSync(`${legacy}.bak`, `${filePath}.bak`);
+    }
 }
 
 /** File-name-safe version of a plan name for the export dialog. */
