@@ -33,7 +33,7 @@
     if (!stage) return;
 
     // Mirrors .node in canvas.css; the input port sits on the vertical centre
-    // and the output ports are spread down the right edge.
+    // and so does the output port.
     const { NODE_W, NODE_H, DOCK_H } = P.GEOM;
     const heightOf = (n) => (n.dock ? DOCK_H : NODE_H);
     const GRID = 24;
@@ -71,12 +71,13 @@
         </div>
         <div class="island island--time" hidden aria-live="polite">${iconSvg('clock-counter-clockwise')}<span></span></div>
         <div class="canvas-empty" hidden>
-            <div class="empty-state">
+            <div class="empty-state" role="dialog" aria-labelledby="empty-state-title">
+                <button class="modal-close empty-state-close" type="button" data-act="dismiss-empty" aria-label="Close">×</button>
                 <div class="empty-state-art" aria-hidden="true">
                     ${['source', 'account', 'expense', 'debt', 'modifier', 'account'].map((r, i) =>
                         `<span class="role-tile role-tile--lg" data-role="${r}">${iconSvg(['briefcase', 'piggy-bank', 'shopping-bag', 'cardholder', 'credit-card', 'chart-line-up'][i])}</span>`).join('')}
                 </div>
-                <h2 class="empty-state-title">Empty plan</h2>
+                <h2 class="empty-state-title" id="empty-state-title">Empty plan</h2>
                 <div class="empty-state-actions">
                     <button class="button-primary" type="button" data-act="example">${iconSvg('sparkle')}Load example</button>
                     <button class="button-secondary" type="button" data-act="add">Add module</button>
@@ -87,6 +88,8 @@
     const zoomLabel = stage.querySelector('.zoom-level');
     const timeIsland = stage.querySelector('.island--time');
     const emptyEl = stage.querySelector('.canvas-empty');
+    // Plans whose empty card was closed with the ×; it stays closed for the session.
+    const dismissedEmpty = new Set();
 
     // ── Camera ─────────────────────────────────────────────────────────────
 
@@ -150,12 +153,12 @@
 
     // ── Geometry ───────────────────────────────────────────────────────────
 
-    /** Height of output port `i` of `count` down the card's right edge. */
-    const portY = (i, count, h = NODE_H) => Math.round(h * (i + 1) / (count + 1));
+    /** Parallel links between one pair (money from the balance and from the
+     *  earnings, say) sit this far apart so none hides another. */
+    const PARALLEL_GAP = 20;
 
-    function outPort(n, basis) {
-        const bases = P.basesFor(n);
-        return { x: n.x + NODE_W + 1, y: n.y + portY(Math.max(0, bases.indexOf(basis)), bases.length, heightOf(n)) };
+    function outPort(n) {
+        return { x: n.x + NODE_W + 1, y: n.y + heightOf(n) / 2 };
     }
     const inPort = (n) => ({ x: n.x - 1, y: n.y + heightOf(n) / 2 });
 
@@ -266,12 +269,12 @@
                 out.unit = '/mo';
             }
         } else {
-            // Spending shows what reaches it; a card or a match shows what it
-            // adds; a tax or fee shows what it takes.
+            // Spending and a budget group show what reaches them; a card or a
+            // match shows what it adds; a tax or fee shows what it takes.
             const kind = C.preset(node.type).kind;
-            const series = role === 'expense' ? nr.inflow : kind === 'skim' ? nr.consumed : nr.produced;
+            const series = role === 'expense' || kind === 'group' ? nr.inflow : kind === 'skim' ? nr.consumed : nr.produced;
             const v = vp.all ? avg(series) : series[vp.month];
-            out.value = (role === 'modifier' && kind !== 'skim' && v >= 0.5 ? '+' : '') + Fmt.money(v);
+            out.value = (role === 'modifier' && kind === 'match' && v >= 0.5 ? '+' : '') + Fmt.money(v);
             out.unit = vp.all ? 'avg/mo' : '/mo';
         }
         return out;
@@ -346,8 +349,7 @@
             </div>
             <div class="node-figure"><span class="node-value"></span><span class="node-unit"></span><span class="node-delta"></span></div>
             <div class="node-bar" aria-hidden="true"></div>
-            <span class="node-outs"></span>
-            <div class="node-foot"></div>`;
+            <span class="node-outs"></span>`;
         const view = {
             el,
             tile: el.querySelector('.role-tile'),
@@ -359,7 +361,6 @@
             bar: el.querySelector('.node-bar'),
             inPort: el.querySelector('.node-port--in'),
             outs: el.querySelector('.node-outs'),
-            foot: el.querySelector('.node-foot'),
             sig: {},
             flag: null,
         };
@@ -399,14 +400,14 @@
             view.tile.dataset.role = r;
             view.inPort.hidden = !C.ROLES[r].hasIn;
         });
-        const bases = P.basesFor(node);
+        const sends = P.basesFor(node).length > 0;
         put(view, 'docked', !!node.dock, (on) => view.el.classList.toggle('is-docked', on));
-        put(view, 'ports', `${role}|${bases.join()}|${node.dock ? 'd' : ''}`, () => {
-            view.outs.innerHTML = bases.map((b, i) => `<span class="node-port node-port--out" data-basis="${b}"
-                data-flow="${D.flowKey(node, b)}" style="top:${portY(i, bases.length, heightOf(node))}px" title="${D.portLabel(node, b)}"
-                aria-hidden="true"><span class="node-port-label">${D.portLabel(node, b)}</span></span>`).join('');
+        put(view, 'ports', `${role}|${sends}|${node.dock ? 'd' : ''}`, () => {
+            view.outs.innerHTML = sends
+                ? `<span class="node-port node-port--out" style="top:${Math.round(heightOf(node) / 2)}px" title="Drag to link" aria-hidden="true"></span>`
+                : '';
         });
-        put(view, 'icon', p.icon, (icon) => { view.tile.innerHTML = iconSvg(icon); });
+        put(view, 'icon', P.iconOf(node), (icon) => { view.tile.innerHTML = iconSvg(icon); });
         put(view, 'name', node.name, (t) => { view.name.textContent = t; });
         put(view, 'meta', D.nodeMeta(node), (t) => { view.meta.textContent = t; });
 
@@ -451,7 +452,7 @@
             if (view.flag) view.el.appendChild(view.flag);
         });
 
-        renderFoot(node, view, role, docks, plan);
+        renderFoot(node, view, docks, plan);
 
         put(view, 'sel', group.has(node.id) || !!(sel && sel.kind === 'node' && sel.id === node.id), (on) => view.el.classList.toggle('is-selected', on));
         const label = `${node.name}, ${C.ROLES[role].label}, ${f.value} ${f.unit}`.trim();
@@ -459,65 +460,26 @@
     }
 
     // ── Foot strips ────────────────────────────────────────────────────────
-    // A strip hanging under a card joins it to what it can take: "+ debt"
-    // under a property (under its last docked loan), a card slot under
-    // spending, and the list of what a credit card is paying for.
+    // What a card's element reaches below the card proper: the loans docked
+    // under a property. The selection ring wraps all of it.
 
-    const FOOT_H = 32;               // .node-foot-btn in canvas.css
     const NO_DOCKS = [];
-    let cardOf = new Map();          // spending id -> the card paying for it
-    let chargedTo = new Map();       // card id -> the spending it pays for
 
-    const CARD_GLYPH = '<span class="card-glyph" aria-hidden="true"></span>';
-
-    function indexCharges(plan) {
-        cardOf = new Map();
-        chargedTo = new Map();
-        for (const l of plan.links) {
-            if (l.basis !== 'charges') continue;
-            const from = Store.node(l.from);
-            const to = Store.node(l.to);
-            if (!from || !to) continue;
-            if (!cardOf.has(to.id)) cardOf.set(to.id, from);
-            if (!chargedTo.has(from.id)) chargedTo.set(from.id, []);
-            chargedTo.get(from.id).push(to);
-        }
-    }
-
-    function renderFoot(node, view, role, docks, plan) {
-        let html = '';
+    function renderFoot(node, view, docks, plan) {
         let top = NODE_H;
-        let kind = '';
         let endsStack = false;
         if (node.dock) {
-            // A docked loan has no strip of its own: the asset's hangs below the last one,
-            // unless the stack is full, and then the last loan closes the frame itself.
+            // A docked loan has no strip of its own; when the stack is full the last
+            // loan closes the frame itself.
             const stack = P.docksOf(plan, node.dock);
             endsStack = stack.length >= P.MAX_DOCKS && stack[stack.length - 1].id === node.id;
         } else if (P.loanOptions(node).length) {
-            if (docks.length < P.MAX_DOCKS) { kind = 'add'; html = '<button class="node-foot-btn" type="button" data-foot="add" aria-haspopup="menu">+ debt</button>'; }
             top = NODE_H + docks.length * DOCK_H;
-        } else if (role === 'expense') {
-            const card = cardOf.get(node.id);
-            kind = card ? 'slot-on' : 'slot';
-            html = `<button class="node-foot-btn node-slot${card ? ' is-on' : ''}" type="button" data-foot="slot" aria-haspopup="menu"
-                aria-label="Choose the card that pays for ${escapeHtml(node.name)}">${CARD_GLYPH}${card ? `<span>${escapeHtml(card.name)}</span>` : ''}</button>`;
-        } else if (C.preset(node.type).kind === 'card' && chargedTo.has(node.id)) {
-            kind = 'tray';
-            const list = chargedTo.get(node.id);
-            const names = list.slice(0, 2).map((n) => `<span class="o-chip">${escapeHtml(n.name)}</span>`).join('');
-            html = `<div class="node-tray">${names}${list.length > 2 ? `<span class="o-chip">+${list.length - 2}</span>` : ''}</div>`;
         }
-        // How far the module reaches down: its card, the loans docked under it
-        // and the strip below them. The selection ring wraps all of it.
-        const extent = node.dock ? DOCK_H : top + (html ? FOOT_H : 0);
-        put(view, 'foot', `${kind}|${top}|${html}|${extent}|${endsStack}`, () => {
+        const extent = node.dock ? DOCK_H : top;
+        put(view, 'foot', `${extent}|${endsStack}|${docks.length}`, () => {
             view.el.style.setProperty('--extent', `${extent}px`);
             view.el.classList.toggle('ends-stack', endsStack);
-            view.foot.innerHTML = html;
-            view.foot.style.setProperty('--foot-top', `${top}px`);
-            view.foot.hidden = !html;
-            view.el.classList.toggle('has-foot', !!html);
             view.el.classList.toggle('has-docks', docks.length > 0);
         });
     }
@@ -546,12 +508,29 @@
         return { g, path, flow, hit, label, sig: {} };
     }
 
-    function renderLink(link, view, plan, res, vp, sel) {
+    /** How far each link moves off the port's centre: nothing for a pair's
+     *  only link, else spread evenly about it in plan order. */
+    function parallelLifts(plan) {
+        const pairs = new Map();
+        for (const l of plan.links) {
+            const key = `${l.from}>${l.to}`;
+            if (pairs.has(key)) pairs.get(key).push(l.id); else pairs.set(key, [l.id]);
+        }
+        const lifts = new Map();
+        for (const ids of pairs.values()) {
+            if (ids.length > 1) ids.forEach((id, i) => lifts.set(id, (i - (ids.length - 1) / 2) * PARALLEL_GAP));
+        }
+        return lifts;
+    }
+
+    function renderLink(link, view, lift, res, vp, sel) {
         const from = Store.node(link.from);
         const to = Store.node(link.to);
         if (!from || !to) return;
         const flow = D.flowKey(from, link.basis);
-        const c = curve(outPort(from, link.basis), inPort(to));
+        const a = outPort(from);
+        const b = inPort(to);
+        const c = curve({ x: a.x, y: a.y + lift }, { x: b.x, y: b.y + lift });
         put(view, 'd', c.d, (d) => {
             view.path.setAttribute('d', d);
             view.flow.setAttribute('d', d);
@@ -599,7 +578,6 @@
         const vp = viewPoint();
 
         for (const id of group) if (!Store.node(id)) group.delete(id);
-        indexCharges(plan);
         const seenNodes = new Set();
         for (const node of plan.nodes) {
             seenNodes.add(node.id);
@@ -625,6 +603,7 @@
         }
 
         const seenLinks = new Set();
+        const lifts = parallelLifts(plan);
         for (const link of plan.links) {
             seenLinks.add(link.id);
             let view = linkViews.get(link.id);
@@ -632,7 +611,7 @@
                 view = buildLink(link);
                 linkViews.set(link.id, view);
             }
-            renderLink(link, view, plan, res, vp, sel);
+            renderLink(link, view, lifts.get(link.id) || 0, res, vp, sel);
         }
         for (const [id, view] of linkViews) {
             if (!seenLinks.has(id)) {
@@ -644,7 +623,7 @@
         }
 
         stage.classList.toggle('flow-limited', plan.links.length > FLOW_LIMIT);
-        emptyEl.hidden = plan.nodes.length > 0;
+        emptyEl.hidden = plan.nodes.length > 0 || dismissedEmpty.has(plan.id);
         const tools = stage.querySelector('.island--tools');
         tools.querySelector('[data-act="undo"]').disabled = !Store.canUndo();
         tools.querySelector('[data-act="redo"]').disabled = !Store.canRedo();
@@ -720,14 +699,14 @@
         })).filter((g) => g.items.length);
     }
 
-    function openAddPicker(clientX, clientY, { from = null, basis = null } = {}) {
+    function openAddPicker(clientX, clientY, { from = null } = {}) {
         const wpt = toWorld(clientX, clientY);
-        const roles = !from ? null : basis ? P.portTargets(from, basis) : C.LINK_TARGETS[D.roleOf(from)];
+        const roles = from ? P.targetRoles(from) : null;
         UI.picker({ x: clientX, y: clientY }, presetGroups(roles), {
             placeholder: from ? `Link ${from.name} to…` : 'Add a module',
             onPick: (item) => {
                 const node = addAt(item.id, wpt.x + NODE_W / 2, wpt.y);
-                if (node && from) Store.connect(from.id, node.id, basis);
+                if (node && from) Store.connect(from.id, node.id);
             },
         });
     }
@@ -825,7 +804,6 @@
             return;
         }
         if (e.button !== 0) return;
-        if (e.target.closest('.node-foot')) return;
         // A debt's input dot is a button (who pays this?), not a drag handle.
         if (e.target.closest('.node-port--in') && e.target.closest('.node')?.dataset.role === 'debt') return;
 
@@ -835,14 +813,12 @@
 
         if (port && card) {
             const from = Store.node(card.dataset.id);
-            const basis = port.dataset.basis;
-            action = { type: 'connect', from, basis, target: null };
+            action = { type: 'connect', from, target: null };
             ghost = document.createElementNS(SVG_NS, 'path');
             ghost.classList.add('link-ghost');
-            ghost.dataset.flow = port.dataset.flow;
             svg.appendChild(ghost);
             stage.classList.add('is-linking');
-            markTargets(from, basis);
+            markTargets(from);
             capture(e);
             moveGhost(e);
             return;
@@ -935,17 +911,17 @@
             stage.classList.remove('is-linking');
             if (ghost) { ghost.remove(); ghost = null; }
             if (e.type !== 'pointerup') return;
-            const target = resolveTarget(a.from, nodeAt(e.clientX, e.clientY), a.basis);
+            const target = resolveTarget(a.from, nodeAt(e.clientX, e.clientY));
             if (target && target.id !== a.from.id) {
-                const ok = P.canConnect(Store.state.plan, a.from.id, target.id, a.basis);
-                if (ok.ok) Store.connect(a.from.id, target.id, a.basis);
-                else if (ok.reason === 'duplicate') UI.toast(`${D.portLabel(a.from, a.basis)} already links those two modules.`);
+                const ok = P.canConnect(Store.state.plan, a.from.id, target.id);
+                if (ok.ok) Store.connect(a.from.id, target.id);
+                else if (ok.reason === 'duplicate') UI.toast('Those modules are already linked every way they can be.');
                 else if (ok.reason === 'role') UI.toast(linkRuleText(D.roleOf(a.from), D.roleOf(target)));
-                else if (ok.reason === 'basis') UI.toast(portRuleText(a.from, a.basis));
+                else if (ok.reason === 'basis') UI.toast(targetRuleText(a.from));
             } else if (!target) {
                 const under = document.elementFromPoint(e.clientX, e.clientY);
                 if (under && stage.contains(under) && !under.closest('.island')) {
-                    openAddPicker(e.clientX, e.clientY, { from: a.from, basis: a.basis });
+                    openAddPicker(e.clientX, e.clientY, { from: a.from });
                 }
             }
         }
@@ -963,11 +939,11 @@
         return `${C.ROLES[fromRole].label} links only to ${list}.`;
     }
 
-    /** Why an output port refused a module, as what it can reach. */
-    function portRuleText(from, basis) {
-        const allowed = P.portTargets(from, basis).map((r) => PLURAL[r]);
+    /** Why a module refused a link, as what it can reach. */
+    function targetRuleText(from) {
+        const allowed = P.targetRoles(from).map((r) => PLURAL[r]);
         const list = allowed.length > 1 ? `${allowed.slice(0, -1).join(', ')} and ${allowed[allowed.length - 1]}` : allowed[0];
-        return `${D.portLabel(from, basis)} goes only to ${list}.`;
+        return `${from.name} sends only to ${list}.`;
     }
 
     /** A property with loans docked under it stands for them: dropping a link
@@ -975,33 +951,33 @@
      *  an asset still waiting to be paid for (bought inside the plan, nothing
      *  linked in yet): the drop is its purchase. A loan's own strip always
      *  takes the drop itself. */
-    function resolveTarget(from, target, basis) {
+    function resolveTarget(from, target) {
         if (!target || target.dock) return target;
         const plan = Store.state.plan;
         const awaitingPurchase = target.params.bought && !plan.links.some((l) => l.to === target.id)
-            && P.canConnect(plan, from.id, target.id, basis).ok;
+            && P.canConnect(plan, from.id, target.id).ok;
         if (awaitingPurchase) return target;
-        const loan = P.docksOf(plan, target.id).find((d) => P.canConnect(plan, from.id, d.id, basis).ok);
+        const loan = P.docksOf(plan, target.id).find((d) => P.canConnect(plan, from.id, d.id).ok);
         return loan || target;
     }
 
     function moveGhost(e) {
-        const a = outPort(action.from, action.basis);
-        const target = resolveTarget(action.from, nodeAt(e.clientX, e.clientY), action.basis);
-        const valid = target && P.canConnect(Store.state.plan, action.from.id, target.id, action.basis).ok;
+        const a = outPort(action.from);
+        const target = resolveTarget(action.from, nodeAt(e.clientX, e.clientY));
+        const valid = target && P.canConnect(Store.state.plan, action.from.id, target.id).ok;
         const b = valid ? inPort(target) : toWorld(e.clientX, e.clientY);
         ghost.setAttribute('d', curve(a, b).d);
         for (const [id, v] of nodeViews) v.el.classList.toggle('is-target', !!valid && id === target.id);
     }
 
-    function markTargets(from, basis) {
+    function markTargets(from) {
         const plan = Store.state.plan;
         for (const [id, v] of nodeViews) {
             if (id === from.id) continue;
             // A loan is dimmed or lit with the card it sits in.
             if (Store.node(id).dock) { v.el.classList.remove('is-dim'); continue; }
-            const ok = P.canConnect(plan, from.id, id, basis).ok
-                || P.docksOf(plan, id).some((d) => P.canConnect(plan, from.id, d.id, basis).ok);
+            const ok = P.canConnect(plan, from.id, id).ok
+                || P.docksOf(plan, id).some((d) => P.canConnect(plan, from.id, d.id).ok);
             v.el.classList.toggle('is-dim', !ok);
         }
     }
@@ -1027,28 +1003,17 @@
         }
     }, { passive: false });
 
-    // The strips under cards, and the dot a debt is paid through.
+    // The dot a debt is paid through.
     stage.addEventListener('click', (e) => {
-        const btn = e.target.closest('.node-foot-btn');
         const card = e.target.closest('.node');
         if (!card) return;
         const node = Store.node(card.dataset.id);
         if (!node) return;
         const plan = Store.state.plan;
-        if (btn && btn.dataset.foot === 'add') {
-            UI.menu(btn, P.loanOptions(node).map((pid) => ({
-                label: C.preset(pid).name, icon: C.preset(pid).icon, onSelect: () => Store.addLoan(node.id, pid),
-            })));
-        } else if (btn && btn.dataset.foot === 'slot') {
-            const cards = plan.nodes.filter((n) => C.preset(n.type).kind === 'card');
-            const items = cards.map((c) => ({ label: c.name, icon: 'credit-card', onSelect: () => Store.payWithCard(node.id, c.id) }));
-            items.push({ label: 'New credit card', icon: 'plus', onSelect: () => Store.payWithCard(node.id, 'new') });
-            if (cardOf.has(node.id)) items.push('sep', { label: 'Not on a card', icon: 'x', onSelect: () => Store.payWithCard(node.id, null) });
-            UI.menu(btn, items);
-        } else if (e.target.closest('.node-port--in') && D.roleOf(node) === 'debt') {
+        if (e.target.closest('.node-port--in') && D.roleOf(node) === 'debt') {
             const payers = plan.nodes.filter((n) => ['source', 'account'].includes(D.roleOf(n)) && P.canConnect(plan, n.id, node.id).ok);
             UI.menu(e.target.closest('.node-port--in'), payers.length
-                ? payers.map((n) => ({ label: `Pay from ${n.name}`, icon: C.preset(n.type).icon, onSelect: () => Store.connect(n.id, node.id) }))
+                ? payers.map((n) => ({ label: `Pay from ${n.name}`, icon: P.iconOf(n), onSelect: () => Store.connect(n.id, node.id) }))
                 : [{ label: 'No account to pay from yet', disabled: true }]);
         }
     });
@@ -1135,9 +1100,56 @@
         else Store.removeLink(s.id);
     }
 
+    // Copied modules live here, so they paste into any open plan.
+    let clipboard = null;
+    let pasteCount = 0;
+
+    function selectedNodeIds() {
+        if (group.size) return [...group];
+        const s = Store.state.selection;
+        return s && s.kind === 'node' ? [s.id] : [];
+    }
+
+    function copySelection() {
+        const snap = Store.copyNodes(selectedNodeIds());
+        if (!snap) return false;
+        clipboard = snap;
+        pasteCount = 0;
+        UI.toast(snap.nodes.length === 1 ? `Copied ${snap.nodes[0].name}.` : `Copied ${snap.nodes.length} modules.`);
+        return true;
+    }
+
+    function pasteClipboard() {
+        if (!clipboard) return;
+        const made = Store.pasteNodes(clipboard, 32 * ++pasteCount);
+        if (!made.length) return;
+        group.clear();
+        if (made.length === 1) {
+            Store.select({ kind: 'node', id: made[0] });
+        } else {
+            Store.select(null);
+            for (const id of made) group.add(id);
+        }
+        render();
+        stage.focus({ preventScroll: true });
+    }
+
     stage.addEventListener('keydown', (e) => {
         if (e.target.closest('input, select, textarea')) return;
         const s = Store.state.selection;
+        if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+            const k = e.key.toLowerCase();
+            if (k === 'c' || k === 'x') {
+                e.preventDefault();
+                if (copySelection() && k === 'x') deleteSelection();
+                return;
+            }
+            if (k === 'v') {
+                e.preventDefault();
+                pasteClipboard();
+                return;
+            }
+        }
         if (e.key === ' ' && !e.repeat) {
             spaceDown = true;
             stage.classList.add('is-space');
@@ -1198,6 +1210,12 @@
             case 'add': openAddPicker(r.left + r.width / 2 - 140, r.top + 80); break;
             case 'inspector': Inspector.toggle(); btn.setAttribute('aria-pressed', String(Inspector.isOpen())); break;
             case 'example': loadExample(); break;
+            case 'dismiss-empty': {
+                const plan = Store.state.plan;
+                if (plan) dismissedEmpty.add(plan.id);
+                emptyEl.hidden = true;
+                break;
+            }
             default: break;
         }
     });

@@ -45,7 +45,7 @@ function inner(name) {
 function main() {
     const moduleIcons = new Set([
         ...Catalog.PRESETS.map((p) => p.icon),
-        ...Catalog.CATEGORIES.map((c) => c.icon),
+        ...Catalog.CATEGORIES.flatMap((c) => [c.icon, ...c.icons]),
     ]);
     const regular = {};
     for (const name of [...new Set([...moduleIcons, ...UI_ICONS])].sort()) regular[name] = inner(name);

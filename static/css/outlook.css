@@ -14,8 +14,17 @@
     border-top: var(--border-width) solid var(--stroke-divider);
 }
 .outlook.is-collapsed { height: 48px; }
-.outlook.is-collapsed .outlook-body,
-.outlook.is-collapsed .kpis { display: none; }
+.outlook.is-collapsed .outlook-body { display: none; }
+/* Collapsed, the headline column keeps just the net worth figure. */
+.outlook.is-collapsed .kpis {
+    justify-content: center;
+    padding-top: 0;
+    padding-bottom: 0;
+    overflow: hidden;
+}
+.outlook.is-collapsed .kpis > :not(.kpi-hero),
+.outlook.is-collapsed .kpi-hero > :not(.kpi-hero-value) { display: none; }
+.outlook.is-collapsed .kpi-hero-value { font-size: var(--size-body, 1rem); }
 
 /* The headline column runs the panel's full height; the view tabs sit above
    the chart, in the column beside it. */
@@ -118,18 +127,17 @@
     gap: var(--space-8);
     font-size: var(--size-small);
 }
-.kpi-row dt {
-    display: flex;
-    align-items: center;
-    gap: var(--space-8);
-    color: var(--text-secondary);
-}
-.kpi-row dt::before {
-    content: '';
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-    background: var(--swatch, transparent);
+.kpi-row dt { color: var(--text-secondary); }
+.kpi-group { display: flex; flex-direction: column; gap: var(--space-8); }
+.kpi-head {
+    margin: 0;
+    padding-bottom: var(--space-4);
+    border-bottom: var(--border-width) solid var(--stroke-divider);
+    color: var(--text-tertiary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--track-wide);
+    text-transform: uppercase;
 }
 .kpi-row dd { margin: 0; color: var(--text-primary); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; }
 

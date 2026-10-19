@@ -141,11 +141,6 @@
     height: 7px;
     background: var(--accent-primary);
 }
-.settings-theme-swatch[data-theme="colorful"] {
-    background-image: linear-gradient(to bottom, var(--color-base-700), var(--color-base-900));
-    background-repeat: no-repeat;
-    background-size: 24% 100%;
-}
 .settings-theme-swatch--system { background: linear-gradient(105deg, #f2f3f2 0 50%, #191a19 50% 100%); }
 .settings-theme-swatch--system::before { display: none; }
 .theme-label {

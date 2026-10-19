@@ -28,6 +28,7 @@
         plan: null,
         selection: null,        // { kind: 'node' | 'link', id }
         preview: null,          // preset id shown in the inspector before it is added
+        previewIcon: null,      // icon picked for the previewed preset; the module is added wearing it
         results: null,
         scrub: null,            // month index under the chart cursor
         save: 'saved',          // 'saved' | 'saving' | 'error'
@@ -183,6 +184,7 @@
     function select(sel) {
         const hadPreview = state.preview !== null;
         state.preview = null;
+        state.previewIcon = null;
         const same = (state.selection && sel && state.selection.kind === sel.kind && state.selection.id === sel.id)
             || (!state.selection && !sel);
         if (same) {
@@ -197,7 +199,16 @@
     function previewPreset(id) {
         if (state.preview === id) return;
         state.preview = id;
+        state.previewIcon = null;
         state.selection = null;
+        emit('selection');
+    }
+
+    /** Pick the icon the previewed module will be added with (null: its own). */
+    function setPreviewIcon(icon) {
+        const p = state.preview && C.preset(state.preview);
+        if (!p) return;
+        state.previewIcon = icon && icon !== p.icon && C.iconChoices(p).includes(icon) ? icon : null;
         emit('selection');
     }
 
@@ -309,6 +320,7 @@
         state.plan = doc;
         state.selection = null;
         state.preview = null;
+        state.previewIcon = null;
         state.scrub = null;
         emit('tabs');
         emit('selection');
@@ -410,8 +422,8 @@
         else if (!r.body.canceled) UI.toast('Plan exported.', { type: 'success' });
     }
 
-    /** Load the tabs and open the active plan. A fresh install gets the
-     *  example plan. Returns false while the file is locked. */
+    /** Load the tabs and open the active plan. A fresh install gets a blank
+     *  plan, which opens on the empty-plan card. Returns false while the file is locked. */
     async function boot() {
         const st = await api('GET', '/api/file/status');
         if (!st.ok) throw new Error('backend unavailable');
@@ -424,7 +436,7 @@
         // names and makes switching tabs instant.
         await Promise.all(state.tabs.map(loadPlan));
         if (!state.tabs.length) {
-            await addPlan(CitrineExample.build());
+            await newPlan();
         } else {
             await openPlan(r.body.active || state.tabs[0]);
         }
@@ -445,6 +457,7 @@
                 return false;
             }
             created = P.createNode(plan, presetId, x, y);
+            if (state.preview === presetId && state.previewIcon) created.icon = state.previewIcon;
             plan.nodes.push(created);
             return true;
         });
@@ -469,25 +482,68 @@
         return copy;
     }
 
+    /** Copies of `ids` and the links among them, ready for pasteNodes. A copied
+     *  asset takes its docked loans along. */
+    function copyNodes(ids) {
+        const plan = state.plan;
+        if (!plan) return null;
+        const want = new Set(ids);
+        for (const id of ids) for (const d of P.docksOf(plan, id)) want.add(d.id);
+        const nodes = plan.nodes.filter((n) => want.has(n.id));
+        if (!nodes.length) return null;
+        const links = plan.links.filter((l) => want.has(l.from) && want.has(l.to));
+        return JSON.parse(JSON.stringify({ nodes, links }));
+    }
+
+    /** Paste a copyNodes snapshot into the open plan, `offset` px from where it
+     *  was copied, with fresh ids. Returns the new node ids. */
+    function pasteNodes(snap, offset) {
+        if (!snap || !state.plan) return [];
+        const ids = new Map();
+        const made = [];
+        edit((plan) => {
+            if (plan.nodes.length + snap.nodes.length > P.LIMITS.nodes || plan.links.length + snap.links.length > P.LIMITS.links) {
+                UI.toast(`A plan holds at most ${P.LIMITS.nodes} modules.`, { type: 'error' });
+                return false;
+            }
+            for (const src of snap.nodes) {
+                const n = JSON.parse(JSON.stringify(src));
+                ids.set(src.id, n.id = P.newId('n'));
+                n.x += offset;
+                n.y += offset;
+                if (n.dock) {
+                    if (ids.has(n.dock)) n.dock = ids.get(n.dock);
+                    else delete n.dock;
+                }
+                plan.nodes.push(n);
+                made.push(n.id);
+            }
+            // Cash back follows a copied account; to one left behind it still
+            // goes if that account is in this plan (the plan clears it if not).
+            for (const n of plan.nodes.filter((x) => made.includes(x.id))) {
+                if (n.params && ids.has(n.params.cashBackTo)) n.params.cashBackTo = ids.get(n.params.cashBackTo);
+            }
+            for (const src of snap.links) {
+                const l = JSON.parse(JSON.stringify(src));
+                l.id = P.newId('l');
+                l.from = ids.get(src.from);
+                l.to = ids.get(src.to);
+                plan.links.push(l);
+            }
+            return true;
+        });
+        return made;
+    }
+
     function removeNode(id) {
         edit((plan) => {
             // Loans docked under a removed asset step out beside where it was.
             for (const d of P.docksOf(plan, id)) P.undockLoan(plan, d.id);
             plan.nodes = plan.nodes.filter((n) => n.id !== id);
             plan.links = plan.links.filter((l) => l.from !== id && l.to !== id);
+            // A card that paid its cash back into the removed account credits itself again.
+            for (const n of plan.nodes) if (n.params && n.params.cashBackTo === id) n.params.cashBackTo = null;
         });
-    }
-
-    /** A new loan docked under an asset, or null when it holds no more. */
-    function addLoan(assetId, presetId) {
-        let created = null;
-        edit((plan) => {
-            if (plan.nodes.length >= P.LIMITS.nodes) return false;
-            created = P.addLoan(plan, assetId, presetId);
-            return !!created;
-        });
-        if (created) select({ kind: 'node', id: created.id });
-        return created;
     }
 
     /** What a loan can do about docks: leave its asset, or attach to one. */
@@ -499,32 +555,6 @@
         return plan.nodes.filter((a) => P.canDock(plan, id, a.id).ok).map((a) => ({ kind: 'dock', asset: a }));
     }
 
-    /** Charge a spending module to a card (replacing any card it was on), or
-     *  with `cardId` null take it off its card. A new card is added beside it
-     *  when `cardId` is 'new'. */
-    function payWithCard(spendId, cardId) {
-        let card = null;
-        edit((plan) => {
-            const sp = plan.nodes.find((n) => n.id === spendId);
-            if (!sp) return false;
-            const isCard = (id) => { const x = plan.nodes.find((n) => n.id === id); return x && C.preset(x.type).kind === 'card'; };
-            plan.links = plan.links.filter((l) => !(l.to === spendId && l.basis === 'charges' && isCard(l.from)));
-            if (!cardId) return true;
-            if (cardId === 'new') {
-                if (plan.nodes.length >= P.LIMITS.nodes) return false;
-                card = P.createNode(plan, 'credit-card', sp.x - P.GEOM.NODE_W - 96, sp.y);
-                plan.nodes.push(card);
-            } else {
-                card = plan.nodes.find((n) => n.id === cardId);
-            }
-            if (!card || plan.links.length >= P.LIMITS.links) return false;
-            if (!P.canConnect(plan, card.id, spendId, 'charges').ok) return false;
-            plan.links.push(P.createLink(plan, card.id, spendId, 'charges'));
-            return true;
-        });
-        return card;
-    }
-
     function dockLoan(debtId, assetId) {
         return !!edit((plan) => P.dockLoan(plan, debtId, assetId));
     }
@@ -533,7 +563,7 @@
         edit((plan) => { P.undockLoan(plan, debtId); });
     }
 
-    /** Link two modules, from the output port `basis` (or the default one). */
+    /** Link two modules on `basis`, or on the usual (else next free) one. */
     function connect(fromId, toId, basis = null) {
         const check = P.canConnect(state.plan, fromId, toId, basis);
         if (!check.ok) return null;
@@ -556,6 +586,6 @@
         state, on, edit, beginGesture, gestureMove, endGesture, undo, redo, canUndo, canRedo,
         select, setScrub, setView, flush, boot, openPlan, newPlan, addPlan, duplicatePlan,
         renamePlan, deletePlan, reorderTabs, importPlan, exportPlan, planName, getPlan,
-        node, link, previewPreset, addNode, duplicateNode, removeNode, addLoan, dockLoan, undockLoan, dockChoices, payWithCard, connect, removeLink, simulateNow,
+        node, link, previewPreset, setPreviewIcon, addNode, duplicateNode, copyNodes, pasteNodes, removeNode, dockLoan, undockLoan, dockChoices, connect, removeLink, simulateNow,
     };
 }());

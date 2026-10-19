@@ -31,7 +31,7 @@ function open(file) {
 function samplePlan(name = 'Sample') {
     const plan = Plan.createPlan({ name, start: '2026-01', years: 2 });
     const salary = Plan.createNode(plan, 'salary', 0, 0);
-    const savings = Plan.createNode(plan, 'hysa', 300, 0);
+    const savings = Plan.createNode(plan, 'bank-account', 300, 0);
     plan.nodes.push(salary, savings);
     plan.links.push(Plan.createLink(plan, salary.id, savings.id));
     return plan;
@@ -202,7 +202,7 @@ test('router: export and import go through the injected dialogs', async () => {
     const file = tmpFile();
     const ws = open(file);
     const plan = ws.addPlan(samplePlan('Shared'));
-    const out = path.join(path.dirname(file), 'shared.citrine-plan');
+    const out = path.join(path.dirname(file), 'shared.json');
     const ctx = ctxFor(ws, {
         chooseExportPath: async () => out,
         chooseImportPath: async () => out,

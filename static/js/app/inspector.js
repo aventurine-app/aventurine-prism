@@ -122,6 +122,12 @@
         root.querySelectorAll('[data-years]').forEach((b) => {
             b.setAttribute('aria-pressed', String(Number(b.dataset.years) === plan().settings.years));
         });
+        const iconTile = root.querySelector('[data-act="node-icon"]');
+        const shown = iconTile && Store.node(built.slice(5));
+        if (shown && iconTile.dataset.icon !== P.iconOf(shown)) {
+            iconTile.dataset.icon = P.iconOf(shown);
+            iconTile.innerHTML = iconSvg(P.iconOf(shown));
+        }
         const sentence = root.querySelector('[data-sentence]');
         if (sentence) {
             const l = Store.link(built.slice(5));
@@ -296,8 +302,8 @@
         start: (p) => (p.role === 'debt' ? 'Already owed' : 'Plan start'),
         end: () => 'No end',
         lockUntil: () => 'Not locked',
-        bought: () => 'Already owned',
-        sold: () => 'Not sold',
+        bought: () => '--/--/--',
+        sold: () => '--/--/--',
     };
 
     function paramSpec(node, key) {
@@ -320,6 +326,17 @@
                 options: [['0', 'Spread monthly'], ...P.MONTHS.map((m, i) => [String(i + 1), m])],
             };
             case 'yearmonth': return { ...base, type: 'yearmonth', empty: EMPTY_MONTH[key](p) };
+            case 'account': return {
+                // A target that is gone reads as the default; the plan clears it on save.
+                ...base, type: 'select',
+                options: [['', 'Card balance'], ...plan().nodes.filter((n) => D.roleOf(n) === 'account').map((n) => [n.id, n.name])],
+                get: () => {
+                    const v = (Store.node(id) || node).params[key];
+                    const to = v && Store.node(v);
+                    return to && D.roleOf(to) === 'account' ? v : '';
+                },
+                set: (pl, v) => { pl.nodes.find((n) => n.id === id).params[key] = v || null; },
+            };
             default: throw new Error(`unknown field ${key} on ${p.id}`);
         }
     }
@@ -332,6 +349,7 @@
             if (k === 'payMonth') return per === 'year';
             if (k === 'end') return per !== 'once';
             if (k === 'sellCost') return !!node.params.sold;
+            if (k === 'cashBackTo') return node.params.cashBack > 0;
             return true;
         });
     }
@@ -352,13 +370,13 @@
         return `${money(amount)}/mo`;
     }
 
-    /** One row in Sends to / Receives from: the module at the other end, the
+    /** One row in Outgoing / Incoming Rules: the module at the other end, the
      *  money moving along the link, and the link's rule. */
     function linkRow(l, other) {
         const r = results() && results().links[l.id];
         const short = r && r.short > 0.005;
         return `<li><button class="insp-link" type="button" data-select="link:${esc(l.id)}">
-            <span class="role-tile role-tile--sm" data-role="${D.roleOf(other)}">${iconSvg(C.preset(other.type).icon)}</span>
+            <span class="role-tile role-tile--sm" data-role="${D.roleOf(other)}">${iconSvg(P.iconOf(other))}</span>
             <span class="insp-link-text">
                 <span class="insp-link-name">${esc(other.name)}</span>
                 <span class="insp-link-amount" data-flow="${esc(l.id)}">${esc(flowText(l.id))}</span>
@@ -387,26 +405,28 @@
         const outs = plan().links.filter((l) => l.from === id);
         const ins = plan().links.filter((l) => l.to === id);
         // An asset that is not sold and collects no rent has nothing to send.
-        const sends = C.ROLES[role].hasOut && P.basesFor(node).length ? section('Sends to',
+        const sends = C.ROLES[role].hasOut && P.basesFor(node).length ? section('Outgoing Rules',
             outs.length
                 ? `<ul class="insp-links">${outs.map((l) => linkRow(l, Store.node(l.to))).join('')}</ul>`
                 : '<p class="insp-none">No links yet</p>') : '';
-        const receives = C.ROLES[role].hasIn ? section('Receives from',
+        const receives = C.ROLES[role].hasIn ? section('Incoming Rules',
             ins.length
                 ? `<ul class="insp-links">${ins.map((l) => linkRow(l, Store.node(l.from))).join('')}</ul>`
                 : '<p class="insp-none">Nothing links here yet</p>') : '';
 
         return `
+            <div class="insp-card" data-role="${role}">
             <div class="insp-header">
-                <span class="role-tile role-tile--lg" data-role="${role}">${iconSvg(p.icon)}</span>
-                <div class="insp-titles">${nameB.html}
-                    <div class="insp-sub"><span class="chip chip--role" data-role="${role}">${esc(C.ROLES[role].label)}</span>
-                        ${D.CATEGORY_NAME[p.cat] !== C.ROLES[role].label ? `<span class="chip">${esc(D.CATEGORY_NAME[p.cat])}</span>` : ''}
-                        ${node.dock && Store.node(node.dock) ? `<button class="chip" type="button" data-select="node:${esc(node.dock)}">Secures ${esc(Store.node(node.dock).name)}</button>` : ''}</div>
-                </div>
-                <button class="button-icon" type="button" data-act="node-menu" aria-label="Module options" aria-haspopup="menu">${iconSvg('dots-three')}</button>
+                <button class="role-tile role-tile--lg role-tile--button" type="button" data-act="node-icon" data-role="${role}"
+                    data-icon="${esc(P.iconOf(node))}" aria-haspopup="dialog" aria-label="Change icon" title="Change icon">${iconSvg(P.iconOf(node))}</button>
+                <div class="insp-titles">${nameB.html}</div>
             </div>
-            ${settings}${sends}${receives}
+            <div class="insp-sub"><span class="chip" data-role="${role}">${esc(C.ROLES[role].label)}</span>
+                ${D.CATEGORY_NAME[p.cat] !== C.ROLES[role].label ? `<span class="chip">${esc(D.CATEGORY_NAME[p.cat])}</span>` : ''}
+                ${node.dock && Store.node(node.dock) ? `<button class="chip" type="button" data-select="node:${esc(node.dock)}">Secures ${esc(Store.node(node.dock).name)}</button>` : ''}</div>
+            ${settings}
+            </div>
+            ${receives}${sends}
             <div data-stats></div>`;
     }
 
@@ -419,15 +439,18 @@
         const settings = keys.length
             ? section('Settings', `<div class="insp-fields">${keys.map((k) => field(labelFor(node, k), `param.${k}`, paramSpec(node, k))).join('')}</div>`)
             : '';
+        const icon = Store.state.previewIcon || p.icon;
         return `
+            <div class="insp-card" data-role="${role}">
             <div class="insp-header">
-                <span class="role-tile role-tile--lg" data-role="${role}">${iconSvg(p.icon)}</span>
-                <div class="insp-titles"><div class="insp-name">${esc(p.name)}</div>
-                    <div class="insp-sub"><span class="chip chip--role" data-role="${role}">${esc(C.ROLES[role].label)}</span>
-                        ${D.CATEGORY_NAME[p.cat] !== C.ROLES[role].label ? `<span class="chip">${esc(D.CATEGORY_NAME[p.cat])}</span>` : ''}</div>
-                </div>
+                <button class="role-tile role-tile--lg role-tile--button" type="button" data-act="preview-icon" data-role="${role}"
+                    aria-haspopup="dialog" aria-label="Change icon" title="Change icon">${iconSvg(icon)}</button>
+                <div class="insp-titles"><div class="insp-name">${esc(p.name)}</div></div>
             </div>
-            ${settings}`;
+            <div class="insp-sub"><span class="chip" data-role="${role}">${esc(C.ROLES[role].label)}</span>
+                ${D.CATEGORY_NAME[p.cat] !== C.ROLES[role].label ? `<span class="chip">${esc(D.CATEGORY_NAME[p.cat])}</span>` : ''}</div>
+            ${settings}
+            </div>`;
     }
 
     function nodeStats(node) {
@@ -488,6 +511,8 @@
                 + (nr.totals.out > 0.5 ? stat('Paid through links', money(nr.totals.out)) : '');
         } else {
             if (kind === 'match') stats = stat('Match added', money(nr.totals.produced)) + stat('Contributions', money(nr.totals.in));
+            else if (kind === 'group') stats = stat('Received', money(nr.totals.in)) + stat('Passed on', money(nr.totals.out))
+                + (nr.totals.consumed > 0.5 ? stat('Spent in group', money(nr.totals.consumed)) : '');
             else stats = stat('Taken', money(nr.totals.consumed)) + stat('Passed on', money(nr.totals.out));
         }
         const unplaced = nr.totals.unplaced;
@@ -515,8 +540,18 @@
         const sym = Fmt.symbolParts().symbol;
 
         let rule = '';
-        // The output port the link leaves from is fixed when it is drawn.
-        if (bases.length > 1) rule += row('From', `<span class="insp-static">${esc(D.portLabel(from, link.basis))}</span>`);
+        // What the link carries (deposits, earnings, balance...) is picked here;
+        // the other links between this pair hold the bases they already use.
+        const sources = bases.filter((b) => b === link.basis || P.basesBetween(plan(), from, to, link.id).includes(b));
+        if (sources.length > 1) {
+            rule += field('From', 'link.basis', {
+                type: 'select', options: sources.map((b) => [b, D.portLabel(from, b)]), rebuild: true,
+                get: () => L().basis,
+                set: (pl, v) => P.changeBasis(pl, pl.links.find((x) => x.id === id), v),
+            });
+        } else if (bases.length > 1) {
+            rule += row('From', `<span class="insp-static">${esc(D.portLabel(from, link.basis))}</span>`);
+        }
         rule += row('Send', `<div class="segctl" role="group" aria-label="Send">${modes.map((m) =>
             `<button class="segctl-btn" type="button" data-mode="${m}" aria-pressed="${link.mode === m}">${esc(MODE_LABEL[m] || sym)}</button>`).join('')}</div>`,
         { wide: modes.length > 3 });
@@ -581,10 +616,10 @@
                 <div class="insp-titles">
                     <div class="link-ends">
                         <button class="link-end" type="button" data-select="node:${esc(from.id)}">
-                            <span class="role-tile" data-role="${D.roleOf(from)}">${iconSvg(C.preset(from.type).icon)}</span><span>${esc(from.name)}</span></button>
+                            <span class="role-tile" data-role="${D.roleOf(from)}">${iconSvg(P.iconOf(from))}</span><span>${esc(from.name)}</span></button>
                         <span class="link-ends-arrow" aria-hidden="true">${iconSvg('arrow-right')}</span>
                         <button class="link-end" type="button" data-select="node:${esc(to.id)}">
-                            <span class="role-tile" data-role="${D.roleOf(to)}">${iconSvg(C.preset(to.type).icon)}</span><span>${esc(to.name)}</span></button>
+                            <span class="role-tile" data-role="${D.roleOf(to)}">${iconSvg(P.iconOf(to))}</span><span>${esc(to.name)}</span></button>
                     </div>
                 </div>
                 <button class="button-icon" type="button" data-act="link-delete" aria-label="Delete link" title="Delete link">${iconSvg('trash')}</button>
@@ -597,18 +632,7 @@
 
     function linkStats(link) {
         const r = results();
-        const lr = r && r.links[link.id];
-        if (!lr) return '';
-        const flows = Array.from(lr.flow);
-        const first = flows.findIndex((v) => v > 0.005);
-        const scrub = Store.state.scrub;
-        const stats = stat('Moved in total', money(lr.total))
-            + stat('Average', `${money(lr.avg)}/mo`)
-            + (first >= 0 ? stat('First move', D.monthLabel(plan(), first)) : stat('First move', 'Never'))
-            + (lr.short > 0.5 ? stat('Short by', money(lr.short), 'down') : '');
-        const issues = r.warnings.filter((w) => w.linkId === link.id);
-        return section('Moved', `${spark(flows, D.roleOf(Store.node(link.from)), scrub == null ? null : Math.max(0, scrub - 1))}<div class="insp-stats">${stats}</div>`)
-            + issuesHtml(issues);
+        return r ? issuesHtml(r.warnings.filter((w) => w.linkId === link.id)) : '';
     }
 
     // ── Render ─────────────────────────────────────────────────────────────
@@ -754,57 +778,30 @@
         const act = e.target.closest('[data-act]');
         if (!act) return;
         const key = built;
-        if (act.dataset.act === 'node-menu') {
+        if (act.dataset.act === 'node-icon') {
             const id = key.slice(5);
-            const docking = Store.dockChoices(id).map((c) => (c.kind === 'undock'
-                ? { label: `Detach from ${c.asset.name}`, icon: 'x', onSelect: () => Store.undockLoan(id) }
-                : { label: `Attach to ${c.asset.name}`, icon: 'link-simple', onSelect: () => Store.dockLoan(id, c.asset.id) }));
-            UI.menu(act, [
-                { label: 'Link to…', icon: 'flow-arrow', onSelect: () => openLinkPicker(id, act) },
-                ...docking,
-                { label: 'Duplicate', icon: 'copy', onSelect: () => Store.duplicateNode(id) },
-                'sep',
-                { label: 'Delete', icon: 'trash', danger: true, onSelect: () => deleteNode(id) },
-            ], { align: 'right' });
+            const node = Store.node(id);
+            openIconPicker(act, C.preset(node.type), P.iconOf(node), (icon) => {
+                Store.edit((pl) => {
+                    const n = pl.nodes.find((x) => x.id === id);
+                    if (icon === C.preset(n.type).icon) delete n.icon; else n.icon = icon;
+                });
+            });
+        } else if (act.dataset.act === 'preview-icon') {
+            const p = C.preset(Store.state.preview);
+            openIconPicker(act, p, Store.state.previewIcon || p.icon, (icon) => {
+                Store.setPreviewIcon(icon);
+                refresh();
+                root.querySelector('[data-act="preview-icon"]')?.focus();
+            });
         } else if (act.dataset.act === 'link-delete') {
             Store.removeLink(key.slice(5));
         }
     });
 
-    function deleteNode(id) {
-        const n = Store.node(id);
-        if (!n) return;
-        const name = n.name;
-        Store.removeNode(id);
-        UI.toast(`Deleted ${name}.`, { action: { label: 'Undo', onClick: () => Store.undo() } });
-    }
-
-    /** Link this module to an existing one, or to a new module placed beside it. */
-    function openLinkPicker(id, anchor) {
-        const from = Store.node(id);
-        if (!from) return;
-        const p = plan();
-        const existing = p.nodes
-            .filter((n) => P.canConnect(p, id, n.id).ok)
-            .map((n) => ({ id: `node:${n.id}`, label: n.name, icon: C.preset(n.type).icon, role: D.roleOf(n) }));
-        const roles = C.LINK_TARGETS[D.roleOf(from)];
-        const fresh = C.CATEGORIES.map((cat) => ({
-            label: `New · ${cat.name}`,
-            items: C.PRESETS.filter((pr) => pr.cat === cat.id && roles.includes(pr.role))
-                .map((pr) => ({ id: `preset:${pr.id}`, label: pr.name, icon: pr.icon, role: pr.role, keywords: pr.keywords })),
-        })).filter((g) => g.items.length);
-        UI.picker(anchor, [{ label: 'In this plan', items: existing }, ...fresh], {
-            placeholder: `Link ${from.name} to…`,
-            onPick: (item) => {
-                const [kind, ref] = item.id.split(/:(.*)/s);
-                if (kind === 'node') {
-                    Store.connect(id, ref);
-                } else {
-                    const n = Store.addNode(ref, from.x + 320, from.y + (p.links.filter((l) => l.from === id).length * 136) - 68);
-                    if (n) Store.connect(id, n.id);
-                }
-            },
-        });
+    /** The icon grid for a module of preset `p`, in its role's colour. */
+    function openIconPicker(anchor, p, value, onPick) {
+        UI.iconPicker(anchor, { icons: C.iconChoices(p), value, role: p.role, onPick });
     }
 
     function toggle() {
@@ -836,7 +833,10 @@
             const n = Store.node(id);
             const links = p.links.filter((l) => l.from === id || l.to === id)
                 .map((l) => `${l.id}:${l.mode}:${l.value}:${l.basis}:${l.when}:${l.date}:${Store.node(l.from === id ? l.to : l.from)?.name}`);
-            return `${links.join('|')}#${n ? n.params.per : ''}`;
+            // A card's cash back setting lists the plan's accounts.
+            const accounts = n && n.params.cashBack != null
+                ? p.nodes.filter((a) => D.roleOf(a) === 'account').map((a) => `${a.id}:${a.name}`).join(',') : '';
+            return `${links.join('|')}#${n ? n.params.per : ''}#${n ? n.params.cashBack > 0 : ''}#${accounts}`;
         }
         if (built.startsWith('link:')) {
             const l = Store.link(built.slice(5));

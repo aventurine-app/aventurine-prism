@@ -9,7 +9,7 @@
 //   { id, name, version, createdAt, updatedAt,
 //     settings: { start: 'YYYY-MM', years, inflation },
 //     view:     { x, y, zoom },            canvas camera, restored on open
-//     nodes:    [{ id, type, name, x, y, params, dock? }],
+//     nodes:    [{ id, type, name, x, y, params, icon?, dock? }],
 //     links:    [{ id, from, to, mode, value, basis, when, month, date,
 //                  start, end, growth }] }
 //
@@ -36,7 +36,8 @@
 //
 //   basis  inflow    money arriving at the source. For income that is the
 //                    paycheck; for spending, the spending; for a debt, what is
-//                    paid beyond the payoff; for an account, its deposits.
+//                    paid beyond the payoff (loans only; a card sends nothing
+//                    on); for an account, its deposits.
 //          earnings  accounts only: this month's interest or returns
 //          balance   accounts only: the balance itself (withdrawals)
 //          proceeds  debts with a start date only: the amount borrowed
@@ -45,7 +46,13 @@
 //          rent      rental assets only: the month's rent
 //          charges   credit cards only: a purchase the card pays for, charged
 //                    to its balance (fixed amounts, sent to spending)
-//          cashback  credit cards only: the cash back earned on purchases
+//
+// A card's cash back is not a link. It is the card's `cashBackTo` setting:
+// empty credits the card's balance, an account's id deposits it there.
+//
+// A module has one output port. The basis is the link's own setting, chosen
+// when it is edited ("From": deposits, earnings, balance...), and two modules
+// may be linked once per basis.
 //
 // Timing (`when`) is monthly, yearly (in `month`) or once (on `date`), with an
 // optional window (`start` / `end`). Money that arrives is split as it
@@ -64,10 +71,43 @@
 }(typeof self !== 'undefined' ? self : this, function (Catalog) {
 
     const PLAN_VERSION = 1;
-    // Types folded into another preset; saved plans that hold one open as its successor.
+    // Presets folded into another. A saved plan that holds one opens as its
+    // survivor, wearing the icon the old preset had and keeping the name it
+    // was given. A preset that was only a name and icon on another's behaviour
+    // (Freelance on Paycheck, Checking on Bank account) is retired this way.
     // 'new-car' was spending; a bought car is now a Vehicle asset with a Bought
     // date, but an old plan keeps its links valid as a one-off purchase.
-    const RETIRED_TYPES = { 'side-hustle': 'freelance', 'new-car': 'big-purchase' };
+    const retireInto = (type, icons) => Object.fromEntries(
+        Object.entries(icons).map(([old, icon]) => [old, { type, icon }]));
+
+    const RETIRED_TYPES = {
+        ...retireInto('paycheck', { 'side-hustle': 'laptop', 'freelance': 'laptop', 'other-income': 'coins' }),
+        ...retireInto('bank-account', {
+            'checking': 'wallet', 'savings': 'piggy-bank', 'hysa': 'vault', 'money-market': 'coin-vertical',
+            'emergency-fund': 'lifebuoy', 'cash': 'money-wavy' }),
+        ...retireInto('term-deposit', { 'cd': 'certificate', 'i-bonds': 'seal-check' }),
+        ...retireInto('investment', {
+            'brokerage': 'chart-line-up', 'index-fund': 'chart-pie-slice', 'stocks': 'trend-up',
+            'bonds': 'seal-percent', 'treasuries': 'bank', 'crypto': 'currency-btc', 'reit': 'building-office',
+            'gold': 'diamond' }),
+        ...retireInto('pretax-account', { '401k': 'plant', 'trad-ira': 'tree', 'hsa': 'heartbeat' }),
+        ...retireInto('tax-free-account', { 'roth-ira': 'tree-evergreen', '529': 'graduation-cap' }),
+        ...retireInto('real-estate', { 'home': 'house-line', 'land': 'mountains' }),
+        ...retireInto('expense', {
+            'rent': 'house', 'groceries': 'basket', 'dining': 'fork-knife', 'utilities': 'lightning',
+            'transport': 'bus', 'insurance': 'shield-check', 'healthcare': 'first-aid', 'subscriptions': 'repeat',
+            'entertainment': 'popcorn', 'shopping': 'handbag', 'travel': 'airplane-tilt', 'childcare': 'baby',
+            'education': 'book-open', 'pets': 'paw-print', 'gifts': 'gift', 'charity': 'hand-heart',
+            'taxes': 'receipt', 'home-upkeep': 'hammer' }),
+        ...retireInto('loan', {
+            'student-loan': 'student', 'car-loan': 'car-profile', 'mortgage': 'house-simple', 'home-equity': 'key',
+            'personal-loan': 'handshake', 'medical-debt': 'first-aid-kit', 'bnpl': 'shopping-cart-simple' }),
+        ...retireInto('tax-or-fee', { 'tax': 'percent', 'fee': 'scissors' }),
+        ...retireInto('one-time-income', { 'windfall': 'sparkle', 'inheritance': 'scroll' }),
+        ...retireInto('expense', {
+            'one-time-expense': 'package', 'big-purchase': 'package', 'new-car': 'package', 'wedding': 'heart',
+            'dream-trip': 'island', 'emergency': 'siren' }),
+    };
 
     // Bounds. A plan larger than these is not a plan anyone draws by hand; the
     // limits exist so a corrupt or hostile document cannot make the backend
@@ -153,7 +193,6 @@
             inflow:   ['percent', 'fixed', 'rest'],
             proceeds: ['percent', 'rest'],
             charges:  ['fixed'],
-            cashback: ['percent', 'rest'],
         },
         account:  {
             inflow:   ['percent', 'fixed', 'rest'],
@@ -170,7 +209,6 @@
     function timingsFor(basis, mode) {
         if (basis === 'proceeds' || basis === 'sale') return ['once'];
         if (basis === 'rent' || mode === 'due') return ['monthly'];
-        if (basis === 'cashback') return ['monthly'];
         if (basis === 'charges') return ['monthly', 'yearly', 'once'];
         if (basis === 'inflow') return mode === 'fixed' ? ['monthly', 'yearly', 'once'] : ['monthly'];
         if (basis === 'earnings') return ['monthly', 'yearly'];
@@ -179,20 +217,22 @@
     }
 
     /** Bases a node offers to its outgoing links. A debt only borrows (and so
-     *  only has proceeds to send) when it starts inside the plan, and only a
-     *  credit card has purchases and cash back. An asset sends nothing until it
-     *  has a sold date, and only a rental collects rent. */
+     *  only has proceeds to send) when it starts inside the plan. A credit card
+     *  only has purchases: it is paid, never paid onward. An asset sends
+     *  nothing until it has a sold date, and only a rental collects rent. */
     function basesFor(node) {
         const p = Catalog.preset(node.type);
         if (!p) return [];
         const bases = Object.keys(RULES[p.role]);
+        // Spending consumes what it receives; it sends nothing on.
+        if (p.role === 'expense') return [];
         if (p.role === 'asset') {
             return bases.filter((b) => (b !== 'sale' || node.params.sold)
                 && (b !== 'rent' || Catalog.fieldsFor(p).includes('rent')));
         }
         if (p.role !== 'debt') return bases;
-        return bases.filter((b) => (b !== 'proceeds' || node.params.start)
-            && ((b !== 'charges' && b !== 'cashback') || p.kind === 'card'));
+        if (p.kind === 'card') return ['charges'];
+        return bases.filter((b) => b !== 'charges' && (b !== 'proceeds' || node.params.start));
     }
 
     /** The modes a link on `basis` offers. 'due' only reaches a debt, so a
@@ -219,7 +259,7 @@
 
     /** A loan's monthly payment: the level payment that clears `balance` over
      *  its years left at its APR. Without a term it is the minimum payment the
-     *  plan was saved with, or nothing. A card has no schedule (see 'due'). */
+     *  user set, or nothing. A card has no schedule (see 'due'). */
     function loanPayment(params) {
         const principal = params.balance || 0;
         const n = params.term ? Math.max(1, Math.round(params.term * 12)) : 0;
@@ -234,11 +274,9 @@
     }
 
     /** The roles a link on `basis` may run into. A card's purchases pay for
-     *  spending and its cash back lands in an account or against a debt; every
-     *  other basis goes wherever the source's role may link. */
+     *  spending; every other basis goes wherever the source's role may link. */
     function portTargets(node, basis) {
         if (basis === 'charges') return ['expense'];
-        if (basis === 'cashback') return ['account', 'debt'];
         return Catalog.LINK_TARGETS[roleOf(node)] || [];
     }
 
@@ -285,21 +323,6 @@
         return plan;
     }
 
-    /** A new loan, docked under `assetId`. Returns the node, or null. Under an
-     *  asset bought inside the plan it is taken out the month of the purchase,
-     *  so its proceeds fund it (see engine.js, buying an asset). */
-    function addLoan(plan, assetId, presetId) {
-        const asset = nodeById(plan, assetId);
-        if (!asset || !loanOptions(asset).includes(presetId)) return null;
-        if (docksOf(plan, assetId).length >= MAX_DOCKS) return null;
-        const node = createNode(plan, presetId, asset.x, asset.y);
-        if (asset.params.bought) node.params.start = asset.params.bought;
-        node.dock = assetId;
-        plan.nodes.push(node);
-        relayout(plan);
-        return node;
-    }
-
     /** Dock an existing loan under an asset. */
     function dockLoan(plan, debtId, assetId) {
         if (!canDock(plan, debtId, assetId).ok) return false;
@@ -329,9 +352,20 @@
         return valueAt - loanBalancesAt.reduce((a, b) => a + b, 0);
     }
 
-    /** A module's output ports, in display order: one per thing it can send. */
-    function portsFor(node) {
-        return basesFor(node).map((basis) => ({ basis, targets: portTargets(node, basis) }));
+    /** The roles a module may send to on any of its bases. */
+    function targetRoles(node) {
+        const roles = new Set();
+        for (const basis of basesFor(node)) for (const r of portTargets(node, basis)) roles.add(r);
+        return [...roles];
+    }
+
+    /** The bases a link from `from` to `to` could be on: the ones that reach
+     *  the target's role and that no other link between the pair already uses.
+     *  `exceptLinkId` is a link being edited, which does not block itself. */
+    function basesBetween(plan, from, to, exceptLinkId = null) {
+        const role = roleOf(to);
+        return basesFor(from).filter((basis) => portTargets(from, basis).includes(role)
+            && !plan.links.some((l) => l.id !== exceptLinkId && l.from === from.id && l.to === to.id && l.basis === basis));
     }
 
     // ── Construction ───────────────────────────────────────────────────────
@@ -351,16 +385,21 @@
         };
     }
 
+    /** The icon a module wears: the one the user chose, else its preset's. */
+    function iconOf(node) {
+        return node.icon || Catalog.preset(node.type).icon;
+    }
+
     function createNode(plan, presetId, x, y) {
         const p = Catalog.preset(presetId);
         if (!p) throw new Error(`unknown module type: ${presetId}`);
         return { id: newId('n'), type: p.id, name: p.name, x: Math.round(x), y: Math.round(y), params: Catalog.defaultParams(p) };
     }
 
-    /** Whether a link from `fromId` to `toId` may be drawn, and why not.
-     *  `basis` is the output port it leaves from; without one the link takes
-     *  the basis a new link would start on. Two modules may be linked once
-     *  per basis. */
+    /** Whether a link from `fromId` to `toId` may be drawn, and why not. Two
+     *  modules may be linked once per basis (deposits, earnings, balance...),
+     *  so a pair is full only when every basis that reaches the target is
+     *  taken. With a `basis`, only that one is checked. */
     function canConnect(plan, fromId, toId, basis = null) {
         if (fromId === toId) return { ok: false, reason: 'self' };
         const from = plan.nodes.find((n) => n.id === fromId);
@@ -368,12 +407,10 @@
         if (!from || !to) return { ok: false, reason: 'missing' };
         const fr = roleOf(from);
         const tr = roleOf(to);
-        if (!Catalog.LINK_TARGETS[fr].includes(tr)) return { ok: false, reason: 'role' };
-        const onBasis = basis || defaultRule(plan, from, to).basis;
-        if (!basesFor(from).includes(onBasis) || !portTargets(from, onBasis).includes(tr)) {
-            return { ok: false, reason: 'basis' };
-        }
-        if (plan.links.some((l) => l.from === fromId && l.to === toId && l.basis === onBasis)) {
+        if (!Catalog.LINK_TARGETS[fr].includes(tr) || !basesFor(from).length) return { ok: false, reason: 'role' };
+        const reaches = basesFor(from).filter((b) => portTargets(from, b).includes(tr));
+        if (basis ? !reaches.includes(basis) : !reaches.length) return { ok: false, reason: 'basis' };
+        if (!(basis ? [basis] : reaches).some((b) => basesBetween(plan, from, to).includes(b))) {
             return { ok: false, reason: 'duplicate' };
         }
         return { ok: true };
@@ -391,15 +428,29 @@
      *  price (Rent, a wedding) asks for that price. */
     function defaultRule(plan, from, to, basis = null) {
         const rule = startingRule(plan, from, to);
-        return !basis || rule.basis === basis ? rule : ruleOnBasis(plan, from, to, basis);
+        if (basis) return rule.basis === basis ? rule : ruleOnBasis(plan, from, to, basis);
+        // The usual basis may already link this pair: take the next free one.
+        const free = basesBetween(plan, from, to);
+        return free.length && !free.includes(rule.basis) ? ruleOnBasis(plan, from, to, free[0]) : rule;
     }
 
-    /** The rule for a link drawn from a specific output port. */
+    /** The rule for a link on a given basis. Only one link per source and
+     *  basis may take the rest, so a later one takes a share instead. */
     function ruleOnBasis(plan, from, to, basis) {
+        const rule = rawRuleOnBasis(plan, from, to, basis);
+        const modes = modesFor(from, basis, to);
+        const taken = plan.links.some((l) => l.from === from.id && l.basis === basis && l.mode === 'rest');
+        if (rule.mode === 'rest' && taken && modes.includes('percent')) Object.assign(rule, { mode: 'percent', value: 50 });
+        return rule;
+    }
+
+    function rawRuleOnBasis(plan, from, to, basis) {
         const rule = Object.assign(blankRule(), { basis });
         const tp = Catalog.preset(to.type);
         const existing = plan.links.filter((l) => l.from === from.id && l.basis === basis);
         switch (basis) {
+            case 'charges':
+                return Object.assign(rule, priceRule(plan, tp.inLink || { when: 'monthly', value: 100 }));
             case 'earnings':
                 return Object.assign(rule, { mode: 'percent', value: 50 });
             case 'balance': {
@@ -411,8 +462,6 @@
             case 'proceeds':
             case 'sale':
                 return Object.assign(rule, { mode: 'rest', when: 'once' });
-            case 'cashback':
-                return rule;
             default:
                 if (tp.inLink && modesFor(from, basis, to).includes('fixed')) {
                     return Object.assign(rule, priceRule(plan, tp.inLink));
@@ -442,17 +491,13 @@
         const existing = plan.links.filter((l) => l.from === from.id);
         const hasRest = (basis) => existing.some((l) => l.basis === basis && l.mode === 'rest');
 
-        // A card pays for spending (a purchase, at that spending's usual
-        // price) and sends its cash back elsewhere.
+        // A card pays for spending: a purchase, at that spending's usual price.
         if (fp.kind === 'card') {
-            if (tp.role === 'expense') {
-                const buy = tp.inLink || { when: 'monthly', value: 100 };
-                Object.assign(rule, { basis: 'charges', mode: 'fixed', value: buy.value, when: buy.when });
-                if (buy.month) rule.month = buy.month;
-                if (buy.relDate != null) rule.date = ymAdd(plan.settings.start, buy.relDate);
-                return rule;
-            }
-            return Object.assign(rule, { basis: 'cashback', mode: 'rest' });
+            const buy = tp.inLink || { when: 'monthly', value: 100 };
+            Object.assign(rule, { basis: 'charges', mode: 'fixed', value: buy.value, when: buy.when });
+            if (buy.month) rule.month = buy.month;
+            if (buy.relDate != null) rule.date = ymAdd(plan.settings.start, buy.relDate);
+            return rule;
         }
 
         if (tp.inLink) {
@@ -515,11 +560,14 @@
                 return hasRest('inflow')
                     ? Object.assign(rule, { mode: 'percent', value: 50 })
                     : rule;
-            case 'expense':
-                // Routing spending onward is usually partial: "pay some of
-                // this with the card".
-                return hasRest('inflow') ? Object.assign(rule, { mode: 'percent', value: 25 })
-                    : Object.assign(rule, { mode: 'percent', value: 50 });
+            case 'modifier':
+                // A budget group splits its money among its categories.
+                if (fp.kind === 'group') {
+                    return Object.assign(rule, { mode: 'percent', value: hasRest('inflow') ? 25 : 50 });
+                }
+                return hasRest('inflow')
+                    ? Object.assign(rule, { mode: 'percent', value: 10 })
+                    : rule;
             default:
                 return hasRest('inflow')
                     ? Object.assign(rule, { mode: 'percent', value: 10 })
@@ -543,6 +591,20 @@
         const timings = timingsFor(link.basis, link.mode);
         if (!timings.includes(link.when)) link.when = timings[0];
         return link;
+    }
+
+    /** Move a link onto another basis (money from the balance rather than
+     *  from the earnings, say). The rule starts afresh for that basis, since
+     *  its amounts mean something else there; the link's window and raise
+     *  stay. Returns false when the basis is not open to this pair. */
+    function changeBasis(plan, link, basis) {
+        const from = nodeById(plan, link.from);
+        const to = nodeById(plan, link.to);
+        if (!from || !to || link.basis === basis || !basesBetween(plan, from, to, link.id).includes(basis)) return false;
+        const { start, end, growth } = link;
+        Object.assign(link, ruleOnBasis(plan, from, to, basis), { start, end, growth });
+        fitRule(link, from, to);
+        return true;
     }
 
     // ── Validation ─────────────────────────────────────────────────────────
@@ -617,6 +679,9 @@
                 case 'yearmonth':
                     out[key] = cleanYm(v, key, true);
                     break;
+                case 'account':
+                    out[key] = v == null || v === '' ? null : cleanId(v, key);
+                    break;
                 default:
                     fail(`unknown field type for ${key}`);
             }
@@ -625,7 +690,7 @@
     }
 
     const MODES = ['percent', 'fixed', 'rest', 'above', 'due'];
-    const BASES = ['inflow', 'earnings', 'balance', 'proceeds', 'charges', 'cashback', 'sale', 'rent'];
+    const BASES = ['inflow', 'earnings', 'balance', 'proceeds', 'charges', 'sale', 'rent'];
     const WHENS = ['monthly', 'yearly', 'once'];
 
     function cleanLink(raw, nodesById, i) {
@@ -695,7 +760,8 @@
         const nodesById = new Map();
         raw.nodes.forEach((n, i) => {
             if (!isObj(n)) fail(`module ${i} is malformed`);
-            const p = Catalog.preset(RETIRED_TYPES[n.type] || n.type);
+            const retired = RETIRED_TYPES[n.type];
+            const p = Catalog.preset(retired ? retired.type : n.type);
             if (!p) fail(`module ${i} has an unknown type`);
             const node = {
                 id: cleanId(n.id, `module ${i}`),
@@ -705,6 +771,10 @@
                 y: Math.round(cleanNumber(n.y, -1e6, 1e6, `module ${i} y`)),
                 params: cleanParams(p, n.params),
             };
+            // An icon the category does not offer is dropped, not rejected: the
+            // module wears its preset's icon instead.
+            const icon = n.icon ?? (retired && retired.icon);
+            if (typeof icon === 'string' && icon !== p.icon && Catalog.iconChoices(p).includes(icon)) node.icon = icon;
             if (nodesById.has(node.id)) fail(`module id ${node.id} is used twice`);
             nodesById.set(node.id, node);
             plan.nodes.push(node);
@@ -730,9 +800,48 @@
         });
         relayout(plan);
 
+        // Cash back lands in an account that exists, else it credits the card.
+        for (const n of plan.nodes) {
+            const to = n.params.cashBackTo && nodesById.get(n.params.cashBackTo);
+            if (n.params.cashBackTo && !(to && roleOf(to) === 'account')) n.params.cashBackTo = null;
+        }
+
+        // Cash back once travelled along links from the card, and a card could
+        // send what it overpaid onward. Both are gone: a card's cash back is a
+        // setting now (the account the old links favoured, if any), and the
+        // overpayment stays with whoever paid.
+        const isCard = (id) => {
+            const n = nodesById.get(id);
+            return !!n && Catalog.preset(n.type).kind === 'card';
+        };
+        const retiredCardLink = (l) => isObj(l) && (l.basis === 'cashback' || (l.basis === 'inflow' && isCard(l.from)));
+        const backLinks = raw.links.filter((l) => isObj(l) && l.basis === 'cashback' && isCard(l.from));
+        for (const card of plan.nodes.filter((n) => n.params.cashBackTo == null && isCard(n.id))) {
+            const mine = backLinks.filter((l) => l.from === card.id);
+            const shared = mine.filter((l) => l.mode === 'percent').reduce((sum, l) => sum + (Number(l.value) || 0), 0);
+            let best = null;
+            let bestShare = 0;
+            for (const l of mine) {
+                const share = l.mode === 'rest' ? Math.max(0, 100 - shared) : l.mode === 'percent' ? Number(l.value) || 0 : 0;
+                if (share > bestShare) { best = l; bestShare = share; }
+            }
+            const to = best && nodesById.get(best.to);
+            if (to && roleOf(to) === 'account') card.params.cashBackTo = to.id;
+        }
+
+        // Spending once routed onward from any module (a budget group, now a
+        // modifier, was the exception), and a card could charge a budget group:
+        // older plans lose those links and the money stays where it was.
+        const sinkLink = (l) => {
+            const from = isObj(l) && nodesById.get(l.from);
+            const to = isObj(l) && nodesById.get(l.to);
+            if (!from || !to) return false;
+            if (roleOf(from) === 'expense') return true;
+            return l.basis === 'charges' && Catalog.preset(to.type).kind === 'group';
+        };
         const seenLinks = new Set();
         const seenPairs = new Set();
-        raw.links.forEach((l, i) => {
+        raw.links.filter((l) => !sinkLink(l) && !retiredCardLink(l)).forEach((l, i) => {
             const link = cleanLink(l, nodesById, i);
             if (seenLinks.has(link.id)) fail(`link id ${link.id} is used twice`);
             const pair = `${link.from}>${link.to}>${link.basis}`;
@@ -767,7 +876,10 @@
             map.set(n.id, id);
             n.id = id;
         }
-        for (const n of copy.nodes) if (n.dock) n.dock = map.get(n.dock);
+        for (const n of copy.nodes) {
+            if (n.dock) n.dock = map.get(n.dock);
+            if (n.params && n.params.cashBackTo) n.params.cashBackTo = map.get(n.params.cashBackTo) || null;
+        }
         for (const l of copy.links) {
             l.id = newId('l');
             l.from = map.get(l.from);
@@ -779,9 +891,9 @@
     return {
         PLAN_VERSION, LIMITS, GEOM, MAX_DOCKS, MONTHS, RULES, PlanError,
         ymParse, ymFormat, ymNow, ymAdd, ymDiff, ymLabel,
-        newId, roleOf, basesFor, modesFor, timingsFor, portsFor, portTargets, loanPayment, isPretax,
-        createPlan, createNode, canConnect, createLink, defaultRule, fitRule,
-        docksOf, loanOptions, canDock, relayout, addLoan, dockLoan, undockLoan, equityOf,
+        newId, roleOf, basesFor, modesFor, timingsFor, portTargets, targetRoles, basesBetween, changeBasis, loanPayment, isPretax,
+        createPlan, createNode, iconOf, RETIRED_TYPES, canConnect, createLink, defaultRule, fitRule,
+        docksOf, loanOptions, canDock, relayout, dockLoan, undockLoan, equityOf,
         validatePlan, cloneWithNewIds,
     };
 }));

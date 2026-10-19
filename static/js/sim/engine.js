@@ -42,8 +42,9 @@
 // Paying debts. A payment never exceeds what is owed: once a debt is paid off,
 // the money its links would have sent stays with the payer and falls through
 // to the payer's later links (its rest, usually savings). A debt that has its
-// own Overflow links is the exception: that is a snowball, and the freed
-// payments go on along them instead. A 'due' link pays what the debt asks for
+// own Overpayment links is the exception: that is a snowball, and the freed
+// payments go on along them instead. (Only loans have them. A card is paid
+// down and no further: what it cannot take stays with the payer.) A 'due' link pays what the debt asks for
 // this month: a loan's scheduled payment (from its years left) or a card's
 // whole balance.
 //
@@ -133,6 +134,11 @@
         const debts = states.filter((s) => s.role === 'debt');
         const sources = states.filter((s) => s.role === 'source');
         const cards = states.filter((s) => s.kind === 'card');
+        // Where each card's cash back goes: an account, else the card's balance.
+        for (const s of cards) {
+            const to = s.params.cashBackTo && byId.get(s.params.cashBackTo);
+            s.cashBackTo = to && to.role === 'account' ? to : null;
+        }
         const loansOn = new Map(assets.map((s) => [s.id, debts.filter((d) => d.node.dock === s.id)]));
         const flowOrder = topoOrder(states, linkStates).filter((s) => s.role === 'account');
 
@@ -194,7 +200,7 @@
         }
 
         /** How much more a debt can take this month: what it owes less what is
-         *  already on its way to it. Unlimited for a snowball (Overflow links),
+         *  already on its way to it. Unlimited for a snowball (Overpayment links),
          *  whose overpayments move on. */
         function room(d) {
             if (d.outs.inflow.some(activeAt)) return Infinity;
@@ -349,6 +355,8 @@
                         s.produced[t] += match;
                         totals.match[t] += match;
                         out = amount + match;
+                    } else if (s.kind === 'group') {
+                        out = amount;
                     } else {
                         const cut = amount * Math.min(1, rate);
                         s.consumed[t] += cut;
@@ -357,7 +365,14 @@
                     }
                     if (out > EPS) {
                         const left = allocate(s, 'inflow', out);
-                        if (left > EPS) park(s, left);
+                        if (left <= EPS) return;
+                        if (s.kind === 'group') {
+                            // What a budget group does not hand on is spent in the group.
+                            s.consumed[t] += left;
+                            totals.spent[t] += left;
+                        } else {
+                            park(s, left);
+                        }
                     }
                     return;
                 }
@@ -385,7 +400,7 @@
 
         /** A card's purchases this month. Each charges link adds its amount to
          *  the balance and sends it to the spending it pays for. Cash back is
-         *  split by the card's cash back links; what they leave credits the
+         *  deposited in the card's cash back account, or else credits the
          *  balance. */
         function chargeCard(s) {
             for (const L of s.outs.charges) {
@@ -400,8 +415,12 @@
                 if (back > EPS) {
                     s.cashback[t] += back;
                     totals.cashback[t] += back;
-                    const left = allocate(s, 'cashback', back);
-                    if (left > EPS) settle(s, left);
+                    if (s.cashBackTo) {
+                        s.outflow[t] += back;
+                        queue.push(s.cashBackTo, back);
+                    } else {
+                        settle(s, back);
+                    }
                 }
                 transfer(L, amount);
             }
@@ -591,11 +610,10 @@
             }
 
             settleFixedShortfalls();
-            // Underpaid: a loan paid less than its scheduled payment, a card
-            // less than its minimum.
+            // Underpaid: a debt paid less than the minimum payment the user set
+            // on it. With none set there is nothing to fall short of.
             for (const s of debts) {
-                const required = Math.min(s.owedBeforePay,
-                    s.kind === 'card' ? s.params.minPayment || 0 : s.scheduled);
+                const required = Math.min(s.owedBeforePay, s.params.minPayment || 0);
                 if (required > EPS && s.underpaidFirst < 0 && s.paid[t] + EPS < required) {
                     s.underpaidFirst = t;
                 }
@@ -630,7 +648,7 @@
             bal: 0,
             outs: role === 'account' ? { inflow: [], earnings: [], balance: [] }
                 : role === 'asset' ? { sale: [], rent: [] }
-                    : role === 'debt' ? { inflow: [], proceeds: [], ...(preset.kind === 'card' ? { charges: [], cashback: [] } : {}) }
+                    : role === 'debt' ? { inflow: [], proceeds: [], ...(preset.kind === 'card' ? { charges: [] } : {}) }
                         : { inflow: [] },
             outflow: series(),
         };

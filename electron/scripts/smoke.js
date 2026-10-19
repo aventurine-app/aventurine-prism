@@ -36,7 +36,7 @@ app.whenReady().then(async () => {
 
         const plan = Plan.createPlan({ name: 'Smoke', start: '2026-01', years: 3 });
         const salary = Plan.createNode(plan, 'salary', 0, 0);
-        const savings = Plan.createNode(plan, 'hysa', 300, 0);
+        const savings = Plan.createNode(plan, 'bank-account', 300, 0);
         plan.nodes.push(salary, savings);
         plan.links.push(Plan.createLink(plan, salary.id, savings.id));
         const created = await dispatch(ctx, 'POST', '/api/plans', { plan });

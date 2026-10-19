@@ -61,9 +61,9 @@
 }
 
 /* ── Links ──────────────────────────────────────────────────────────────── */
-/* A link wears the colour of the output port it leaves from. */
-.link { --link: var(--role-none); }
-.link[data-flow] { --link: var(--flow); }
+/* Every link is the same light blue; the output port it leaves from still
+   wears the colour of what it sends (--flow). */
+.link { --link: var(--link-line); }
 [data-flow="pay"]       { --flow: var(--flow-pay); }
 [data-flow="deposits"]  { --flow: var(--flow-deposits); }
 [data-flow="spending"]  { --flow: var(--flow-spending); }
@@ -73,7 +73,6 @@
 [data-flow="earnings"]  { --flow: var(--flow-earnings); }
 [data-flow="balance"]   { --flow: var(--flow-balance); }
 [data-flow="charges"]   { --flow: var(--flow-charges); }
-[data-flow="cashback"]  { --flow: var(--flow-cashback); }
 [data-flow="sale"]      { --flow: var(--flow-sale); }
 [data-flow="rent"]      { --flow: var(--flow-rent); }
 
@@ -118,7 +117,7 @@
 
 .link-ghost {
     fill: none;
-    stroke: var(--flow, var(--accent-ring));
+    stroke: var(--link-line);
     stroke-width: 2;
     stroke-dasharray: 6 6;
     stroke-linecap: round;
@@ -181,6 +180,9 @@
     cursor: grab;
     user-select: none;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    /* A stacking context of its own, so the selection ring can sit behind the
+       card's ports and flag instead of over them. */
+    isolation: isolate;
 }
 .node:hover { border-color: var(--stroke-strong); }
 /* The ring is drawn by ::after so it can wrap the whole module: the card plus
@@ -198,6 +200,7 @@
     border: 2px solid var(--accent-ring);
     border-radius: calc(var(--radius-panel) + 4px);
     pointer-events: none;
+    z-index: -1;
 }
 .node.is-selected { z-index: 2; }
 .node.is-dragging { cursor: grabbing; box-shadow: var(--shadow-popover); z-index: 3; }
@@ -303,9 +306,9 @@
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: var(--warning);
+    background: #ff6a00;
     box-shadow: 0 0 0 2px var(--canvas-bg);
-    color: #1c1300;
+    color: #1c0a00;
 }
 .node-flag .icon { width: 12px; height: 12px; }
 
@@ -330,9 +333,10 @@
 .node-check .icon { width: 12px; height: 12px; }
 
 /* ── Ports ──────────────────────────────────────────────────────────────── */
-/* The input port sits on the vertical centre. Output ports are placed down the
-   right edge by canvas.js (one per thing the module can send), each filled
-   with the colour of what it sends. */
+/* Both ports sit on the vertical centre: money comes in on the left and leaves
+   on the right. What a link carries (deposits, earnings, balance...) is chosen
+   on the link, not by which port it leaves, so the output port wears the
+   module's own colour. */
 .node-port {
     position: absolute;
     top: 50%;
@@ -345,7 +349,7 @@
     transition: transform 0.12s ease, background-color 0.12s ease;
 }
 .node-port--in  { left: -8px; }
-.node-port--out { right: -8px; cursor: crosshair; border-color: var(--flow); background: var(--flow); }
+.node-port--out { right: -8px; cursor: crosshair; border-color: var(--tile); background: var(--tile); }
 .node-port--out::after {
     /* A bigger invisible hit area than the visible dot. */
     content: '';
@@ -356,47 +360,13 @@
 .node:hover .node-port,
 .node.is-selected .node-port { transform: scale(1.15); }
 .node-port--out:hover { transform: scale(1.35); }
-.node-port-label {
-    /* Named only while it is useful: hovering the card, selected, or linking. */
-    position: absolute;
-    left: 100%;
-    top: 50%;
-    margin-left: 10px;
-    padding: 1px 6px;
-    border-radius: var(--radius-control);
-    background: var(--surface1);
-    border: var(--border-width) solid var(--border);
-    color: var(--text-secondary);
-    font-size: var(--size-micro);
-    font-weight: var(--weight-bold);
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    transform: translateY(-50%);
-    transition: opacity 0.12s ease;
-}
-.node:hover .node-port-label,
-.node.is-selected .node-port-label,
-.stage.is-linking .node-port-label { opacity: 1; }
 .node.is-target .node-port--in { background: var(--accent-ring); border-color: var(--accent-ring); transform: scale(1.4); }
 
-/* ── Docks and strips under a card ──────────────────────────────────────── */
-/* A loan secured by a property is a debt card snapped under it, and the strip
-   under the last piece of a stack is "+ debt" on a property, a card slot on
-   spending, and what a card pays for. Together they read as ONE card: the top
-   card's own outline is handed to a frame (::before) that spans the whole
-   stack, and the pieces inside are divided by a single line. A docked loan's
+/* ── Docks under a card ─────────────────────────────────────────────────── */
+/* A loan secured by a property is a debt card snapped under it. Together they
+   read as ONE card: the top card's own outline is handed to a frame (::before)
+   that spans the whole stack, and the pieces inside are divided by a single line. A docked loan's
    height (72px) is DOCK_H in plan.js; --extent is the stack's full height. */
-.node-foot {
-    position: absolute;
-    left: 0;
-    right: 0;
-    /* --foot-top is measured from the card's outer edge; this box is placed
-       from its padding edge, one border lower. */
-    top: calc(var(--foot-top, 112px) - var(--border-width));
-}
-.node-foot[hidden] { display: none; }
-.node.has-foot,
 .node.has-docks {
     border-color: transparent;
     border-bottom-left-radius: 0;
@@ -404,7 +374,6 @@
     background: transparent;
     box-shadow: none;
 }
-.node.has-foot::before,
 .node.has-docks::before {
     content: '';
     position: absolute;
@@ -422,9 +391,7 @@
     pointer-events: none;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-.node.has-foot:hover::before,
 .node.has-docks:hover::before { border-color: var(--stroke-strong); }
-.node.has-foot.is-target::before,
 .node.has-docks.is-target::before { border-color: var(--accent-ring); box-shadow: 0 0 0 4px var(--accent-wash), var(--shadow-card); }
 
 .node.is-docked {
@@ -461,67 +428,6 @@
 .node.is-docked .node-head .role-tile { width: 28px; height: 28px; border-radius: 8px; }
 .node.is-docked .node-head .role-tile .icon { width: 18px; height: 18px; }
 @keyframes dock-in { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 -20px -20px -20px); } }
-
-.node-foot-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-8);
-    width: 100%;
-    height: 32px;
-    border: 0;
-    border-top: var(--border-width) solid var(--border);
-    border-radius: 0 0 calc(var(--radius-panel) - 1px) calc(var(--radius-panel) - 1px);
-    background: transparent;
-    color: var(--text-tertiary);
-    font-size: var(--size-small);
-    font-weight: var(--weight-bold);
-    cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
-}
-.node-foot-btn:hover { background: var(--surface2); color: var(--text-primary); }
-.node-foot-btn:focus-visible { outline: none; background: var(--surface2); color: var(--text-primary); }
-.node-slot.is-on {
-    color: var(--text-primary);
-    background: color-mix(in srgb, var(--role-debt) 8%, var(--surface1));
-}
-.card-glyph {
-    position: relative;
-    flex: none;
-    width: 26px;
-    height: 16px;
-    border: 1.6px dashed currentColor;
-    border-radius: 4px;
-}
-.card-glyph::after { content: ''; position: absolute; left: 0; right: 0; top: 3px; height: 3px; background: currentColor; }
-.node-slot.is-on .card-glyph { border-style: solid; color: var(--role-debt); }
-
-.node-tray {
-    display: flex;
-    gap: var(--space-4);
-    min-height: 30px;
-    padding: 5px var(--space-8);
-    overflow: hidden;
-    border: 0;
-    border-top: 1px solid var(--border);
-    border-radius: 0 0 calc(var(--radius-panel) - 1px) calc(var(--radius-panel) - 1px);
-    background: transparent;
-}
-.o-chip {
-    flex: none;
-    max-width: 96px;
-    overflow: hidden;
-    padding: 0 var(--space-8);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--role-expense) 14%, var(--surface1));
-    border: 1px solid color-mix(in srgb, var(--role-expense) 40%, var(--border));
-    color: var(--text-secondary);
-    font-size: var(--size-micro);
-    font-weight: var(--weight-bold);
-    line-height: 18px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
 
 /* A debt's input port is where a payment link lands. */
 .node[data-role="debt"] .node-port--in { cursor: pointer; }
@@ -578,6 +484,11 @@
 .zoom-level:hover { background: var(--frost-3); color: var(--text-primary); }
 
 /* ── Empty plan ─────────────────────────────────────────────────────────── */
+.empty-state-close {
+    position: absolute;
+    top: var(--space-12);
+    right: var(--space-12);
+}
 .canvas-empty {
     position: absolute;
     inset: 0;
@@ -588,6 +499,7 @@
     pointer-events: none;
 }
 .canvas-empty .empty-state {
+    position: relative;
     pointer-events: auto;
     background: var(--surface1);
     border: var(--border-width) solid var(--border);

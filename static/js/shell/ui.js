@@ -215,6 +215,48 @@
         input.focus();
     }
 
+    // ── Icon picker ────────────────────────────────────────────────────────
+
+    const ICON_COLUMNS = 6;
+    const iconName = (name) => name.replace(/-/g, ' ');
+
+    /** A grid of icons to choose from, drawn in the module's role colour.
+     *  `value` is the icon now worn; onPick receives the chosen icon name. */
+    function iconPicker(anchor, { icons, value, role = '', onPick } = {}) {
+        closePop();
+        const at = pointFor(anchor, 'left');
+        const el = document.createElement('div');
+        el.className = 'icon-pop';
+        el.setAttribute('role', 'dialog');
+        el.setAttribute('aria-label', 'Choose an icon');
+        el.innerHTML = `<div class="icon-pop-grid" data-role="${escapeHtml(role)}">${icons.map((name) =>
+            `<button class="icon-pop-cell" type="button" data-icon="${escapeHtml(name)}" aria-pressed="${name === value}"
+                aria-label="${escapeHtml(iconName(name))}" title="${escapeHtml(iconName(name))}">${iconSvg(name)}</button>`).join('')}</div>`;
+
+        el.addEventListener('click', (e) => {
+            const cell = e.target.closest('[data-icon]');
+            if (!cell) return;
+            closePop();
+            if (onPick) onPick(cell.dataset.icon);
+            if (at.el) at.el.focus();
+        });
+        el.addEventListener('keydown', (e) => {
+            const cell = e.target.closest('[data-icon]');
+            const move = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: ICON_COLUMNS, ArrowUp: -ICON_COLUMNS }[e.key];
+            if (!cell || !move) return;
+            e.preventDefault();
+            const cells = [...el.querySelectorAll('[data-icon]')];
+            const next = cells[cells.indexOf(cell) + move];
+            if (next) next.focus();
+        });
+
+        document.body.appendChild(el);
+        place(el, at.x, at.y);
+        const unguard = guard(el, at.el);
+        openPop = { el, cleanup() { unguard(); el.remove(); } };
+        (el.querySelector('[aria-pressed="true"]') || el.querySelector('[data-icon]')).focus();
+    }
+
     // ── Month picker ───────────────────────────────────────────────────────
 
     const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -445,5 +487,5 @@
         if (toastEl) toastEl.classList.remove('is-visible');
     }
 
-    window.UI = { menu, picker, monthPicker, closePop, confirm, prompt, toast, openModal, closeModal };
+    window.UI = { menu, picker, iconPicker, monthPicker, closePop, confirm, prompt, toast, openModal, closeModal };
 }());

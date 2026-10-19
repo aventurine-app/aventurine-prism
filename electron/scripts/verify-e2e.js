@@ -70,15 +70,15 @@ app.whenReady().then(async () => {
             nodes: Store.state.plan.nodes.length, links: Store.state.plan.links.length,
             warnings: Store.state.results.warnings.length, months: Store.state.results.months,
             worth: Store.state.results.totals.endNetWorth })`));
-        check('starter plan has 6 modules and 7 links', start.nodes === 6 && start.links === 7);
+        check('starter plan has 6 modules and 6 links', start.nodes === 6 && start.links === 6);
         check('starter plan simulates 60 months cleanly', start.months === 60 && start.warnings === 0 && start.worth > 0);
 
         check('canvas drew every module', (await js('document.querySelectorAll("#nodes .node").length')) === 6);
-        check('canvas drew every link label', (await js('document.querySelectorAll("#labels .link-label").length')) === 7);
-        check('a credit card draws three output ports', await js(`(() => {
+        check('canvas drew every link label', (await js('document.querySelectorAll("#labels .link-label").length')) === 6);
+        check('a credit card draws one output port, for purchases', await js(`(() => {
             const card = Store.state.plan.nodes.find((n) => n.type === 'credit-card');
             const ports = [...document.querySelectorAll('#nodes .node[data-id="' + card.id + '"] .node-port--out')];
-            return ports.map((p) => p.dataset.basis).join() === 'inflow,charges,cashback';
+            return ports.map((p) => p.dataset.basis).join() === 'charges';
         })()`));
         check('every link and port is drawn in a colour', await js(`(() => {
             const paint = (el, prop) => getComputedStyle(el)[prop];
@@ -207,7 +207,6 @@ app.whenReady().then(async () => {
         await sleep(150);
         check('choosing a new card links it to the spending by Purchases', await js(`Store.state.plan.links.some((l) => l.from === '${spend.card}' && l.to === '${spend.sp}' && l.basis === 'charges')`));
         check('the spending shows the card in its slot', await js(`!!document.querySelector('.node[data-id="${spend.sp}"] .node-slot.is-on')`));
-        check('the card lists what it pays for', await js(`!!document.querySelector('.node[data-id="${spend.card}"] .node-tray .o-chip')`));
         await js(`Store.payWithCard('${spend.sp}', null)`);
         check('taking spending off its card removes the link', await js(`!Store.state.plan.links.some((l) => l.to === '${spend.sp}' && l.basis === 'charges')`));
 

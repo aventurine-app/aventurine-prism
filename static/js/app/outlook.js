@@ -33,10 +33,10 @@
     const compareCache = new Map();   // plan id → { updatedAt, results }
     const LENGTHS = [1, 3, 5, 10, 20, 30];
     // Net worth bands: at most this many per family before the rest fold
-    // into "Other", coloured from the --chart-rainbow-1..12 stops.
+    // into "Other". Each band wears its module's role colour (style.css).
     const ACCOUNT_BANDS = 6;
     const DEBT_BANDS = 4;
-    const RAINBOW_STOPS = 12;
+    const SHADES = 6;   // --chart-<role>-1..6
 
     root.innerHTML = `
         <div class="outlook-grip" aria-hidden="true"></div>
@@ -97,9 +97,9 @@
 
     /** Account and debt bands in module order (never by size), folded into
      *  an "other" band past each family's limit. Assets stack with the
-     *  accounts: both are what the plan holds. Colours run as a rainbow down
-     *  the stack, red at the top to violet at the bottom, spread evenly over
-     *  the bands drawn. */
+     *  accounts: both are what the plan holds. Each band wears its module's
+     *  role colour (accounts blue, assets lime, debts red); several of one
+     *  role take successive shades of it. */
     function worthBands(plan, res, def) {
         const bands = [];
         const accounts = plan.nodes.filter((n) => ['account', 'asset'].includes(D.roleOf(n)));
@@ -108,7 +108,7 @@
             list.forEach((n, i) => {
                 const values = balances(res.nodes[n.id].balance, def);
                 if (i < limit - 1 || list.length === limit) {
-                    bands.push({ label: n.name, values, sign, id: n.id });
+                    bands.push({ label: n.name, values, sign, id: n.id, role: D.roleOf(n) });
                 } else if (i === limit - 1) {
                     bands.push({ label: otherLabel, values: Float64Array.from(values), sign, other: true });
                 } else {
@@ -122,9 +122,12 @@
             bands.push({ label: 'Unassigned', values: balances(res.unassigned, def), sign: 1 });
         }
         fold(debts, DEBT_BANDS, -1, 'Other debts');
-        const stack = topDown(bands);
-        const span = Math.max(stack.length - 1, 1);
-        stack.forEach((b, i) => { b.color = `--chart-rainbow-${1 + Math.round((i * (RAINBOW_STOPS - 1)) / span)}`; });
+        const used = {};
+        for (const b of bands) {
+            if (!b.role) { b.color = '--chart-unassigned'; continue; }
+            used[b.role] = (used[b.role] || 0) + 1;
+            b.color = `--chart-${b.role}-${((used[b.role] - 1) % SHADES) + 1}`;
+        }
         return bands;
     }
 
@@ -149,15 +152,25 @@
         const F = res.flows;
         const worth = res.netWorth[k] * def[k];
         const delta = worth - res.netWorth[0];
-        const rows = [
-            ['Take-home income', sumTo(F.earned) - sumTo(F.withheld), '--chart-in'],
-            ['Spent', sumTo(F.spent), '--chart-out'],
-            ['Growth', sumTo(F.growth), '--chart-growth'],
-            ['Interest paid', sumTo(F.interest), '--chart-interest'],
-            ['Cash back and match', sumTo(F.cashback) + sumTo(F.match), '--role-modifier'],
-            ['Taxes and fees', sumTo(F.skimmed), '--role-none'],
-            ['Unassigned', res.unassigned[k] * def[k], '--chart-unassigned'],
-        ].filter(([, v], i) => i < 2 || Math.abs(v) >= 0.5);
+        const keep = ([, v], i) => i < 1 || Math.abs(v) >= 0.5;
+        const income = [
+            ['Take-home income', sumTo(F.earned) - sumTo(F.withheld)],
+            ['Growth', sumTo(F.growth)],
+            ['Cash back and match', sumTo(F.cashback) + sumTo(F.match)],
+        ].filter(keep);
+        const expenses = [
+            ['Spent', sumTo(F.spent)],
+            ['Interest paid', sumTo(F.interest)],
+            ['Taxes and fees', sumTo(F.skimmed)],
+        ].filter(keep);
+        const unassigned = res.unassigned[k] * def[k];
+        const group = (title, rows) => `
+            <section class="kpi-group">
+                <h3 class="kpi-head">${title}</h3>
+                <dl class="kpi-list">${rows.map(([name, v]) => `
+                    <div class="kpi-row"><dt>${escapeHtml(name)}</dt><dd>${escapeHtml(Fmt.money(v))}</dd></div>`).join('')}
+                </dl>
+            </section>`;
         kpisEl.innerHTML = `
             <div class="kpi-hero">
                 <p class="eyebrow">Net worth</p>
@@ -165,9 +178,9 @@
                 <div class="kpi-hero-delta ${delta >= 0 ? 'is-up' : 'is-down'}">${escapeHtml(Fmt.money(delta, { sign: true }))}</div>
                 <div class="kpi-hero-range">${escapeHtml(label(plan, 0))} to ${escapeHtml(label(plan, k))}</div>
             </div>
-            <dl class="kpi-list">${rows.map(([name, v, color]) => `
-                <div class="kpi-row" style="--swatch: var(${color})"><dt>${escapeHtml(name)}</dt><dd>${escapeHtml(Fmt.money(v))}</dd></div>`).join('')}
-            </dl>`;
+            ${group('Income', income)}
+            ${group('Expenses', expenses)}
+            ${Math.abs(unassigned) >= 0.5 ? group('Unallocated', [['Unassigned', unassigned]]) : ''}`;
     }
 
     // ── Charts ─────────────────────────────────────────────────────────────
@@ -207,7 +220,7 @@
         const ghost = compareSeries(plan, res, def);
         const listed = topDown(bands);
         legend([
-            { label: 'Net worth', color: '--chart-networth', line: true },
+            { label: 'Net worth', color: '--chart-worth-line', line: true },
             ...(ghost ? [{ label: ghost.label, color: ghost.color, dashed: true }] : []),
             ...listed,
         ]);
@@ -217,7 +230,7 @@
             count: res.months + 1,
             xTicks: yearTicks(plan, res.months + 1),
             bands,
-            line: { label: 'Net worth', color: '--chart-networth', values: worth },
+            line: { label: 'Net worth', color: '--chart-worth-line', values: worth },
             ghost,
             format: (v) => Fmt.money(v, { compact: true }),
             tooltip: (k) => ({
@@ -226,7 +239,7 @@
                     ...listed.filter((b) => b.values[k] > 0.5).map((b) => ({
                         label: b.label, color: b.color, value: Fmt.money(b.sign < 0 ? -b.values[k] : b.values[k]),
                     })),
-                    { label: 'Net worth', color: '--chart-networth', value: Fmt.money(worth[k]), total: true },
+                    { label: 'Net worth', color: '--chart-worth-line', value: Fmt.money(worth[k]), total: true },
                     ...(ghost && Number.isFinite(ghost.values[k]) ? [
                         { label: ghost.label, color: ghost.color, value: Fmt.money(ghost.values[k]) },
                         { label: 'Difference', color: null, value: Fmt.money(worth[k] - ghost.values[k], { sign: true }) },
@@ -294,7 +307,7 @@
         if (points[points.length - 1] !== months) points.push(months);
         const holders = plan.nodes.filter((n) => C.ROLES[D.roleOf(n)].holds);
         const cell = (v, neg) => `<td class="${neg && v > 0.5 ? 'is-negative' : ''}">${escapeHtml(Fmt.money(neg ? -v : v))}</td>`;
-        const nameCell = (n) => `<td><span class="cell-name"><span class="role-tile role-tile--sm" data-role="${D.roleOf(n)}">${iconSvg(C.preset(n.type).icon)}</span>${escapeHtml(n.name)}</span></td>`;
+        const nameCell = (n) => `<td><span class="cell-name"><span class="role-tile role-tile--sm" data-role="${D.roleOf(n)}">${iconSvg(P.iconOf(n))}</span>${escapeHtml(n.name)}</span></td>`;
         let html = `<table class="outlook-table"><caption class="sr-only">Balances</caption><thead><tr><th>Balance</th>${points.map((k) => `<th>${escapeHtml(label(plan, k))}</th>`).join('')}</tr></thead><tbody>`;
         for (const n of holders) {
             const b = res.nodes[n.id].balance;
@@ -334,7 +347,7 @@
 
     function renderHead() {
         const plan = Store.state.plan;
-        root.querySelectorAll('[data-view]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === view)));
+        root.querySelectorAll('[data-view]').forEach((b) => { b.setAttribute('aria-selected', String(!collapsed && b.dataset.view === view)); b.disabled = collapsed; });
         root.querySelectorAll('[data-years]').forEach((b) => b.setAttribute('aria-pressed', String(!!plan && Number(b.dataset.years) === plan.settings.years)));
         realBtn.setAttribute('aria-pressed', String(real));
         const cmp = root.querySelector('[data-act="compare"]');
@@ -353,9 +366,10 @@
         renderHead();
         const plan = Store.state.plan;
         const res = Store.state.results;
-        if (!plan || !res || collapsed) return;
+        if (!plan || !res) return;
         const def = deflator(plan, res.months);
         renderKpis(plan, res, def);
+        if (collapsed) return;
         const isTable = view === 'table';
         pane.hidden = isTable;
         tableWrap.hidden = !isTable;
@@ -367,7 +381,7 @@
     function renderKpisOnly() {
         const plan = Store.state.plan;
         const res = Store.state.results;
-        if (!plan || !res || collapsed) return;
+        if (!plan || !res) return;
         renderKpis(plan, res, deflator(plan, res.months));
     }
 

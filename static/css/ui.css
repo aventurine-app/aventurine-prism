@@ -120,6 +120,9 @@
 .role-tile .icon { width: 18px; height: 18px; }
 .role-tile--lg { width: 40px; height: 40px; border-radius: 10px; }
 .role-tile--lg .icon { width: 24px; height: 24px; }
+.role-tile--button { padding: 0; border: 0; cursor: pointer; transition: box-shadow 0.15s ease; }
+.role-tile--button:hover { box-shadow: 0 0 0 2px color-mix(in srgb, var(--tile) 40%, transparent); }
+.role-tile--button:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; }
 .role-tile--sm { width: 22px; height: 22px; border-radius: 6px; }
 .role-tile--sm .icon { width: 14px; height: 14px; }
 
@@ -204,6 +207,8 @@
 .segctl-btn:hover { color: var(--text-primary); background: var(--segctl-hover); }
 .segctl-btn[aria-pressed="true"],
 .segctl-btn[aria-selected="true"] { color: var(--segctl-active-text); background: var(--segctl-active); }
+.segctl-btn:disabled { opacity: 0.4; cursor: default; }
+.segctl-btn:disabled:hover { color: inherit; background: transparent; }
 .segctl-btn:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 1px; }
 
 /* The compact version: horizon chips (1Y 5Y 10Y…). */
@@ -278,14 +283,36 @@
     .segctl-btn { transition: none; }
 }
 
-/* A chip naming a role carries the role's colour as a dot. */
-.chip--role::before {
-    content: '';
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--tile);
+/* ─── Icon picker ─────────────────────────────────────────────────────────── */
+.icon-pop {
+    position: fixed;
+    z-index: 900;
+    width: 260px;
+    max-height: 320px;
+    padding: var(--space-8);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--surface4) transparent;
+    background: var(--surface1);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-card);
 }
+.icon-pop-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--space-4); }
+.icon-pop-cell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.icon-pop-cell .icon { width: 20px; height: 20px; }
+.icon-pop-cell:hover { background: var(--frost-3); color: var(--text-primary); }
+.icon-pop-cell[aria-pressed="true"] { background: color-mix(in srgb, var(--tile, var(--role-none)) 16%, transparent); color: var(--tile, var(--role-none)); }
+.icon-pop-cell:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 1px; }
 
 /* ─── Month picker ────────────────────────────────────────────────────────── */
 .month-pop {

@@ -64,6 +64,9 @@ html[data-theme="dark"] { --titlebar-frost: rgba(255, 255, 255, 0.10); }
     gap: var(--space-4);
     min-width: 0;
     padding-top: var(--space-4);
+    /* The active tab's left border sits on the library's divider line, so the
+       tab and the canvas share one edge. */
+    margin-left: calc(-1 * var(--border-width));
     position: relative;
     z-index: 1;
     -webkit-app-region: no-drag;

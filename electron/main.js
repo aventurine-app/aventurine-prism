@@ -99,7 +99,12 @@ function documentsDir() {
 }
 
 const PLAN_FILE_FILTERS = [
-    { name: 'Aventurine Prism Plan', extensions: ['citrine-plan'] },
+    { name: 'Aventurine Prism Plan', extensions: ['json'] },
+    { name: 'All Files', extensions: ['*'] },
+];
+// Plans exported earlier are .prism or .citrine-plan: import offers all three.
+const PLAN_IMPORT_FILTERS = [
+    { name: 'Aventurine Prism Plan', extensions: ['json', 'prism', 'citrine-plan'] },
     { name: 'All Files', extensions: ['*'] },
 ];
 
@@ -110,7 +115,7 @@ const dialogs = {
     async chooseExportPath(planName) {
         const r = await dialog.showSaveDialog(mainWindow, {
             title: 'Export Plan',
-            defaultPath: path.join(documentsDir(), `${safeFileName(planName)}.citrine-plan`),
+            defaultPath: path.join(documentsDir(), `${safeFileName(planName)}.json`),
             filters: PLAN_FILE_FILTERS,
         });
         return r.canceled ? null : r.filePath;
@@ -119,7 +124,7 @@ const dialogs = {
         const r = await dialog.showOpenDialog(mainWindow, {
             title: 'Import Plan',
             properties: ['openFile'],
-            filters: PLAN_FILE_FILTERS,
+            filters: PLAN_IMPORT_FILTERS,
         });
         return r.canceled || !r.filePaths.length ? null : r.filePaths[0];
     },

@@ -31,6 +31,26 @@
     padding: var(--space-20) var(--space-20) var(--space-16);
 }
 
+/* A module's identity and settings, held together at the top of the panel. */
+.insp-card {
+    margin: var(--space-16);
+    border-radius: var(--radius-panel);
+    background: color-mix(in srgb, var(--tile, var(--role-none)) 16%, transparent);
+    overflow: hidden;
+}
+.insp-card > .insp-header { padding: var(--space-16) var(--space-16) var(--space-12); }
+.insp-card > .insp-sub {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    padding: 0 var(--space-16) var(--space-16);
+}
+.insp-card .chip { border-radius: 6px; }
+.insp-card > .insp-section { padding: var(--space-16); }
+.insp-card + .insp-section { border-top: 0; }
+.insp-card .field-input,
+.insp-card .field-select,
+.insp-card .field-affix-text { background: var(--surface1); }
+
 .insp-titles {
     flex: 1;
     min-width: 0;

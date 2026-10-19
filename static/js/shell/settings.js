@@ -50,7 +50,7 @@
 
     // ── Appearance ─────────────────────────────────────────────────────────
 
-    const themeChoice = () => { const s = store.get('color-theme', null); return s === null ? '' : s; };
+    const themeChoice = () => { const s = store.get('color-theme', null); return s === 'dark' || s === 'system' ? s : ''; };
     const dark = window.matchMedia('(prefers-color-scheme: dark)');
 
     function applyTheme(choice) {

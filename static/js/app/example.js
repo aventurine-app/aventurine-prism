@@ -36,10 +36,14 @@
 
         const salary = at(0, ROW, 'salary', { amount: 85000, per: 'year', growth: 3, tax: 22 });
         const living = at(1, 0, 'living');
-        const dining = at(3, 0, 'dining');
-        const brokerage = at(1, ROW * 2, 'brokerage', { balance: 10000, rate: 7 });
+        const dining = at(3, 0, 'expense');
+        dining.name = 'Dining out';
+        const brokerage = at(1, ROW * 2, 'investment', { balance: 10000, rate: 7 });
+        brokerage.name = 'Brokerage';
         const card = at(2, 0, 'credit-card', { cashBack: 2 });
-        const savings = at(4, ROW, 'hysa', { balance: 5000, rate: 4 });
+        const savings = at(4, ROW, 'bank-account', { balance: 5000, rate: 4 });
+        savings.name = 'Savings';
+        card.params.cashBackTo = savings.id;
 
         link(salary, living, { mode: 'percent', value: 45, basis: 'inflow' });
         link(salary, card, { mode: 'fixed', value: 450, basis: 'inflow' });
@@ -47,7 +51,6 @@
         link(salary, brokerage, { mode: 'rest', basis: 'inflow' });
         link(brokerage, savings, { mode: 'percent', value: 50, basis: 'earnings', when: 'yearly', month: 12 });
         link(card, dining, { mode: 'fixed', value: 450, basis: 'charges' });
-        link(card, savings, { mode: 'rest', basis: 'cashback' });
 
         return plan;
     }

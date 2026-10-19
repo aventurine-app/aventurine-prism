@@ -18,9 +18,10 @@
 //   debt      Debt       Holds what is owed. Interest adds to it; money that
 //                        arrives pays it down.
 //   modifier  Modifier   Money passes through and changes on the way: cash back,
-//                        an employer match, a tax or a fee.
+//                        an employer match, a tax or a fee. A budget group is
+//                        the one that changes nothing: it only splits.
 //
-// Every preset below (sixty-odd of them) is one of those six roles with a
+// Every preset below (a couple of dozen of them) is one of those six roles with a
 // name, an icon, the fields it shows and starting values. Learning the five
 // roles is learning the whole library: a Roth IRA and a CD behave alike because
 // both are accounts, and the canvas paints them alike for the same reason.
@@ -53,16 +54,15 @@
     const ROLE_ORDER = ['source', 'account', 'asset', 'expense', 'debt', 'modifier'];
 
     // Which roles a link may run into, by the role it leaves. Nothing links
-    // into a source (income has no input). Spending only routes onward to
-    // other spending or to a modifier. A credit card pays for spending: its
-    // links out to spending are purchases charged to the card. An asset is
+    // into a source (income has no input). Spending sends nothing on. A credit
+    // card pays for spending: its links out to spending are purchases charged to the card. An asset is
     // bought or improved with money from income, accounts and loans, and only
     // sends money on once it is sold (or, for a rental, as rent).
     const LINK_TARGETS = {
         source:   ['account', 'asset', 'expense', 'debt', 'modifier'],
         account:  ['account', 'asset', 'expense', 'debt', 'modifier'],
         asset:    ['account', 'expense', 'debt', 'modifier'],
-        expense:  ['expense', 'modifier'],
+        expense:  ['expense'],
         debt:     ['account', 'asset', 'expense', 'debt', 'modifier'],
         modifier: ['account', 'asset', 'expense', 'debt', 'modifier'],
     };
@@ -77,6 +77,7 @@
     //   choice     one of `options` ([value, label] pairs)
     //   month      a calendar month, 1-12 (0 = no specific month)
     //   yearmonth  'YYYY-MM', or null when optional and left blank
+    //   account    the id of an account in the plan, or null
     const FIELDS = {
         amount:     { type: 'money',     label: 'Amount',           min: 0,    max: 1e10 },
         per:        { type: 'choice',    label: 'Every',
@@ -94,6 +95,7 @@
         minPayment: { type: 'money',     label: 'Minimum payment',  min: 0,    max: 1e10, optional: true },
         term:       { type: 'number',    label: 'Years left',       min: 0.1,  max: 50,   optional: true, suffix: 'yrs' },
         cashBack:   { type: 'percent',   label: 'Cash back',        min: 0,    max: 100 },
+        cashBackTo: { type: 'account',   label: 'Cash back to',     optional: true },
         annualFee:  { type: 'money',     label: 'Annual fee',       min: 0,    max: 1e10, optional: true },
         value:      { type: 'money',     label: 'Value',            min: 0,    max: 1e11 },
         bought:     { type: 'yearmonth', label: 'Bought',           optional: true },
@@ -107,7 +109,7 @@
         account:  ['balance', 'rate', 'lockUntil', 'capYearly'],
         asset:    ['value', 'rate', 'rent', 'bought', 'sold', 'sellCost'],
         expense:  [],
-        debt:     ['balance', 'rate', 'term', 'minPayment', 'start', 'cashBack', 'annualFee'],
+        debt:     ['balance', 'rate', 'term', 'minPayment', 'start', 'cashBack', 'cashBackTo', 'annualFee'],
         modifier: ['rate', 'capYearly'],
     };
 
@@ -116,23 +118,57 @@
         account:  { balance: 0, rate: 0, lockUntil: null, capYearly: null },
         asset:    { value: 0, rate: 0, rent: 0, bought: null, sold: null, sellCost: 0 },
         expense:  {},
-        debt:     { balance: 0, rate: 0, term: null, minPayment: null, start: null, cashBack: 0, annualFee: null },
+        debt:     { balance: 0, rate: 0, term: null, minPayment: null, start: null, cashBack: 0, cashBackTo: null, annualFee: null },
         modifier: { rate: 0, capYearly: null },
     };
 
     // ── Categories ─────────────────────────────────────────────────────────
     // How the library is shelved. A category is for finding a module, the
-    // role is what it does; most categories hold one role, Events holds two.
+    // role is what it does.
+    //
+    // `icons` is the set a placed module in the category may wear instead of
+    // its preset's icon (the user picks one in the inspector). Every preset's
+    // own icon is offered too (see iconChoices).
     const CATEGORIES = [
-        { id: 'income',     name: 'Income',     icon: 'briefcase' },
-        { id: 'banking',    name: 'Banking',    icon: 'bank' },
-        { id: 'investing',  name: 'Investing',  icon: 'chart-line-up' },
-        { id: 'retirement', name: 'Retirement', icon: 'plant' },
-        { id: 'property',   name: 'Property',   icon: 'house-line' },
-        { id: 'spending',   name: 'Spending',   icon: 'shopping-cart' },
-        { id: 'debt',       name: 'Debt',       icon: 'cardholder' },
-        { id: 'modifiers',  name: 'Modifiers',  icon: 'sliders-horizontal' },
-        { id: 'events',     name: 'Events',     icon: 'calendar-star' },
+        { id: 'income',     name: 'Income',     icon: 'briefcase',
+          icons: ['briefcase', 'money', 'arrow-u-up-left', 'laptop', 'coins', 'hand-coins', 'storefront',
+                  'receipt', 'handshake', 'chalkboard-teacher', 'hammer', 'paint-brush', 'camera', 'pen-nib',
+                  'microphone', 'music-notes', 'truck', 'stethoscope', 'wrench', 'code', 'shopping-bag',
+                  'house-line', 'gift', 'hand-heart', 'trophy', 'calendar-check', 'currency-dollar', 'chart-line-up'] },
+        { id: 'accounts',   name: 'Accounts',   icon: 'bank',
+          icons: ['wallet', 'piggy-bank', 'vault', 'coin-vertical', 'lifebuoy', 'certificate', 'money-wavy', 'bank',
+                  'coins', 'currency-dollar', 'lock-key', 'shield-check', 'umbrella', 'house-line', 'car',
+                  'airplane-tilt', 'graduation-cap', 'heart', 'star', 'flag', 'target', 'calendar-check',
+                  'hand-coins', 'money', 'gift', 'sun', 'tree', 'seal-check', 'plant', 'tree-evergreen', 'heartbeat',
+                  'sun-horizon', 'umbrella-simple', 'mountains', 'flower', 'leaf', 'tree-palm', 'sailboat', 'golf',
+                  'campfire', 'coffee', 'binoculars', 'hourglass', 'calendar-heart', 'first-aid', 'stethoscope',
+                  'pill', 'books', 'student', 'baby', 'hand-heart', 'chart-line-up', 'chart-pie-slice', 'trend-up',
+                  'seal-percent', 'currency-btc', 'currency-eth', 'building-office', 'diamond', 'chart-bar',
+                  'chart-line', 'chart-donut', 'scales', 'globe', 'rocket', 'lightning', 'cpu', 'flask', 'crown',
+                  'medal', 'coin'] },
+        { id: 'property',   name: 'Property',   icon: 'house-line',
+          icons: ['house-line', 'house', 'house-simple', 'buildings', 'building', 'building-apartment',
+                  'warehouse', 'storefront', 'tent', 'factory', 'castle-turret', 'car', 'car-profile', 'truck',
+                  'motorcycle', 'bicycle', 'boat', 'sailboat', 'airplane', 'tractor', 'mountains', 'tree',
+                  'plant', 'key', 'door', 'bed', 'couch', 'garage'] },
+        { id: 'spending',   name: 'Spending',   icon: 'shopping-cart',
+          icons: ['folder', 'house', 'basket', 'fork-knife', 'lightning', 'bus', 'shield-check', 'first-aid',
+                  'repeat', 'popcorn', 'handbag', 'airplane-tilt', 'baby', 'book-open', 'paw-print', 'gift',
+                  'hand-heart', 'receipt', 'hammer', 'shopping-cart', 'shopping-bag', 'coffee', 'pizza',
+                  'hamburger', 'beer-bottle', 'wine', 't-shirt', 'sneaker', 'scissors', 'television',
+                  'game-controller', 'music-notes', 'headphones', 'phone', 'wifi-high', 'drop', 'flame',
+                  'gas-pump', 'car', 'train', 'bicycle', 'tooth', 'pill', 'heart', 'dog', 'cat',
+                  'graduation-cap', 'barbell', 'ticket', 'camera', 'paint-brush', 'wrench', 'plant',
+                  'flower', 'toolbox', 'lamp', 'bed', 'cake', 'balloon'] },
+        { id: 'debt',       name: 'Debt',       icon: 'cardholder',
+          icons: ['credit-card', 'student', 'car-profile', 'house-simple', 'key', 'handshake', 'first-aid-kit',
+                  'shopping-cart-simple', 'bank', 'receipt', 'scales', 'warning', 'clock', 'hourglass', 'link',
+                  'anchor', 'lock', 'notebook', 'file-text', 'percent', 'money', 'coins', 'hand-coins', 'wallet',
+                  'gavel', 'cardholder'] },
+        { id: 'modifiers',  name: 'Modifiers',  icon: 'sliders-horizontal',
+          icons: ['hand-coins', 'percent', 'scissors', 'sliders-horizontal', 'funnel', 'arrows-split',
+                  'plus-minus', 'divide', 'calculator', 'receipt', 'bank', 'gavel', 'scales', 'shield',
+                  'hand-withdraw', 'hand-deposit', 'gear', 'wrench', 'faders', 'equals'] },
     ];
 
     // ── Presets ────────────────────────────────────────────────────────────
@@ -142,7 +178,9 @@
     // defaults    starting values merged over ROLE_DEFAULTS. Amounts, rates and
     //             dates always start empty; only a cadence (Every, Paid in) is set
     // fixed       values the preset pins and hides (a windfall is always 'once')
-    // kind        modifiers: 'match' | 'skim'. Debts: 'card' (a credit card).
+    // kind        modifiers: 'match' | 'skim' | 'group' (a budget group: it
+    //             passes everything on, split by its links). Debts: 'card'
+    //             (a credit card).
     // pretax      accounts paid from gross pay: income sent here is taken before
     //             withholding (see engine.js, pre-tax contributions)
     // loans       assets: the debt presets that can be attached below the module
@@ -150,262 +188,120 @@
     // inLink      the rule a new link INTO this module starts with
     // keywords    extra search terms
     // Installment loans are repaid over a term, so their payment is worked out
-    // from it (plan.js, loanPayment) rather than typed in. A minimum payment
-    // belongs to revolving credit: the card.
-    const DEBT_FIELDS = ['balance', 'rate', 'term', 'start'];
+    // from it (plan.js, loanPayment) rather than typed in. A minimum payment is
+    // optional on any debt: it is only ever what the user sets, and the plan
+    // warns when a debt is paid less than it.
+    const DEBT_FIELDS = ['balance', 'rate', 'term', 'minPayment', 'start'];
     const ASSET_FIELDS = ['value', 'rate', 'bought', 'sold', 'sellCost'];
     const P = (cat, role, id, name, icon, extra = {}) => ({ cat, role, id, name, icon, ...extra });
 
-    // A new link into a spending module starts at 0 with this timing. A one-off
-    // needs a date to be valid, so it keeps one, `inMonths` after the plan start.
+    // A new link into a spending module starts at 0 with this timing.
     const monthly = () => ({ mode: 'fixed', value: 0, when: 'monthly' });
-    const yearly = (month) => ({ mode: 'fixed', value: 0, when: 'yearly', month });
-    const once = (inMonths) => ({ mode: 'fixed', value: 0, when: 'once', relDate: inMonths });
 
     const PRESETS = [
         // Income
         P('income', 'source', 'salary', 'Salary', 'briefcase', {
             defaults: { per: 'year' },
-            keywords: 'job wage pay employment' }),
+            keywords: 'job wage pay employment freelance contract consulting side hustle' }),
         P('income', 'source', 'paycheck', 'Paycheck', 'money', {
             defaults: { per: 'biweek' },
             labels: { amount: 'Take-home' },
-            keywords: 'net pay biweekly job' }),
-        P('income', 'source', 'freelance', 'Freelance', 'laptop', {
-            keywords: 'contract consulting gig self-employed side hustle extra' }),
+            keywords: 'net pay biweekly job gig allowance support royalties other income' }),
         P('income', 'source', 'tax-refund', 'Tax refund', 'arrow-u-up-left', {
             defaults: { per: 'year', payMonth: 4 },
             fields: ['amount', 'per', 'payMonth', 'start', 'end'],
             keywords: 'irs return' }),
-        P('income', 'source', 'other-income', 'Other income', 'coins', {
-            keywords: 'misc allowance support alimony royalties' }),
+        P('income', 'source', 'one-time-income', 'One-time income', 'sparkle', {
+            fixed: { per: 'once' },
+            fields: ['amount', 'tax', 'start'],
+            labels: { start: 'Date', tax: 'Tax' },
+            keywords: 'windfall lottery prize inheritance estate gift one-time' }),
 
-        // Banking
-        P('banking', 'account', 'checking', 'Checking', 'wallet', {
-            fields: ['balance', 'rate'],
-            keywords: 'bank debit everyday' }),
-        P('banking', 'account', 'savings', 'Savings', 'piggy-bank', {
-            fields: ['balance', 'rate'],
-            labels: { rate: 'APY' },
-            keywords: 'bank save' }),
-        P('banking', 'account', 'hysa', 'High-yield savings', 'vault', {
+        // Accounts. Banking first: cash, checking, savings and a money market
+        // are one thing at different rates; only a lock date makes a deposit
+        // its own module.
+        P('accounts', 'account', 'bank-account', 'Bank account', 'wallet', {
             fields: ['balance', 'rate'],
             labels: { rate: 'APY' },
-            keywords: 'hysa online bank save interest' }),
-        P('banking', 'account', 'money-market', 'Money market', 'coin-vertical', {
-            fields: ['balance', 'rate'],
-            labels: { rate: 'APY' },
-            keywords: 'mmf mma fund' }),
-        P('banking', 'account', 'emergency-fund', 'Emergency fund', 'lifebuoy', {
-            fields: ['balance', 'rate'],
-            labels: { rate: 'APY' },
-            keywords: 'rainy day safety' }),
-        P('banking', 'account', 'cd', 'Certificate of deposit', 'certificate', {
+            keywords: 'checking savings hysa high-yield money market emergency fund cash bank debit everyday save interest' }),
+        P('accounts', 'account', 'term-deposit', 'Term deposit', 'certificate', {
             fields: ['balance', 'rate', 'lockUntil'],
             labels: { rate: 'APY', lockUntil: 'Matures' },
-            keywords: 'cd term deposit' }),
-        P('banking', 'account', 'cash', 'Cash on hand', 'money-wavy', {
-            fields: ['balance'],
-            keywords: 'wallet physical' }),
+            keywords: 'cd certificate of deposit locked fixed term' }),
 
-        // Investing
-        P('investing', 'account', 'brokerage', 'Brokerage', 'chart-line-up', {
-            fields: ['balance', 'rate'],
-            labels: { rate: 'Expected return' },
-            keywords: 'stocks etf invest taxable' }),
-        P('investing', 'account', 'index-fund', 'Index fund', 'chart-pie-slice', {
-            fields: ['balance', 'rate'],
-            labels: { rate: 'Expected return' },
-            keywords: 'etf s&p 500 total market' }),
-        P('investing', 'account', 'stocks', 'Stocks', 'trend-up', {
-            fields: ['balance', 'rate'],
-            labels: { rate: 'Expected return' },
-            keywords: 'shares equities' }),
-        P('investing', 'account', 'bonds', 'Bonds', 'seal-percent', {
-            fields: ['balance', 'rate'],
-            labels: { rate: 'Yield' },
-            keywords: 'fixed income corporate municipal' }),
-        P('investing', 'account', 'treasuries', 'Treasury bills', 'bank', {
-            fields: ['balance', 'rate'],
-            labels: { rate: 'Yield' },
-            keywords: 't-bills government' }),
-        P('investing', 'account', 'i-bonds', 'I bonds', 'seal-check', {
-            fields: ['balance', 'rate', 'lockUntil'],
-            labels: { rate: 'Yield' },
-            keywords: 'savings bonds inflation' }),
-        P('investing', 'account', 'crypto', 'Crypto', 'currency-btc', {
-            fields: ['balance', 'rate'],
-            labels: { rate: 'Expected return' },
-            keywords: 'bitcoin ethereum coin' }),
-        P('investing', 'account', 'reit', 'Real estate fund', 'building-office', {
-            fields: ['balance', 'rate'],
-            labels: { rate: 'Expected return' },
-            keywords: 'reit property fund' }),
-        P('investing', 'account', 'gold', 'Gold', 'diamond', {
-            fields: ['balance', 'rate'],
-            labels: { rate: 'Expected return' },
-            keywords: 'precious metals silver bullion' }),
-
-        // Retirement
-        P('retirement', 'account', '401k', '401(k)', 'plant', {
+        // Retirement and investing. Every holding is a balance that grows at an
+        // expected return, so one module covers stocks, funds, bonds, crypto and
+        // gold. What sets the retirement accounts apart is when tax is paid:
+        // before the money goes in (pre-tax) or already paid (tax-free growth).
+        P('accounts', 'account', 'pretax-account', 'Pre-tax account', 'plant', {
             pretax: true,
             labels: { rate: 'Expected return' },
-            keywords: '401k 403b workplace retirement' }),
-        P('retirement', 'account', 'trad-ira', 'Traditional IRA', 'tree', {
-            pretax: true,
+            keywords: '401k 403b traditional ira hsa health savings account workplace retirement' }),
+        P('accounts', 'account', 'tax-free-account', 'Tax-free account', 'tree-evergreen', {
             labels: { rate: 'Expected return' },
-            keywords: 'ira retirement' }),
-        P('retirement', 'account', 'roth-ira', 'Roth IRA', 'tree-evergreen', {
+            keywords: 'roth ira 529 plan college education savings retirement' }),
+        P('accounts', 'account', 'investment', 'Investment', 'chart-line-up', {
+            fields: ['balance', 'rate'],
             labels: { rate: 'Expected return' },
-            keywords: 'roth ira retirement' }),
-        P('retirement', 'account', 'hsa', 'HSA', 'heartbeat', {
-            pretax: true,
-            labels: { rate: 'Expected return' },
-            keywords: 'health savings account medical' }),
-        P('retirement', 'account', '529', '529 plan', 'graduation-cap', {
-            labels: { rate: 'Expected return' },
-            keywords: 'college education savings' }),
+            keywords: 'brokerage stocks etf index fund s&p 500 bonds treasury t-bills crypto bitcoin reit gold invest taxable' }),
 
-        // Property. Only a rental shows rent. A secured loan is one the
-        // asset backs, so an unsecured personal loan never docks.
-        P('property', 'asset', 'home', 'Home', 'house-line', {
+        // Property. Only a rental shows rent. A loan docks under any property:
+        // a mortgage, a car loan, a loan against the home.
+        P('property', 'asset', 'real-estate', 'Real estate', 'house-line', {
             fields: ASSET_FIELDS,
             labels: { rate: 'Appreciation' },
-            loans: ['mortgage', 'home-equity'],
-            keywords: 'house real estate property' }),
+            loans: ['loan'],
+            keywords: 'home house land lot acreage property' }),
         P('property', 'asset', 'rental-property', 'Rental property', 'buildings', {
             fields: [...ASSET_FIELDS, 'rent'],
             labels: { rate: 'Appreciation' },
-            loans: ['mortgage', 'home-equity'],
+            loans: ['loan'],
             keywords: 'investment property landlord rent' }),
         P('property', 'asset', 'vehicle', 'Vehicle', 'car', {
             fields: ASSET_FIELDS,
             labels: { rate: 'Value change' },
-            loans: ['car-loan'],
+            loans: ['loan'],
             keywords: 'car truck depreciation buy new car' }),
-        P('property', 'asset', 'land', 'Land', 'mountains', {
-            fields: ASSET_FIELDS,
-            labels: { rate: 'Appreciation' },
-            loans: ['mortgage'],
-            keywords: 'lot acreage' }),
 
-        // Spending
-        P('spending', 'expense', 'living', 'Living expenses', 'shopping-bag', {
-            keywords: 'cost of living spending budget' }),
-        P('spending', 'expense', 'rent', 'Rent', 'house', {
-            inLink: monthly(), keywords: 'housing apartment lease' }),
-        P('spending', 'expense', 'groceries', 'Groceries', 'basket', {
-            inLink: monthly(), keywords: 'food supermarket' }),
-        P('spending', 'expense', 'dining', 'Dining out', 'fork-knife', {
-            inLink: monthly(), keywords: 'restaurants food takeout' }),
-        P('spending', 'expense', 'utilities', 'Utilities', 'lightning', {
-            inLink: monthly(), keywords: 'electric water gas internet phone bills' }),
-        P('spending', 'expense', 'transport', 'Transportation', 'bus', {
-            inLink: monthly(), keywords: 'gas fuel transit commute car' }),
-        P('spending', 'expense', 'insurance', 'Insurance', 'shield-check', {
-            inLink: monthly(), keywords: 'health auto home life premium' }),
-        P('spending', 'expense', 'healthcare', 'Healthcare', 'first-aid', {
-            inLink: monthly(), keywords: 'medical doctor pharmacy' }),
-        P('spending', 'expense', 'subscriptions', 'Subscriptions', 'repeat', {
-            inLink: monthly(), keywords: 'streaming software memberships' }),
-        P('spending', 'expense', 'entertainment', 'Entertainment', 'popcorn', {
-            inLink: monthly(), keywords: 'fun hobbies movies games' }),
-        P('spending', 'expense', 'shopping', 'Shopping', 'handbag', {
-            inLink: monthly(), keywords: 'clothes retail' }),
-        P('spending', 'expense', 'travel', 'Travel', 'airplane-tilt', {
-            inLink: yearly(7), keywords: 'vacation holiday trips' }),
-        P('spending', 'expense', 'childcare', 'Childcare', 'baby', {
-            inLink: monthly(), keywords: 'daycare kids nanny' }),
-        P('spending', 'expense', 'education', 'Education', 'book-open', {
-            inLink: monthly(), keywords: 'tuition school courses' }),
-        P('spending', 'expense', 'pets', 'Pets', 'paw-print', {
-            inLink: monthly(), keywords: 'dog cat vet' }),
-        P('spending', 'expense', 'gifts', 'Gifts', 'gift', {
-            inLink: yearly(12), keywords: 'holidays birthdays presents' }),
-        P('spending', 'expense', 'charity', 'Charity', 'hand-heart', {
-            inLink: monthly(), keywords: 'donation giving tithe' }),
-        P('spending', 'expense', 'taxes', 'Taxes', 'receipt', {
-            inLink: yearly(4), keywords: 'property tax income tax irs' }),
-        P('spending', 'expense', 'home-upkeep', 'Home upkeep', 'hammer', {
-            inLink: monthly(), keywords: 'repairs maintenance renovation' }),
+        // Spending. Every expense consumes what arrives; how often it is paid
+        // is the link's timing, not the module's.
+        P('spending', 'expense', 'expense', 'Expense', 'shopping-cart', {
+            inLink: monthly(),
+            keywords: 'rent groceries food dining utilities bills transport insurance healthcare subscriptions entertainment shopping travel childcare education pets gifts charity taxes home upkeep repairs' }),
 
-        // Debt
+        // Debt. A card is its own thing (purchases, cash back). All
+        // other debt is a balance owed at a rate, repaid over a term.
         P('debt', 'debt', 'credit-card', 'Credit card', 'credit-card', {
             kind: 'card',
-            fields: ['balance', 'rate', 'minPayment', 'cashBack', 'annualFee'],
+            fields: ['balance', 'rate', 'minPayment', 'cashBack', 'cashBackTo', 'annualFee'],
             labels: { balance: 'Balance owed', rate: 'APR' },
             keywords: 'cash back rewards points miles travel revolving debt' }),
-        P('debt', 'debt', 'student-loan', 'Student loan', 'student', {
+        P('debt', 'debt', 'loan', 'Loan', 'handshake', {
             fields: DEBT_FIELDS,
             labels: { balance: 'Balance owed', rate: 'APR' },
-            keywords: 'college education loan' }),
-        P('debt', 'debt', 'car-loan', 'Car loan', 'car-profile', {
-            fields: DEBT_FIELDS,
-            labels: { balance: 'Balance owed', rate: 'APR' },
-            keywords: 'auto vehicle loan' }),
-        P('debt', 'debt', 'mortgage', 'Mortgage', 'house-simple', {
-            fields: DEBT_FIELDS,
-            labels: { balance: 'Balance owed', rate: 'APR' },
-            keywords: 'home loan house' }),
-        P('debt', 'debt', 'home-equity', 'Home equity loan', 'key', {
-            fields: DEBT_FIELDS,
-            labels: { balance: 'Balance owed', rate: 'APR' },
-            keywords: 'heloc cash-out refinance borrow against home equity line' }),
-        P('debt', 'debt', 'personal-loan', 'Personal loan', 'handshake', {
-            fields: DEBT_FIELDS,
-            labels: { balance: 'Balance owed', rate: 'APR' },
-            keywords: 'loan installment' }),
-        P('debt', 'debt', 'medical-debt', 'Medical debt', 'first-aid-kit', {
-            fields: DEBT_FIELDS,
-            labels: { balance: 'Balance owed', rate: 'APR' },
-            keywords: 'hospital bills' }),
-        P('debt', 'debt', 'bnpl', 'Buy now, pay later', 'shopping-cart-simple', {
-            fields: DEBT_FIELDS,
-            labels: { balance: 'Balance owed', rate: 'APR' },
-            keywords: 'bnpl installments klarna afterpay' }),
+            keywords: 'mortgage student car auto personal home equity heloc medical bnpl buy now pay later installment borrow' }),
 
         // Modifiers
-        P('modifiers', 'modifier', 'employer-match', 'Employer match', 'hand-coins', {
+        P('modifiers', 'modifier', 'employer-match', 'Match', 'hand-coins', {
             kind: 'match',
             labels: { rate: 'Match', capYearly: 'Yearly match limit' },
-            keywords: '401k match contribution free money' }),
-        P('modifiers', 'modifier', 'tax', 'Tax', 'percent', {
+            keywords: 'employer 401k match contribution free money' }),
+        P('modifiers', 'modifier', 'living', 'Budget Group', 'folder', {
+            kind: 'group',
+            fields: [],
+            keywords: 'living expenses cost of living spending budget group category split' }),
+        P('modifiers', 'modifier', 'tax-or-fee', 'Tax or fee', 'percent', {
             kind: 'skim',
             fields: ['rate'],
-            labels: { rate: 'Tax rate' },
-            keywords: 'withholding income capital gains' }),
-        P('modifiers', 'modifier', 'fee', 'Fee', 'scissors', {
-            kind: 'skim',
-            fields: ['rate'],
-            labels: { rate: 'Fee' },
-            keywords: 'advisor commission cost' }),
-
-        // Events
-        P('events', 'source', 'windfall', 'Windfall', 'sparkle', {
-            fixed: { per: 'once' },
-            fields: ['amount', 'tax', 'start'],
-            labels: { start: 'Date', tax: 'Tax' },
-            keywords: 'lottery prize one-time gift' }),
-        P('events', 'source', 'inheritance', 'Inheritance', 'scroll', {
-            fixed: { per: 'once' },
-            fields: ['amount', 'tax', 'start'],
-            labels: { start: 'Date', tax: 'Tax' },
-            keywords: 'estate one-time' }),
-        P('events', 'expense', 'big-purchase', 'Big purchase', 'package', {
-            inLink: once(12), keywords: 'one-time furniture appliance' }),
-        P('events', 'expense', 'wedding', 'Wedding', 'heart', {
-            inLink: once(18), keywords: 'marriage ceremony one-time' }),
-        P('events', 'expense', 'dream-trip', 'Dream trip', 'island', {
-            inLink: once(12), keywords: 'vacation travel one-time' }),
-        P('events', 'expense', 'emergency', 'Unexpected bill', 'siren', {
-            inLink: once(9), keywords: 'emergency repair one-time' }),
+            labels: { rate: 'Rate' },
+            keywords: 'tax withholding income capital gains fee advisor commission cost' }),
     ];
 
     const PRESET_BY_ID = Object.create(null);
     for (const p of PRESETS) {
         if (PRESET_BY_ID[p.id]) throw new Error(`duplicate preset id ${p.id}`);
         if (!ROLES[p.role]) throw new Error(`preset ${p.id}: unknown role ${p.role}`);
-        if (p.role === 'modifier' && !['match', 'skim'].includes(p.kind)) {
+        if (p.role === 'modifier' && !['match', 'skim', 'group'].includes(p.kind)) {
             throw new Error(`preset ${p.id}: modifier needs a kind`);
         }
         PRESET_BY_ID[p.id] = p;
@@ -413,6 +309,16 @@
 
     function preset(id) {
         return PRESET_BY_ID[id] || null;
+    }
+
+    const CATEGORY_BY_ID = Object.create(null);
+    for (const c of CATEGORIES) CATEGORY_BY_ID[c.id] = c;
+
+    /** Icons a module of this preset may wear: its category's set, plus the
+     *  icon its preset ships with. No duplicates, preset icon first. */
+    function iconChoices(p) {
+        const cat = CATEGORY_BY_ID[p.cat];
+        return [...new Set([p.icon, ...(cat ? cat.icons : [])])];
     }
 
     /** The fields a preset shows, in display order. */
@@ -435,6 +341,6 @@
 
     return {
         ROLES, ROLE_ORDER, LINK_TARGETS, FIELDS, ROLE_FIELDS, ROLE_DEFAULTS,
-        CATEGORIES, PRESETS, preset, fieldsFor, fieldLabel, defaultParams,
+        CATEGORIES, PRESETS, preset, iconChoices, fieldsFor, fieldLabel, defaultParams,
     };
 }));

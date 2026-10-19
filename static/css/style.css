@@ -8,7 +8,7 @@
    spacing, radii, controls and themes, including the teal accent.
 
      1. Colour ramps
-     2. Semantic tokens (light baseline; dark and colorful live in themes.css)
+     2. Semantic tokens (light baseline; dark lives in themes.css)
      3. Module roles and chart colours
      4. Typography
      5. Component tokens
@@ -75,8 +75,7 @@
  * Light is the baseline; themes.css overrides for dark. The swatch selectors
  * put the theme picker's previews in each theme's own context. */
 :root,
-.settings-theme-swatch[data-theme="light"],
-.settings-theme-swatch[data-theme="colorful"] {
+.settings-theme-swatch[data-theme="light"] {
     color-scheme: light;
 
     --text-primary:   var(--color-base-900);
@@ -156,17 +155,15 @@
  * band, which is allowed because no module is ever colour-only: each carries
  * its own icon, name and port layout. Dark clears the 8 target. */
 :root,
-.settings-theme-swatch[data-theme="light"],
-.settings-theme-swatch[data-theme="colorful"] {
+.settings-theme-swatch[data-theme="light"] {
     --role-source:   #3a9163;
     --role-account:  #154eb2;
     --role-expense:  #b27d23;
     --role-debt:     #b43933;
     --role-modifier: #8c5cb4;
 
-    /* Assets borrow the account blue: both are what the plan holds. A hue of
-       their own has to clear the dataviz validator first (CLAUDE.md, rule 10). */
-    --role-asset: var(--role-account);
+    /* Assets are a lime green: growth, and a hue no other role or port uses. */
+    --role-asset: #6f9a1a;
 
     /* Unassigned money: no role, so it takes the neutral that recedes. */
     --role-none: var(--color-base-500);
@@ -182,31 +179,44 @@
     --flow-earnings:  #1f9ea3;
     --flow-balance:   #5b63c9;
     --flow-charges:   #b9920f;
-    --flow-cashback:  #cf4f92;
     --flow-sale:      var(--role-account);
     --flow-rent:      var(--role-source);
 
-    /* Net worth bands: a rainbow, red at the top of the stack down to
-       violet at the bottom, spread evenly over however many bands the plan
-       draws (outlook.js, worthBands). Unassigned always sits on top, so it
-       is always the red. The same stops serve both themes. */
-    --chart-rainbow-1: #e34841;   /* red */
-    --chart-rainbow-2: #e96f43;   /* red-orange */
-    --chart-rainbow-3: #ed914d;   /* orange */
-    --chart-rainbow-4: #f1b45a;   /* amber */
-    --chart-rainbow-5: #edd964;   /* yellow */
-    --chart-rainbow-6: #a5d75b;   /* lime */
-    --chart-rainbow-7: #52bf69;   /* green */
-    --chart-rainbow-8: #53b9a7;   /* teal */
-    --chart-rainbow-9: #4eacc8;   /* cyan */
-    --chart-rainbow-10: #3578d9;  /* blue */
-    --chart-rainbow-11: #5754dc;  /* indigo */
-    --chart-rainbow-12: #9a49e0;  /* violet */
-    --chart-unassigned: var(--chart-rainbow-1);
+    /* Every link on the canvas, whatever it carries. */
+    --link-line:      #7bbcf2;
+
+    /* Net worth bands wear the colour of the module they stand for: accounts
+       blue, assets lime, debts red, as on the canvas. Several of one role are
+       told apart by alternating lighter and darker shades of it, in module
+       order (outlook.js, worthBands). Mixed from the role colours, so a theme
+       switch carries them along. Unassigned and folded "Other" bands are the
+       neutral. */
+    --chart-account-1: var(--role-account);
+    --chart-account-2: color-mix(in srgb, var(--role-account) 70%, white);
+    --chart-account-3: color-mix(in srgb, var(--role-account) 85%, black);
+    --chart-account-4: color-mix(in srgb, var(--role-account) 45%, white);
+    --chart-account-5: color-mix(in srgb, var(--role-account) 70%, black);
+    --chart-account-6: color-mix(in srgb, var(--role-account) 28%, white);
+
+    --chart-asset-1: var(--role-asset);
+    --chart-asset-2: color-mix(in srgb, var(--role-asset) 70%, white);
+    --chart-asset-3: color-mix(in srgb, var(--role-asset) 85%, black);
+    --chart-asset-4: color-mix(in srgb, var(--role-asset) 45%, white);
+    --chart-asset-5: color-mix(in srgb, var(--role-asset) 70%, black);
+    --chart-asset-6: color-mix(in srgb, var(--role-asset) 28%, white);
+
+    --chart-debt-1: var(--role-debt);
+    --chart-debt-2: color-mix(in srgb, var(--role-debt) 70%, white);
+    --chart-debt-3: color-mix(in srgb, var(--role-debt) 85%, black);
+    --chart-debt-4: color-mix(in srgb, var(--role-debt) 45%, white);
+    --chart-debt-5: color-mix(in srgb, var(--role-debt) 70%, black);
+    --chart-debt-6: color-mix(in srgb, var(--role-debt) 28%, white);
+    --chart-unassigned: var(--role-none);
 
     /* The headline line (net worth) is the accent, as Aventurine's charts are;
        the cash-flow pair is the arriving green against the leaving gold. */
     --chart-networth: var(--color-accent-600);
+    --chart-worth-line: #000;   /* the Net worth chart's line */
     --chart-in:       var(--role-source);
     --chart-out:      var(--role-expense);
     --chart-growth:   #3e6dc8;

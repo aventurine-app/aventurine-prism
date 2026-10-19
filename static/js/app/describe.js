@@ -24,29 +24,28 @@
         if (basis === 'balance') return 'balance';
         if (basis === 'proceeds') return 'loan proceeds';
         if (basis === 'charges') return 'purchases';
-        if (basis === 'cashback') return 'cash back';
         if (basis === 'sale') return 'sale proceeds';
         if (basis === 'rent') return 'rent';
         switch (p.role) {
             case 'source':  return 'income';
             case 'account': return 'deposits';
             case 'expense': return 'spending';
-            case 'debt':    return 'payoff overflow';
+            case 'debt':    return 'overpayment';
             default:        return 'output';
         }
     }
 
-    const INFLOW_PORT = { source: 'Pay', account: 'Deposits', expense: 'Spending', modifier: 'Passes on', debt: 'Overflow' };
-    const BASIS_PORT = { earnings: 'Earnings', balance: 'Balance', proceeds: 'Loan proceeds', charges: 'Purchases', cashback: 'Cash back',
+    const INFLOW_PORT = { source: 'Pay', account: 'Deposits', expense: 'Spending', modifier: 'Passes on', debt: 'Overpayment' };
+    const BASIS_PORT = { earnings: 'Earnings', balance: 'Balance', proceeds: 'Loan proceeds', charges: 'Purchases',
         sale: 'Sale', rent: 'Rent' };
     const INFLOW_FLOW = { source: 'pay', account: 'deposits', expense: 'spending', modifier: 'passes', debt: 'overflow' };
 
-    /** What an output port sends, as its label: 'Deposits', 'Cash back'. */
+    /** What a link carries out of a module, as a label: 'Deposits', 'Purchases'. */
     function portLabel(node, basis) {
         return BASIS_PORT[basis] || INFLOW_PORT[roleOf(node)] || 'Output';
     }
 
-    /** The colour key of an output port and of the links leaving it. */
+    /** The colour key of the links carrying `basis` out of `node`. */
     function flowKey(node, basis) {
         return basis === 'inflow' ? INFLOW_FLOW[roleOf(node)] || 'overflow' : basis;
     }
@@ -72,7 +71,7 @@
     /** The label on a link's pill: '20%', '$1,800/mo', 'Rest', 'Above $20K'. */
     /** Bases whose money is split the moment it arrives, so their links have
      *  no timing of their own. */
-    const ON_ARRIVAL = new Set(['inflow', 'proceeds', 'cashback', 'sale', 'rent']);
+    const ON_ARRIVAL = new Set(['inflow', 'proceeds', 'sale', 'rent']);
 
     /** A 'due' link's amount: a card's whole balance, a loan's payment. */
     const dueWords = (to, short) => {
@@ -97,9 +96,8 @@
                 if (link.basis === 'balance') return `Everything${timingShort(link).replace('/mo', ' monthly')}`;
                 if (link.basis === 'earnings') return 'Rest of earnings';
                 if (link.basis === 'proceeds') return 'Proceeds';
-                if (link.basis === 'cashback') return 'Cash back';
                 if (link.basis === 'sale') return 'Sale';
-                return roleOf(from) === 'debt' ? 'Overflow' : 'Rest';
+                return roleOf(from) === 'debt' ? 'Overpayment' : 'Rest';
         }
     }
 
@@ -162,12 +160,15 @@
             }
             case 'debt': {
                 const apr = r ? `${Fmt.pct(r)} APR` : '';
-                const back = p.kind === 'card' && node.params.cashBack ? `${Fmt.pct(node.params.cashBack)} back` : '';
+                const backTo = p.kind === 'card' && Store.node(node.params.cashBackTo);
+                const back = p.kind === 'card' && node.params.cashBack
+                    ? `${Fmt.pct(node.params.cashBack)} back${backTo ? ` to ${backTo.name}` : ''}` : '';
                 const payment = p.kind === 'card' ? 0 : P.loanPayment(node.params);
                 const due = payment > 0.005 ? `${compact(payment)}/mo` : '';
                 return [apr, back, due].filter(Boolean).join(' · ');
             }
             case 'modifier':
+                if (p.kind === 'group') return '';
                 if (p.kind === 'match') return `+${Fmt.pct(r)} match`;
                 return `${Fmt.pct(r)} ${p.id === 'fee' ? 'fee' : 'tax'}`;
             default:
