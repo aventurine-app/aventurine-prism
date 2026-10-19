@@ -11,13 +11,16 @@
 // scheme with its shared chrome spliced in from pages/partials/. The fixed
 // origin (app://citrine) keeps localStorage (theme, number format) stable.
 //
-// Aventurine Prism makes no network calls and never will. Nothing here opens a URL
-// outside the app origin.
+// The only network calls are software updates (updater.js), which ask GitHub
+// for the latest version and stop entirely when the user turns Automatic
+// Updates off. Nothing here opens a URL outside the app origin; the one way to
+// the OS browser is updater.js's fixed download page.
 
 const { app, BrowserWindow, Menu, ipcMain, dialog, protocol, net } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
+const { initUpdater } = require('./updater');
 
 const APP_HOST = 'citrine';
 const APP_ORIGIN = `app://${APP_HOST}`;
@@ -350,6 +353,9 @@ app.whenReady().then(async () => {
         app.quit();
         return;
     }
+    // Before the window: the About tab asks for the update state as soon as
+    // the page runs, and an IPC handler registered after that call is too late.
+    initUpdater({ getWindow: () => mainWindow, isAppSender: fromAppOrigin });
     await createWindow();
 
     app.on('activate', async () => {

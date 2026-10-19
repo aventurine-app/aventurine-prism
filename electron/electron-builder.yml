@@ -17,9 +17,13 @@ directories:
   output: dist
   buildResources: build
 
+# App-root files (electron/). Production dependencies (electron-updater) are
+# added from node_modules on top of this list; devDependencies never ship.
 files:
   - main.js
   - preload.js
+  - updater.js
+  - updatePolicy.js
   - backend/**/*
   - package.json
 
@@ -32,8 +36,26 @@ extraResources:
 asar: true
 npmRebuild: false
 
-# No publish config and no updater. Aventurine Prism never phones home; users update by
-# installing a newer build.
+# Update feed for the in-app updater (../updater.js). electron-builder bakes
+# this into each build as resources/app-update.yml and writes the release
+# metadata electron-updater reads: latest.yml (Windows) and latest-linux.yml
+# (one file listing the AppImage, deb and rpm). The repository is public, so the
+# shipped app needs no token. updatePolicy.js names the same repository for the
+# macOS / dev check; change both together (a test checks they match).
+#
+# electron-builder itself still never uploads anything: CI builds with
+# `--publish never`, and the `release` job in .github/workflows/release.yml
+# attaches the installers AND that metadata (plus the .blockmap files used for
+# differential downloads), so one place stays in charge of what ships. A
+# release missing latest*.yml reads as a failed check to every installed copy.
+#
+# Releases are created as drafts, and the feed shows only published releases,
+# so nothing reaches installed copies until the draft is published by hand.
+publish:
+  provider: github
+  owner: aventurine-app
+  repo: aventurine-prism
+  releaseType: release
 
 linux:
   target:
@@ -59,8 +81,14 @@ rpm:
   artifactName: ${name}-${version}.${arch}.${ext}
 
 # Windows installers are not Authenticode-signed yet (the same recorded gap as
-# Aventurine): users see a SmartScreen "unknown publisher" warning on first
-# install.
+# Aventurine Manage). With no signing block:
+#   • Users see a SmartScreen "unknown publisher" warning on first install.
+#   • The in-app updater has no publisher signature to verify, so an update's
+#     integrity rests on the SHA-512 in latest.yml, fetched with the installer
+#     from the same GitHub release over HTTPS. An update is exactly as
+#     trustworthy as the GitHub account that publishes the release.
+# When signing is added, also set win.publisherName to the certificate's
+# subject, so electron-updater refuses any update not signed by it.
 win:
   target:
     - nsis
@@ -76,7 +104,13 @@ nsis:
   shortcutName: Aventurine Prism
 
 # macOS must be built on macOS. Ad-hoc signed, not notarized (no Apple
-# Developer ID yet), as Aventurine.
+# Developer ID yet), as Aventurine Manage.
+#
+# That also rules out updating in place: the macOS updater (Squirrel.Mac) only
+# accepts an update signed by the same Developer ID as the running app, and
+# needs a zip target this config doesn't build. So macOS copies only check for
+# a new version and link to the download page (updatePolicy.js, 'notify'). With
+# a Developer ID, add a zip target and upload latest-mac.yml to enable it.
 mac:
   target:
     - dmg

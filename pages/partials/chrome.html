@@ -151,6 +151,47 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Updates. Driven by shell/updates.js against the
+                         electronUpdater bridge (electron/updater.js). Hidden
+                         until that bridge answers, so a plain browser never
+                         shows controls that can't work. The status line and the
+                         one action button beside it change with the update
+                         state; the description under Automatic Updates changes
+                         with what this install can do (updatePolicy.js,
+                         resolveUpdateMode). -->
+                    <div class="settings-section" data-updates-section hidden>
+                        <div class="settings-section-header">Updates</div>
+                        <div class="settings-card">
+                            <div class="settings-row">
+                                <div class="settings-row-label">
+                                    <div class="settings-row-name" id="update-auto-name">Automatic Updates</div>
+                                    <div class="settings-row-desc" data-update-auto-desc></div>
+                                </div>
+                                <div class="seg-switch" data-update-auto role="group" aria-labelledby="update-auto-name">
+                                    <button class="seg-switch-btn" type="button" data-value="on">On</button>
+                                    <button class="seg-switch-btn" type="button" data-value="off">Off</button>
+                                </div>
+                            </div>
+                            <div class="settings-row">
+                                <div class="settings-row-label">
+                                    <div class="settings-row-name">Software Update</div>
+                                    <div class="settings-row-desc" data-update-status role="status" aria-live="polite"></div>
+                                    <div class="update-progress" data-update-progress role="progressbar"
+                                         aria-label="Download progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+                                        <div class="update-progress-bar" data-update-progress-bar></div>
+                                    </div>
+                                    <div class="update-error" data-update-error role="alert" hidden></div>
+                                </div>
+                                <div class="update-actions">
+                                    <button class="button-secondary" type="button" data-update-action="check">Check for Updates</button>
+                                    <button class="button-primary" type="button" data-update-action="download" hidden>Download</button>
+                                    <button class="button-primary" type="button" data-update-action="install" hidden>Restart &amp; Install</button>
+                                    <button class="button-primary" type="button" data-update-action="open-download-page" hidden>Open Download Page</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
             </div>

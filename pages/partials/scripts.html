@@ -14,3 +14,7 @@
     <script src="/static/js/shell/ui.js"></script>
     <script src="/static/js/shell/titlebar.js"></script>
     <script src="/static/js/shell/settings.js"></script>
+    <!-- The Updates section of Preferences → About. Needs ui.js (toasts) and
+         the About markup in chrome.html; reads Store, if present, only on
+         Restart & Install, so it may load before the app scripts. -->
+    <script src="/static/js/shell/updates.js"></script>

@@ -77,6 +77,20 @@
 .settings-row + .settings-row { border-top: var(--border-width) solid var(--border); }
 .settings-row--stack { flex-direction: column; align-items: flex-start; }
 .settings-row-name { color: var(--text-primary); font-weight: var(--weight-medium); }
+/* A row whose name carries a line of explanation under it. */
+.settings-row-label {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-width: 0;
+}
+.settings-row-desc {
+    max-width: 60ch;
+    color: var(--text-secondary);
+    font-size: var(--size-small);
+    line-height: var(--lh-normal);
+}
 .settings-value {
     color: var(--text-secondary);
     font-size: var(--size-small);
@@ -186,6 +200,44 @@
     line-height: var(--lh-normal);
 }
 .form-error { margin: var(--space-12) 0 0; color: var(--accent-negative); font-size: var(--size-small); }
+
+/* ── Updates (About tab) ────────────────────────────────────────────────── */
+
+.update-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: var(--space-8);
+}
+
+.update-error {
+    color: var(--accent-negative);
+    font-size: var(--size-small);
+    line-height: var(--lh-normal);
+}
+
+.update-progress {
+    width: 100%;
+    max-width: 320px;
+    height: 4px;
+    margin-top: var(--space-4);
+    border-radius: 2px;
+    background: var(--surface3);
+    overflow: hidden;
+}
+
+/* Scaled rather than sized, so each progress step is a compositor-only
+   change instead of a layout. */
+.update-progress-bar {
+    height: 100%;
+    background: var(--accent-primary);
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 200ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .update-progress-bar { transition: none; }
+}
 
 /* ── Lock screen ────────────────────────────────────────────────────────── */
 .lockscreen {

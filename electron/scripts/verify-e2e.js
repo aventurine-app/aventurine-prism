@@ -3,8 +3,9 @@
 // End-to-end verification: boots the REAL app entry (main.js) against an
 // isolated profile, waits for the window, then asserts from INSIDE the renderer:
 // the page and its security posture, the starter plan and its simulation, the
-// canvas and library, an edit → undo → redo round trip, and a save that
-// survives a fresh read through IPC. Exits 0 on PASS.
+// canvas and library, an edit → undo → redo round trip, a save that survives a
+// fresh read through IPC, and the Updates section of About (with Automatic
+// Updates off, so the run stays off the network). Exits 0 on PASS.
 //
 //   npm run verify   (close `npm start` first: one instance per profile)
 
@@ -13,6 +14,9 @@ const os = require('os');
 const path = require('path');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'citrine-e2e-'));
+// Automatic Updates off, so the run never reaches the network (a dev run
+// would otherwise ask GitHub for the latest release ten seconds in).
+fs.writeFileSync(path.join(tmp, 'update-preferences.json'), JSON.stringify({ autoUpdate: false }));
 const { app, BrowserWindow } = require('electron');
 
 require('../main.js');
@@ -248,6 +252,25 @@ app.whenReady().then(async () => {
         await js('Library.toggleRail()');
         await sleep(350);
         check('expanding brings the full library back', await js('!document.getElementById("library").classList.contains("is-rail") && document.getElementById("library").getBoundingClientRect().width > 150'));
+
+        // Software updates, as far as they go without the network: the
+        // profile was seeded with Automatic Updates off.
+        await js('Settings.open("about")');
+        await sleep(150);
+        const updates = JSON.parse(await js(`JSON.stringify({
+            shown: !document.querySelector('[data-updates-section]').hidden,
+            off: document.querySelector('[data-update-auto] [data-value="off"]').getAttribute('aria-pressed') === 'true',
+            status: document.querySelector('[data-update-status]').textContent,
+            action: [...document.querySelectorAll('[data-update-action]')].filter((b) => !b.hidden).map((b) => b.dataset.updateAction).join(),
+        })`));
+        check('About shows the Updates section', updates.shown);
+        check('Automatic Updates reads back the saved Off', updates.off);
+        check('the update status names the installed version', /^You have version \d+\.\d+\.\d+\.$/.test(updates.status));
+        check('Check for Updates is the one action offered', updates.action === 'check');
+        const updateState = JSON.parse(await js('electronUpdater.getState().then(JSON.stringify)'));
+        check('a dev run only notifies, and has made no check', updateState.mode === 'notify'
+            && updateState.autoUpdate === false && updateState.state === 'idle');
+        await js('UI.closeModal(document.getElementById("prefs"))');
 
         check('no console errors', errors.length === 0);
         if (errors.length) console.log(errors.join('\n'));

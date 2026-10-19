@@ -8,7 +8,10 @@ tax), link them together, pick a time horizon, and see where
 the money ends up month by month.
 
 Every plan lives in one local file on your computer, optionally encrypted with a
-password. Aventurine Prism makes no network calls.
+password. The only network traffic is the check for software updates, which asks
+GitHub for the latest version number and sends nothing about you or your plans.
+Turn Automatic Updates off in Preferences → About and the app makes no network
+requests unless you click Check for Updates.
 
 ## Run it
 

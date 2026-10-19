@@ -43,6 +43,7 @@ const appGlobals = {
     // electron/preload.js bridge (absent outside Electron; feature-detect)
     electronWindow: 'readonly',
     electronApp: 'readonly',
+    electronUpdater: 'readonly',
     citrineApi: 'readonly',
 };
 
