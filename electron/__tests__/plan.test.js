@@ -75,11 +75,11 @@ test('links: nothing into income, no self links, no duplicates, spending sends n
     assert.equal(Plan.canConnect(plan, salary.id, living.id).reason, 'duplicate');
 });
 
-test('default rules: first link takes the rest, the next a slice, a priced target asks its price', () => {
+test('default rules: links start on %, the first at 100, the next a slice, a priced target asks its price', () => {
     const { plan, nodes: [salary, living, savings, rent] } = planWith('salary', 'living', 'bank-account', 'expense');
     const first = Plan.createLink(plan, salary.id, living.id);
     plan.links.push(first);
-    assert.equal(first.mode, 'rest');
+    assert.deepEqual([first.mode, first.value], ['percent', 100]);
     const second = Plan.createLink(plan, salary.id, savings.id);
     plan.links.push(second);
     assert.deepEqual([second.mode, second.value], ['percent', 10]);
@@ -100,7 +100,7 @@ test('a debt dated inside the plan offers its proceeds first', () => {
     const { plan, nodes: [mortgage, home] } = planWith('loan', 'real-estate');
     mortgage.params.start = '2027-06';
     const l = Plan.createLink(plan, mortgage.id, home.id);
-    assert.deepEqual([l.basis, l.mode], ['proceeds', 'rest']);
+    assert.deepEqual([l.basis, l.mode], ['proceeds', 'percent']);
     mortgage.params.start = null;
     Plan.fitRule(l, mortgage);
     assert.equal(l.basis, 'inflow');
@@ -342,7 +342,7 @@ test('an asset sends nothing until sold, and only a rental sends rent', () => {
     home.params.sold = '2030-01';
     assert.deepEqual(Plan.basesFor(home), ['sale']);
     const sale = Plan.createLink(plan, home.id, savings.id);
-    assert.deepEqual([sale.basis, sale.mode, sale.when], ['sale', 'rest', 'once']);
+    assert.deepEqual([sale.basis, sale.mode, sale.when], ['sale', 'percent', 'once']);
     plan.links.push(sale);
     assert.doesNotThrow(() => Plan.validatePlan(JSON.parse(JSON.stringify(plan))));
 });
@@ -452,8 +452,8 @@ test('moving a link to a basis where another already takes the rest shares inste
     home.params.rent = 1000;
     const first = Plan.createLink(plan, home.id, savings.id, 'sale');
     const second = Plan.createLink(plan, home.id, checking.id, 'rent');
+    first.mode = 'rest';
     plan.links.push(first, second);
-    assert.equal(first.mode, 'rest');
     assert.equal(Plan.changeBasis(plan, second, 'sale'), true);
     assert.equal(second.mode, 'percent');
     assert.doesNotThrow(() => Plan.validatePlan(JSON.parse(JSON.stringify(plan))));

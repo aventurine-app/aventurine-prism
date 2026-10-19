@@ -428,10 +428,24 @@
      *  price (Rent, a wedding) asks for that price. */
     function defaultRule(plan, from, to, basis = null) {
         const rule = startingRule(plan, from, to);
-        if (basis) return rule.basis === basis ? rule : ruleOnBasis(plan, from, to, basis);
+        if (basis) return rule.basis === basis ? preferPercent(rule, from, to) : ruleOnBasis(plan, from, to, basis);
         // The usual basis may already link this pair: take the next free one.
         const free = basesBetween(plan, from, to);
-        return free.length && !free.includes(rule.basis) ? ruleOnBasis(plan, from, to, free[0]) : rule;
+        return free.length && !free.includes(rule.basis) ? ruleOnBasis(plan, from, to, free[0]) : preferPercent(rule, from, to);
+    }
+
+    /** Whether a link claims all that is left: a rest link, or the 100% that
+     *  a new link starts with in its place. */
+    const takesRest = (l) => l.mode === 'rest' || (l.mode === 'percent' && Number(l.value) >= 100);
+
+    /** A new link starts on % wherever that is on offer. A rule that would
+     *  take the rest takes all (100%) instead, so the first link still gets
+     *  everything and later ones carve their share out of it. */
+    function preferPercent(rule, from, to) {
+        if (rule.mode === 'rest' && modesFor(from, rule.basis, to).includes('percent')) {
+            Object.assign(rule, { mode: 'percent', value: 100 });
+        }
+        return rule;
     }
 
     /** The rule for a link on a given basis. Only one link per source and
@@ -439,9 +453,9 @@
     function ruleOnBasis(plan, from, to, basis) {
         const rule = rawRuleOnBasis(plan, from, to, basis);
         const modes = modesFor(from, basis, to);
-        const taken = plan.links.some((l) => l.from === from.id && l.basis === basis && l.mode === 'rest');
+        const taken = plan.links.some((l) => l.from === from.id && l.basis === basis && takesRest(l));
         if (rule.mode === 'rest' && taken && modes.includes('percent')) Object.assign(rule, { mode: 'percent', value: 50 });
-        return rule;
+        return preferPercent(rule, from, to);
     }
 
     function rawRuleOnBasis(plan, from, to, basis) {
@@ -466,7 +480,7 @@
                 if (tp.inLink && modesFor(from, basis, to).includes('fixed')) {
                     return Object.assign(rule, priceRule(plan, tp.inLink));
                 }
-                return existing.some((l) => l.mode === 'rest') ? Object.assign(rule, { mode: 'percent', value: 25 }) : rule;
+                return existing.some(takesRest) ? Object.assign(rule, { mode: 'percent', value: 25 }) : rule;
         }
     }
 
@@ -489,7 +503,7 @@
         const fp = Catalog.preset(from.type);
         const tp = Catalog.preset(to.type);
         const existing = plan.links.filter((l) => l.from === from.id);
-        const hasRest = (basis) => existing.some((l) => l.basis === basis && l.mode === 'rest');
+        const hasRest = (basis) => existing.some((l) => l.basis === basis && takesRest(l));
 
         // A card pays for spending: a purchase, at that spending's usual price.
         if (fp.kind === 'card') {
