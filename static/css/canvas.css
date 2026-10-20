@@ -73,8 +73,6 @@
 [data-flow="earnings"]  { --flow: var(--flow-earnings); }
 [data-flow="balance"]   { --flow: var(--flow-balance); }
 [data-flow="charges"]   { --flow: var(--flow-charges); }
-[data-flow="sale"]      { --flow: var(--flow-sale); }
-[data-flow="rent"]      { --flow: var(--flow-rent); }
 
 .link-path {
     fill: none;
@@ -185,8 +183,7 @@
     isolation: isolate;
 }
 .node:hover { border-color: var(--stroke-strong); }
-/* The ring is drawn by ::after so it can wrap the whole module: the card plus
-   any docked loans and the strip under it (--extent is set by canvas.js). */
+/* The ring is drawn by ::after so it can wrap the whole card. */
 .node:focus-visible { outline: none; }
 .node:focus-visible::after,
 .node.is-selected::after {
@@ -196,7 +193,7 @@
     right: -4px;
     top: -4px;
     box-sizing: border-box;
-    height: calc(var(--extent, 112px) + 6px);
+    height: 118px;
     border: 2px solid var(--accent-ring);
     border-radius: calc(var(--radius-panel) + 4px);
     pointer-events: none;
@@ -290,7 +287,6 @@
 .node-bar > span { min-width: 2px; height: 100%; border-radius: 2px; background: var(--seg, var(--role-none)); }
 .node-bar > span[data-role="source"]   { --seg: var(--role-source); }
 .node-bar > span[data-role="account"]  { --seg: var(--role-account); }
-.node-bar > span[data-role="asset"]    { --seg: var(--role-asset); }
 .node-bar > span[data-role="expense"]  { --seg: var(--role-expense); }
 .node-bar > span[data-role="debt"]     { --seg: var(--role-debt); }
 .node-bar > span[data-role="modifier"] { --seg: var(--role-modifier); }
@@ -312,9 +308,7 @@
 }
 .node-flag .icon { width: 12px; height: 12px; }
 
-/* On a docked loan the badge sits inside the card, clear of the asset above. */
-.node.is-docked .node-flag,
-.node.is-docked .node-check { top: 4px; right: 4px; }
+.node-check { top: 4px; right: 4px; }
 
 .node-check {
     position: absolute;
@@ -361,73 +355,6 @@
 .node.is-selected .node-port { transform: scale(1.15); }
 .node-port--out:hover { transform: scale(1.35); }
 .node.is-target .node-port--in { background: var(--accent-ring); border-color: var(--accent-ring); transform: scale(1.4); }
-
-/* ── Docks under a card ─────────────────────────────────────────────────── */
-/* A loan secured by a property is a debt card snapped under it. Together they
-   read as ONE card: the top card's own outline is handed to a frame (::before)
-   that spans the whole stack, and the pieces inside are divided by a single line. A docked loan's
-   height (72px) is DOCK_H in plan.js; --extent is the stack's full height. */
-.node.has-docks {
-    border-color: transparent;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-    background: transparent;
-    box-shadow: none;
-}
-.node.has-docks::before {
-    content: '';
-    position: absolute;
-    left: -1px;
-    right: -1px;
-    top: -1px;
-    z-index: -1;
-    /* Pseudo-elements do not inherit the global border-box, so say it. */
-    box-sizing: border-box;
-    height: var(--extent, 112px);
-    border: var(--border-width) solid var(--border);
-    border-radius: var(--radius-panel);
-    background: var(--surface1);
-    box-shadow: var(--shadow-card);
-    pointer-events: none;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-.node.has-docks:hover::before { border-color: var(--stroke-strong); }
-.node.has-docks.is-target::before { border-color: var(--accent-ring); box-shadow: 0 0 0 4px var(--accent-wash), var(--shadow-card); }
-
-.node.is-docked {
-    --dock-tint: color-mix(in srgb, var(--role-debt) 6%, var(--surface1));
-    height: 72px;
-    padding: var(--space-8) var(--space-12);
-    gap: var(--space-4);
-    /* Side and top edges continue the frame's outline. The left one stays
-       transparent so the loan's accent bar, painted under it, reaches the
-       frame's outer edge. */
-    border: var(--border-width) solid var(--border);
-    border-left-color: transparent;
-    border-bottom-width: 0;
-    border-radius: 0;
-    box-shadow: none;
-    background:
-        linear-gradient(var(--role-debt), var(--role-debt)) left top / 4px 100% no-repeat border-box,
-        var(--dock-tint);
-    animation: dock-in 0.22s ease-out;
-}
-/* With no strip below it, the last loan of a full stack closes the frame. */
-.node.is-docked.ends-stack {
-    border-bottom-width: var(--border-width);
-    border-radius: 0 0 var(--radius-panel) var(--radius-panel);
-}
-/* A docked loan is an element inside its property's, not a second card on the
-   canvas: one outline, one place to click, nothing to overlap. */
-.node.is-docked.is-target { box-shadow: inset 0 0 0 2px var(--accent-ring); }
-/* Selecting a loan tints it; it has no ring of its own to float apart from the stack. */
-.node.is-docked.is-selected { --dock-tint: color-mix(in srgb, var(--role-debt) 16%, var(--surface1)); }
-.node.is-docked.is-selected::after,
-.node.is-docked:focus-visible::after { display: none; }
-.node.is-docked .node-bar { display: none; }
-.node.is-docked .node-head .role-tile { width: 28px; height: 28px; border-radius: 8px; }
-.node.is-docked .node-head .role-tile .icon { width: 18px; height: 18px; }
-@keyframes dock-in { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 -20px -20px -20px); } }
 
 /* A debt's input port is where a payment link lands. */
 .node[data-role="debt"] .node-port--in { cursor: pointer; }
@@ -510,5 +437,4 @@
 @media (prefers-reduced-motion: reduce) {
     .link-flow { animation: none; display: none; }
     .node, .node-port, .link-path, .link-label { transition: none; }
-    .node.is-docked { animation: none; }
 }

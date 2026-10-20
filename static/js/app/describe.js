@@ -24,8 +24,6 @@
         if (basis === 'balance') return 'balance';
         if (basis === 'proceeds') return 'loan proceeds';
         if (basis === 'charges') return 'purchases';
-        if (basis === 'sale') return 'sale proceeds';
-        if (basis === 'rent') return 'rent';
         switch (p.role) {
             case 'source':  return 'income';
             case 'account': return 'deposits';
@@ -36,8 +34,7 @@
     }
 
     const INFLOW_PORT = { source: 'Pay', account: 'Deposits', expense: 'Spending', modifier: 'Passes on', debt: 'Overpayment' };
-    const BASIS_PORT = { earnings: 'Earnings', balance: 'Balance', proceeds: 'Loan proceeds', charges: 'Purchases',
-        sale: 'Sale', rent: 'Rent' };
+    const BASIS_PORT = { earnings: 'Earnings', balance: 'Balance', proceeds: 'Loan proceeds', charges: 'Purchases' };
     const INFLOW_FLOW = { source: 'pay', account: 'deposits', expense: 'spending', modifier: 'passes', debt: 'overflow' };
 
     /** What a link carries out of a module, as a label: 'Deposits', 'Purchases'. */
@@ -71,7 +68,7 @@
     /** The label on a link's pill: '20%', '$1,800/mo', 'Rest', 'Above $20K'. */
     /** Bases whose money is split the moment it arrives, so their links have
      *  no timing of their own. */
-    const ON_ARRIVAL = new Set(['inflow', 'proceeds', 'sale', 'rent']);
+    const ON_ARRIVAL = new Set(['inflow', 'proceeds']);
 
     /** A 'due' link's amount: a card's whole balance, a loan's payment. */
     const dueWords = (to, short) => {
@@ -96,7 +93,6 @@
                 if (link.basis === 'balance') return `Everything${timingShort(link).replace('/mo', ' monthly')}`;
                 if (link.basis === 'earnings') return 'Rest of earnings';
                 if (link.basis === 'proceeds') return 'Proceeds';
-                if (link.basis === 'sale') return 'Sale';
                 return roleOf(from) === 'debt' ? 'Overpayment' : 'Rest';
         }
     }
@@ -153,11 +149,6 @@
                     : label === 'Yield' ? 'yield' : 'return';
                 return `${Fmt.pct(r)} ${word}`;
             }
-            case 'asset': {
-                const rate = r ? `${Fmt.pct(r, { sign: r > 0 })}/yr` : '';
-                const rent = node.params.rent && C.fieldsFor(p).includes('rent') ? `${compact(node.params.rent)} rent` : '';
-                return [rate, rent].filter(Boolean).join(' · ');
-            }
             case 'debt': {
                 const apr = r ? `${Fmt.pct(r)} APR` : '';
                 const backTo = p.kind === 'card' && Store.node(node.params.cashBackTo);
@@ -176,18 +167,16 @@
         }
     }
 
-    /** One line under a module's name: category plus its key setting. */
+    /** One line under a module's name: its key setting. */
     function nodeMeta(node) {
         const p = presetOf(node);
-        const cat = CATEGORY_NAME[p.cat];
         if (p.role === 'source') {
             const v = node.params;
-            if (v.per === 'once') return `${cat} · ${v.start ? P.ymLabel(v.start) : 'once'}`;
+            if (v.per === 'once') return v.start ? P.ymLabel(v.start) : 'once';
             const lump = v.per === 'year' && v.payMonth ? ` in ${P.MONTHS[v.payMonth - 1]}` : '';
-            return `${cat} · ${compact(v.amount)}${PER_WORD[v.per]}${lump}`;
+            return `${compact(v.amount)}${PER_WORD[v.per]}${lump}`;
         }
-        const badge = nodeBadge(node);
-        return badge ? `${cat} · ${badge}` : cat;
+        return nodeBadge(node);
     }
 
     function monthLabel(plan, k) {
@@ -230,18 +219,6 @@
                 return {
                     level: 'warn', select: { kind: 'node', id: w.nodeId },
                     text: `${nameOf(plan, w.nodeId)} is paid less than its minimum from ${m(w.month)}.`,
-                };
-            case 'price': {
-                const short = w.amount > 0;
-                return {
-                    level: 'warn', select: { kind: 'node', id: w.nodeId },
-                    text: `${nameOf(plan, w.nodeId)} is paid ${Fmt.money(Math.abs(w.amount), { compact: true })} ${short ? 'less' : 'more'} than its value in ${m(w.month)}.`,
-                };
-            }
-            case 'underwater':
-                return {
-                    level: 'warn', select: { kind: 'node', id: w.nodeId },
-                    text: `Selling ${nameOf(plan, w.nodeId)} in ${m(w.month)} leaves ${Fmt.money(w.amount, { compact: true })} still owed on its loans.`,
                 };
             case 'debt-growing':
                 return {

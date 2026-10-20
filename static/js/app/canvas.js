@@ -34,8 +34,7 @@
 
     // Mirrors .node in canvas.css; the input port sits on the vertical centre
     // and so does the output port.
-    const { NODE_W, NODE_H, DOCK_H } = P.GEOM;
-    const heightOf = (n) => (n.dock ? DOCK_H : NODE_H);
+    const { NODE_W, NODE_H } = P.GEOM;
     const GRID = 24;
     const SNAP = 8;
     const ZOOM_MIN = 0.3;
@@ -138,7 +137,7 @@
         let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
         for (const n of plan.nodes) {
             x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y);
-            x1 = Math.max(x1, n.x + NODE_W); y1 = Math.max(y1, n.y + heightOf(n));
+            x1 = Math.max(x1, n.x + NODE_W); y1 = Math.max(y1, n.y + NODE_H);
         }
         const pad = 48;
         const w = stage.clientWidth - pad * 2;
@@ -158,9 +157,9 @@
     const PARALLEL_GAP = 20;
 
     function outPort(n) {
-        return { x: n.x + NODE_W + 1, y: n.y + heightOf(n) / 2 };
+        return { x: n.x + NODE_W + 1, y: n.y + NODE_H / 2 };
     }
-    const inPort = (n) => ({ x: n.x - 1, y: n.y + heightOf(n) / 2 });
+    const inPort = (n) => ({ x: n.x - 1, y: n.y + NODE_H / 2 });
 
     /** A cubic from port to port. Forward links bow gently; a link that runs
      *  backward loops out past both cards so it never cuts through them. */
@@ -198,44 +197,10 @@
         return { value: net * perMonth, unit: '/mo' };
     }
 
-    /** What the loans docked under an asset owe at month k. */
-    function dockedOwed(docks, res, k) {
-        let owed = 0;
-        for (const d of docks) { const r = res.nodes[d.id]; if (r) owed += r.balance[k]; }
-        return owed;
-    }
-
-    /** An asset's state at month k: not yet bought, sold, or held. */
-    function assetPhase(node, k, start) {
-        const { bought, sold } = node.params;
-        if (sold && k > P.ymDiff(start, sold)) return 'sold';
-        if (bought && k <= P.ymDiff(start, bought)) return 'pending';
-        return 'held';
-    }
-
-    function figure(node, role, nr, vp, docks, res) {
+    function figure(node, role, nr, vp) {
         const out = { value: '', unit: '', delta: '', deltaDir: '', negative: false, done: false };
         if (!nr || !vp) return out;
-        const phase = role === 'asset' ? assetPhase(node, vp.k, res.start) : null;
-        if (phase === 'sold') {
-            out.value = 'Sold';
-            out.unit = P.ymLabel(node.params.sold);
-            out.done = true;
-        } else if (phase === 'pending') {
-            out.value = Fmt.money(0);
-            out.unit = `until ${P.ymLabel(node.params.bought)}`;
-        } else if (role === 'asset' && docks.length) {
-            // Equity: what the asset is worth, less what its docked loans owe.
-            const v = nr.balance[vp.k] - dockedOwed(docks, res, vp.k);
-            const d = v - (nr.balance[0] - dockedOwed(docks, res, 0));
-            out.value = Fmt.money(v, { compact: Math.abs(v) >= 1e6 });
-            out.unit = 'equity';
-            out.negative = v < 0;
-            if (Math.abs(d) >= 0.5) {
-                out.delta = Fmt.money(d, { sign: true, compact: Math.abs(d) >= 1e4 });
-                out.deltaDir = d > 0 ? 'up' : 'down';
-            }
-        } else if (role === 'account' || role === 'asset') {
+        if (role === 'account') {
             const v = nr.balance[vp.k];
             out.value = Fmt.money(v, { compact: v >= 1e6 });
             const d = v - nr.balance[0];
@@ -275,7 +240,7 @@
             const series = role === 'expense' || kind === 'group' ? nr.inflow : kind === 'skim' ? nr.consumed : nr.produced;
             const v = vp.all ? avg(series) : series[vp.month];
             out.value = (role === 'modifier' && kind === 'match' && v >= 0.5 ? '+' : '') + Fmt.money(v);
-            out.unit = vp.all ? 'avg/mo' : '/mo';
+            out.unit = '/mo';
         }
         return out;
     }
@@ -285,14 +250,6 @@
         if (!nr || !vp) return [];
         const upto = vp.all ? res.months : Math.max(1, vp.k);
         const sumTo = (arr) => { let s = 0; for (let i = 0; i < upto && i < arr.length; i++) s += arr[i]; return s; };
-        if (role === 'asset') {
-            const value = nr.balance[vp.k];
-            const owed = dockedOwed(P.docksOf(plan, node.id), res, vp.k);
-            if (owed > 0.005) {
-                return [{ role: 'source', w: Math.max(0, value - owed), label: 'Equity' }, { role: 'debt', w: Math.min(owed, value), label: 'Owed' }];
-            }
-            return value > 0.005 ? [{ role: 'asset', w: value, label: 'Value' }] : [];
-        }
         if (role === 'account') {
             const balance = nr.balance[vp.k];
             const growth = Math.max(0, sumTo(nr.earnings));
@@ -378,33 +335,18 @@
     function renderNode(node, view, plan, res, vp, sel) {
         const p = C.preset(node.type);
         const role = p.role;
-        const parent = node.dock ? Store.node(node.dock) : null;
-        if (parent) {
-            // A docked loan is a section of its property's card: placed inside
-            // it, below the card proper, and carried along with it.
-            const dy = node.y - parent.y;
-            put(view, 'pos', `dock:${dy}`, () => {
-                view.el.style.transform = 'none';
-                view.el.style.left = '-1px';
-                view.el.style.top = `${dy - 1}px`;
-            });
-        } else {
-            put(view, 'pos', `${node.x},${node.y}`, () => {
-                view.el.style.transform = `translate(${node.x}px, ${node.y}px)`;
-                view.el.style.left = '';
-                view.el.style.top = '';
-            });
-        }
+        put(view, 'pos', `${node.x},${node.y}`, () => {
+            view.el.style.transform = `translate(${node.x}px, ${node.y}px)`;
+        });
         put(view, 'role', role, (r) => {
             view.el.dataset.role = r;
             view.tile.dataset.role = r;
             view.inPort.hidden = !C.ROLES[r].hasIn;
         });
         const sends = P.basesFor(node).length > 0;
-        put(view, 'docked', !!node.dock, (on) => view.el.classList.toggle('is-docked', on));
-        put(view, 'ports', `${role}|${sends}|${node.dock ? 'd' : ''}`, () => {
+        put(view, 'ports', `${role}|${sends}`, () => {
             view.outs.innerHTML = sends
-                ? `<span class="node-port node-port--out" style="top:${Math.round(heightOf(node) / 2)}px" title="Drag to link" aria-hidden="true"></span>`
+                ? `<span class="node-port node-port--out" style="top:${NODE_H / 2}px" title="Drag to link" aria-hidden="true"></span>`
                 : '';
         });
         put(view, 'icon', P.iconOf(node), (icon) => { view.tile.innerHTML = iconSvg(icon); });
@@ -412,8 +354,7 @@
         put(view, 'meta', D.nodeMeta(node), (t) => { view.meta.textContent = t; });
 
         const nr = res && res.nodes[node.id];
-        const docks = role === 'asset' ? P.docksOf(plan, node.id) : NO_DOCKS;
-        const f = figure(node, role, nr, vp, docks, res);
+        const f = figure(node, role, nr, vp);
         put(view, 'value', f.value, (t) => { view.value.textContent = t; });
         put(view, 'neg', f.negative, (v) => view.value.classList.toggle('is-negative', v));
         put(view, 'unit', f.unit, (t) => { view.unit.textContent = t; });
@@ -452,36 +393,9 @@
             if (view.flag) view.el.appendChild(view.flag);
         });
 
-        renderFoot(node, view, docks, plan);
-
         put(view, 'sel', group.has(node.id) || !!(sel && sel.kind === 'node' && sel.id === node.id), (on) => view.el.classList.toggle('is-selected', on));
         const label = `${node.name}, ${C.ROLES[role].label}, ${f.value} ${f.unit}`.trim();
         put(view, 'aria', label, (t) => view.el.setAttribute('aria-label', t));
-    }
-
-    // ── Foot strips ────────────────────────────────────────────────────────
-    // What a card's element reaches below the card proper: the loans docked
-    // under a property. The selection ring wraps all of it.
-
-    const NO_DOCKS = [];
-
-    function renderFoot(node, view, docks, plan) {
-        let top = NODE_H;
-        let endsStack = false;
-        if (node.dock) {
-            // A docked loan has no strip of its own; when the stack is full the last
-            // loan closes the frame itself.
-            const stack = P.docksOf(plan, node.dock);
-            endsStack = stack.length >= P.MAX_DOCKS && stack[stack.length - 1].id === node.id;
-        } else if (P.loanOptions(node).length) {
-            top = NODE_H + docks.length * DOCK_H;
-        }
-        const extent = node.dock ? DOCK_H : top;
-        put(view, 'foot', `${extent}|${endsStack}|${docks.length}`, () => {
-            view.el.style.setProperty('--extent', `${extent}px`);
-            view.el.classList.toggle('ends-stack', endsStack);
-            view.el.classList.toggle('has-docks', docks.length > 0);
-        });
     }
 
     // ── Links ──────────────────────────────────────────────────────────────
@@ -587,13 +501,6 @@
                 nodeViews.set(node.id, view);
             }
             renderNode(node, view, plan, res, vp, sel);
-        }
-        // Docked loans live inside their property's element (one card, not two
-        // stacked); a loan that left its dock goes back on the canvas.
-        for (const node of plan.nodes) {
-            const view = nodeViews.get(node.id);
-            const holder = node.dock && nodeViews.get(node.dock) ? nodeViews.get(node.dock).el : nodeLayer;
-            if (view.el.parentElement !== holder) holder.appendChild(view.el);
         }
         for (const [id, view] of nodeViews) {
             if (!seenNodes.has(id)) {
@@ -757,7 +664,7 @@
         const p0 = { x: (Math.min(a.x, b.x) - cam.x) / cam.zoom, y: (Math.min(a.y, b.y) - cam.y) / cam.zoom };
         const p1 = { x: (Math.max(a.x, b.x) - cam.x) / cam.zoom, y: (Math.max(a.y, b.y) - cam.y) / cam.zoom };
         return Store.state.plan.nodes
-            .filter((n) => n.x < p1.x && n.x + NODE_W > p0.x && n.y < p1.y && n.y + heightOf(n) > p0.y)
+            .filter((n) => n.x < p1.x && n.x + NODE_W > p0.x && n.y < p1.y && n.y + NODE_H > p0.y)
             .map((n) => n.id);
     }
 
@@ -831,12 +738,7 @@
                 group.clear();
                 Store.select({ kind: 'node', id: node.id });
             }
-            // A loan docked under an asset moves with it: dragging either drags the stack.
-            const picked = inGroup ? [...group].map(Store.node).filter(Boolean) : [node];
-            const roots = new Map();
-            for (const n of picked) { const r = n.dock ? Store.node(n.dock) : n; if (r) roots.set(r.id, r); }
-            const members = [];
-            for (const r of roots.values()) members.push(r, ...P.docksOf(Store.state.plan, r.id));
+            const members = inGroup ? [...group].map(Store.node).filter(Boolean) : [node];
             const w = toWorld(e.clientX, e.clientY);
             action = {
                 type: 'drag', node, dx: w.x - node.x, dy: w.y - node.y, x0: e.clientX, y0: e.clientY, moved: false,
@@ -911,7 +813,7 @@
             stage.classList.remove('is-linking');
             if (ghost) { ghost.remove(); ghost = null; }
             if (e.type !== 'pointerup') return;
-            const target = resolveTarget(a.from, nodeAt(e.clientX, e.clientY));
+            const target = nodeAt(e.clientX, e.clientY);
             if (target && target.id !== a.from.id) {
                 const ok = P.canConnect(Store.state.plan, a.from.id, target.id);
                 if (ok.ok) Store.connect(a.from.id, target.id);
@@ -929,7 +831,7 @@
     stage.addEventListener('pointerup', endAction);
     stage.addEventListener('pointercancel', endAction);
 
-    const PLURAL = { account: 'accounts', asset: 'assets', expense: 'spending', debt: 'debts', modifier: 'modifiers' };
+    const PLURAL = { account: 'accounts', expense: 'spending', debt: 'debts', modifier: 'modifiers' };
 
     /** Why a link was refused, as what IS allowed. */
     function linkRuleText(fromRole, toRole) {
@@ -946,24 +848,9 @@
         return `${from.name} sends only to ${list}.`;
     }
 
-    /** A property with loans docked under it stands for them: dropping a link
-     *  on the property pays its first loan that can take it. The exception is
-     *  an asset still waiting to be paid for (bought inside the plan, nothing
-     *  linked in yet): the drop is its purchase. A loan's own strip always
-     *  takes the drop itself. */
-    function resolveTarget(from, target) {
-        if (!target || target.dock) return target;
-        const plan = Store.state.plan;
-        const awaitingPurchase = target.params.bought && !plan.links.some((l) => l.to === target.id)
-            && P.canConnect(plan, from.id, target.id).ok;
-        if (awaitingPurchase) return target;
-        const loan = P.docksOf(plan, target.id).find((d) => P.canConnect(plan, from.id, d.id).ok);
-        return loan || target;
-    }
-
     function moveGhost(e) {
         const a = outPort(action.from);
-        const target = resolveTarget(action.from, nodeAt(e.clientX, e.clientY));
+        const target = nodeAt(e.clientX, e.clientY);
         const valid = target && P.canConnect(Store.state.plan, action.from.id, target.id).ok;
         const b = valid ? inPort(target) : toWorld(e.clientX, e.clientY);
         ghost.setAttribute('d', curve(a, b).d);
@@ -974,11 +861,7 @@
         const plan = Store.state.plan;
         for (const [id, v] of nodeViews) {
             if (id === from.id) continue;
-            // A loan is dimmed or lit with the card it sits in.
-            if (Store.node(id).dock) { v.el.classList.remove('is-dim'); continue; }
-            const ok = P.canConnect(plan, from.id, id).ok
-                || P.docksOf(plan, id).some((d) => P.canConnect(plan, from.id, d.id).ok);
-            v.el.classList.toggle('is-dim', !ok);
+            v.el.classList.toggle('is-dim', !P.canConnect(plan, from.id, id).ok);
         }
     }
 
@@ -1026,12 +909,8 @@
         if (card) {
             const id = card.dataset.id;
             Store.select({ kind: 'node', id });
-            const docking = Store.dockChoices(id).map((c) => (c.kind === 'undock'
-                ? { label: `Detach from ${c.asset.name}`, icon: 'x', onSelect: () => Store.undockLoan(id) }
-                : { label: `Attach to ${c.asset.name}`, icon: 'link-simple', onSelect: () => Store.dockLoan(id, c.asset.id) }));
             UI.menu(at, [
                 { label: 'Link to…', icon: 'flow-arrow', onSelect: () => openAddPicker(e.clientX + 24, e.clientY, { from: Store.node(id) }) },
-                ...docking,
                 { label: 'Duplicate', icon: 'copy', onSelect: () => Store.duplicateNode(id) },
                 'sep',
                 { label: 'Delete', icon: 'trash', danger: true, onSelect: () => removeNode(id) },

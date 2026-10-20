@@ -96,13 +96,12 @@
     const topDown = (bands) => [...bands.filter((b) => b.sign > 0).reverse(), ...bands.filter((b) => b.sign < 0)];
 
     /** Account and debt bands in module order (never by size), folded into
-     *  an "other" band past each family's limit. Assets stack with the
-     *  accounts: both are what the plan holds. Each band wears its module's
-     *  role colour (accounts blue, assets lime, debts red); several of one
-     *  role take successive shades of it. */
+     *  an "other" band past each family's limit. Each band wears its module's
+     *  role colour (accounts blue, debts red); several of one role take
+     *  successive shades of it. */
     function worthBands(plan, res, def) {
         const bands = [];
-        const accounts = plan.nodes.filter((n) => ['account', 'asset'].includes(D.roleOf(n)));
+        const accounts = plan.nodes.filter((n) => D.roleOf(n) === 'account');
         const debts = plan.nodes.filter((n) => D.roleOf(n) === 'debt');
         const fold = (list, limit, sign, otherLabel) => {
             list.forEach((n, i) => {

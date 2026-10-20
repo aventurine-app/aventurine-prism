@@ -111,7 +111,6 @@
         const before = merge || gesture ? null : snapshot();
         const result = fn(state.plan);
         if (result === false) return result;
-        P.relayout(state.plan);
         if (before !== null && before !== snapshot()) pushUndo(before);
         coalesce = { key, at: now };
         changed();
@@ -135,7 +134,6 @@
     function gestureMove(fn) {
         if (!gesture) return;
         fn(state.plan);
-        P.relayout(state.plan);
         emit('plan');
     }
 
@@ -472,7 +470,6 @@
         edit((plan) => {
             copy = JSON.parse(JSON.stringify(src));
             copy.id = P.newId('n');
-            delete copy.dock;
             copy.x += 32;
             copy.y += 32;
             copy.name = `${src.name} copy`.slice(0, P.LIMITS.name);
@@ -482,13 +479,11 @@
         return copy;
     }
 
-    /** Copies of `ids` and the links among them, ready for pasteNodes. A copied
-     *  asset takes its docked loans along. */
+    /** Copies of `ids` and the links among them, ready for pasteNodes. */
     function copyNodes(ids) {
         const plan = state.plan;
         if (!plan) return null;
         const want = new Set(ids);
-        for (const id of ids) for (const d of P.docksOf(plan, id)) want.add(d.id);
         const nodes = plan.nodes.filter((n) => want.has(n.id));
         if (!nodes.length) return null;
         const links = plan.links.filter((l) => want.has(l.from) && want.has(l.to));
@@ -511,10 +506,6 @@
                 ids.set(src.id, n.id = P.newId('n'));
                 n.x += offset;
                 n.y += offset;
-                if (n.dock) {
-                    if (ids.has(n.dock)) n.dock = ids.get(n.dock);
-                    else delete n.dock;
-                }
                 plan.nodes.push(n);
                 made.push(n.id);
             }
@@ -537,30 +528,11 @@
 
     function removeNode(id) {
         edit((plan) => {
-            // Loans docked under a removed asset step out beside where it was.
-            for (const d of P.docksOf(plan, id)) P.undockLoan(plan, d.id);
             plan.nodes = plan.nodes.filter((n) => n.id !== id);
             plan.links = plan.links.filter((l) => l.from !== id && l.to !== id);
             // A card that paid its cash back into the removed account credits itself again.
             for (const n of plan.nodes) if (n.params && n.params.cashBackTo === id) n.params.cashBackTo = null;
         });
-    }
-
-    /** What a loan can do about docks: leave its asset, or attach to one. */
-    function dockChoices(id) {
-        const plan = state.plan;
-        const n = node(id);
-        if (!plan || !n) return [];
-        if (n.dock) return [{ kind: 'undock', asset: node(n.dock) }];
-        return plan.nodes.filter((a) => P.canDock(plan, id, a.id).ok).map((a) => ({ kind: 'dock', asset: a }));
-    }
-
-    function dockLoan(debtId, assetId) {
-        return !!edit((plan) => P.dockLoan(plan, debtId, assetId));
-    }
-
-    function undockLoan(debtId) {
-        edit((plan) => { P.undockLoan(plan, debtId); });
     }
 
     /** Link two modules on `basis`, or on the usual (else next free) one. */
@@ -586,6 +558,6 @@
         state, on, edit, beginGesture, gestureMove, endGesture, undo, redo, canUndo, canRedo,
         select, setScrub, setView, flush, boot, openPlan, newPlan, addPlan, duplicatePlan,
         renamePlan, deletePlan, reorderTabs, importPlan, exportPlan, planName, getPlan,
-        node, link, previewPreset, setPreviewIcon, addNode, duplicateNode, copyNodes, pasteNodes, removeNode, dockLoan, undockLoan, dockChoices, connect, removeLink, simulateNow,
+        node, link, previewPreset, setPreviewIcon, addNode, duplicateNode, copyNodes, pasteNodes, removeNode, connect, removeLink, simulateNow,
     };
 }());

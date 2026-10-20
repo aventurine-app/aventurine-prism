@@ -97,9 +97,9 @@ test('default rules: accounts send earnings to accounts and pay bills from the b
 });
 
 test('a debt dated inside the plan offers its proceeds first', () => {
-    const { plan, nodes: [mortgage, home] } = planWith('loan', 'real-estate');
+    const { plan, nodes: [mortgage, savings] } = planWith('loan', 'bank-account');
     mortgage.params.start = '2027-06';
-    const l = Plan.createLink(plan, mortgage.id, home.id);
+    const l = Plan.createLink(plan, mortgage.id, savings.id);
     assert.deepEqual([l.basis, l.mode], ['proceeds', 'percent']);
     mortgage.params.start = null;
     Plan.fitRule(l, mortgage);
@@ -258,110 +258,6 @@ test('validatePlan rejects a link on a basis that cannot reach the target', () =
     assert.throws(() => Plan.validatePlan(JSON.parse(JSON.stringify(plan))), /cannot take it/);
 });
 
-// ── Docks ────────────────────────────────────────────────────────────────────
-
-/** A new loan docked under `asset`, or null when it cannot dock there. */
-function addLoan(plan, asset, presetId) {
-    const loan = Plan.createNode(plan, presetId, asset.x, asset.y);
-    plan.nodes.push(loan);
-    if (Plan.dockLoan(plan, loan.id, asset.id)) return loan;
-    plan.nodes.pop();
-    return null;
-}
-
-test('a loan docks under an asset that can hold it, and follows it', () => {
-    const { plan, nodes: [home] } = planWith('real-estate');
-    home.x = 100;
-    home.y = 50;
-    const m = addLoan(plan, home.id, 'loan');
-    assert.equal(m.dock, home.id);
-    assert.deepEqual([m.x, m.y], [100, 50 + Plan.GEOM.NODE_H]);
-    const second = addLoan(plan, home.id, 'loan');
-    assert.equal(second.y, 50 + Plan.GEOM.NODE_H + Plan.GEOM.DOCK_H);
-    home.x = 400;
-    Plan.relayout(plan);
-    assert.equal(m.x, 400);
-    assert.ok(addLoan(plan, home.id, 'loan'));
-    assert.equal(addLoan(plan, home.id, 'loan'), null, 'an asset holds three loans at most');
-});
-
-test('only loans dock: not a card, not under an asset that holds none', () => {
-    const { plan, nodes: [home, salary, card, loan] } = planWith('real-estate', 'salary', 'credit-card', 'loan');
-    assert.equal(Plan.canDock(plan, loan.id, home.id).ok, true);
-    assert.equal(Plan.canDock(plan, card.id, home.id).reason, 'kind');
-    assert.equal(Plan.canDock(plan, loan.id, salary.id).reason, 'asset');
-    assert.equal(addLoan(plan, salary.id, 'loan'), null);
-});
-
-test('undocking sets the loan beside its asset and closes the gap', () => {
-    const { plan, nodes: [home] } = planWith('real-estate');
-    const a = addLoan(plan, home.id, 'loan');
-    const b = addLoan(plan, home.id, 'loan');
-    Plan.undockLoan(plan, a.id);
-    assert.equal(a.dock, undefined);
-    assert.equal(a.x, home.x + Plan.GEOM.NODE_W + 56);
-    assert.equal(b.y, home.y + Plan.GEOM.NODE_H);
-});
-
-test('validatePlan keeps docks, re-derives their place, and rejects a bad one', () => {
-    const { plan, nodes: [home] } = planWith('real-estate');
-    const m = addLoan(plan, home.id, 'loan');
-    m.x = 9999;
-    const v = Plan.validatePlan(JSON.parse(JSON.stringify(plan)));
-    const vm = v.nodes.find((n) => n.id === m.id);
-    assert.equal(vm.dock, home.id);
-    assert.equal(vm.x, home.x);
-    const bad = JSON.parse(JSON.stringify(plan));
-    bad.nodes.find((n) => n.id === m.id).dock = 'nope';
-    assert.throws(() => Plan.validatePlan(bad), /cannot hold it/);
-});
-
-test('a loan saved under an old type docks as a Loan', () => {
-    const { plan, nodes: [home, mortgage] } = planWith('real-estate', 'loan');
-    mortgage.type = 'mortgage';
-    mortgage.dock = home.id;
-    const v = Plan.validatePlan(JSON.parse(JSON.stringify(plan)));
-    const vm = v.nodes.find((n) => n.id === mortgage.id);
-    assert.equal(vm.type, 'loan');
-    assert.equal(vm.dock, home.id);
-    assert.equal(Plan.iconOf(vm), 'house-simple');
-});
-
-test('property saved as an account keeps its value', () => {
-    const { plan, nodes: [home] } = planWith('real-estate');
-    home.params = { balance: 350000, rate: 3 };
-    const v = Plan.validatePlan(JSON.parse(JSON.stringify(plan)));
-    assert.equal(v.nodes[0].params.value, 350000);
-    assert.equal(v.nodes[0].params.balance, undefined);
-});
-
-test('an asset sends nothing until sold, and only a rental sends rent', () => {
-    const { plan, nodes: [home, rental, savings] } = planWith('real-estate', 'rental-property', 'bank-account');
-    assert.deepEqual(Plan.basesFor(home), []);
-    assert.deepEqual(Plan.basesFor(rental), ['rent']);
-    home.params.sold = '2030-01';
-    assert.deepEqual(Plan.basesFor(home), ['sale']);
-    const sale = Plan.createLink(plan, home.id, savings.id);
-    assert.deepEqual([sale.basis, sale.mode, sale.when], ['sale', 'percent', 'once']);
-    plan.links.push(sale);
-    assert.doesNotThrow(() => Plan.validatePlan(JSON.parse(JSON.stringify(plan))));
-});
-
-test('paying for an asset defaults to its price on the month it is bought', () => {
-    const { plan, nodes: [savings, car] } = planWith('bank-account', 'vehicle');
-    car.params.value = 30000;
-    car.params.bought = '2027-03';
-    const l = Plan.createLink(plan, savings.id, car.id);
-    assert.deepEqual([l.basis, l.mode, l.value, l.when, l.date], ['balance', 'fixed', 30000, 'once', '2027-03']);
-});
-
-test('nothing withdraws from an asset: a home has no balance or earnings to send', () => {
-    const { plan, nodes: [home, checking] } = planWith('real-estate', 'bank-account');
-    assert.equal(Plan.canConnect(plan, home.id, checking.id, 'balance').ok, false);
-    assert.equal(Plan.canConnect(plan, home.id, checking.id, 'earnings').ok, false);
-    assert.equal(Plan.canConnect(plan, checking.id, home.id).ok, true);
-});
-
 test('a plan with two links between the same modules on different bases saves', () => {
     const { plan, nodes: [checking, savings] } = planWith('bank-account', 'bank-account');
     plan.links.push(Plan.createLink(plan, checking.id, savings.id, 'earnings'));
@@ -369,13 +265,27 @@ test('a plan with two links between the same modules on different bases saves', 
     assert.doesNotThrow(() => Plan.validatePlan(JSON.parse(JSON.stringify(plan))));
 });
 
-test('cloning a plan remaps docks to the new ids', () => {
-    const { plan, nodes: [home] } = planWith('real-estate');
-    const m = addLoan(plan, home.id, 'loan');
-    const copy = Plan.cloneWithNewIds(plan, 'Copy');
-    const loan = copy.nodes.find((n) => n.type === 'loan');
-    assert.ok(copy.nodes.some((n) => n.id === loan.dock));
-    assert.notEqual(loan.dock, m.dock);
+// ── Removed presets ──────────────────────────────────────────────────────────
+
+test('a saved plan that holds a removed module opens without it and its links', () => {
+    const { plan, nodes: [salary, savings, loan] } = planWith('salary', 'bank-account', 'loan');
+    const raw = JSON.parse(JSON.stringify(plan));
+    const gone = { id: 'n_home', type: 'real-estate', name: 'Home', x: 40, y: 40, dock: loan.id, params: { value: 300000, rate: 3 } };
+    loan.dock = gone.id;
+    raw.nodes = JSON.parse(JSON.stringify(plan.nodes));
+    raw.nodes.push(gone);
+    raw.links = [
+        { id: 'l_keep', from: salary.id, to: savings.id, mode: 'rest', value: 0, basis: 'inflow', when: 'monthly', month: 1, date: null, start: null, end: null, growth: 0 },
+        { id: 'l_gone', from: savings.id, to: gone.id, mode: 'fixed', value: 500, basis: 'balance', when: 'monthly', month: 1, date: null, start: null, end: null, growth: 0 },
+    ];
+    const v = Plan.validatePlan(raw);
+    assert.deepEqual(v.nodes.map((n) => n.id), [salary.id, savings.id, loan.id]);
+    assert.deepEqual(v.links.map((l) => l.id), ['l_keep']);
+    assert.equal(v.nodes.find((n) => n.id === loan.id).dock, undefined);
+    for (const type of ['real-estate', 'rental-property', 'vehicle', 'home', 'land']) {
+        assert.ok(Plan.REMOVED_TYPES.has(type), type);
+        assert.equal(Catalog.preset(type), null, type);
+    }
 });
 
 test('older plans lose spending links that are no longer allowed', () => {
@@ -447,14 +357,13 @@ test('moving a link to another basis restarts its amount, and keeps its window',
 });
 
 test('moving a link to a basis where another already takes the rest shares instead', () => {
-    const { plan, nodes: [home, savings, checking] } = planWith('rental-property', 'bank-account', 'bank-account');
-    home.params.sold = '2028-01';
-    home.params.rent = 1000;
-    const first = Plan.createLink(plan, home.id, savings.id, 'sale');
-    const second = Plan.createLink(plan, home.id, checking.id, 'rent');
+    const { plan, nodes: [loan, savings, checking] } = planWith('loan', 'bank-account', 'bank-account');
+    loan.params.start = '2028-01';
+    const first = Plan.createLink(plan, loan.id, savings.id, 'proceeds');
+    const second = Plan.createLink(plan, loan.id, checking.id, 'inflow');
     first.mode = 'rest';
     plan.links.push(first, second);
-    assert.equal(Plan.changeBasis(plan, second, 'sale'), true);
+    assert.equal(Plan.changeBasis(plan, second, 'proceeds'), true);
     assert.equal(second.mode, 'percent');
     assert.doesNotThrow(() => Plan.validatePlan(JSON.parse(JSON.stringify(plan))));
 });

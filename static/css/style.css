@@ -162,9 +162,6 @@
     --role-debt:     #b43933;
     --role-modifier: #8c5cb4;
 
-    /* Assets are a lime green: growth, and a hue no other role or port uses. */
-    --role-asset: #6f9a1a;
-
     /* Unassigned money: no role, so it takes the neutral that recedes. */
     --role-none: var(--color-base-500);
 
@@ -179,14 +176,12 @@
     --flow-earnings:  #1f9ea3;
     --flow-balance:   #5b63c9;
     --flow-charges:   #b9920f;
-    --flow-sale:      var(--role-account);
-    --flow-rent:      var(--role-source);
 
     /* Every link on the canvas, whatever it carries. */
     --link-line:      #7bbcf2;
 
     /* Net worth bands wear the colour of the module they stand for: accounts
-       blue, assets lime, debts red, as on the canvas. Several of one role are
+       blue, debts red, as on the canvas. Several of one role are
        told apart by alternating lighter and darker shades of it, in module
        order (outlook.js, worthBands). Mixed from the role colours, so a theme
        switch carries them along. Unassigned and folded "Other" bands are the
@@ -197,13 +192,6 @@
     --chart-account-4: color-mix(in srgb, var(--role-account) 45%, white);
     --chart-account-5: color-mix(in srgb, var(--role-account) 70%, black);
     --chart-account-6: color-mix(in srgb, var(--role-account) 28%, white);
-
-    --chart-asset-1: var(--role-asset);
-    --chart-asset-2: color-mix(in srgb, var(--role-asset) 70%, white);
-    --chart-asset-3: color-mix(in srgb, var(--role-asset) 85%, black);
-    --chart-asset-4: color-mix(in srgb, var(--role-asset) 45%, white);
-    --chart-asset-5: color-mix(in srgb, var(--role-asset) 70%, black);
-    --chart-asset-6: color-mix(in srgb, var(--role-asset) 28%, white);
 
     --chart-debt-1: var(--role-debt);
     --chart-debt-2: color-mix(in srgb, var(--role-debt) 70%, white);

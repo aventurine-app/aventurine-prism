@@ -231,7 +231,7 @@
 
     // ── Plan panel ─────────────────────────────────────────────────────────
 
-    const ROLE_ICON = { source: 'briefcase', account: 'piggy-bank', asset: 'house-line', expense: 'shopping-bag', debt: 'cardholder', modifier: 'sliders-horizontal' };
+    const ROLE_ICON = { source: 'briefcase', account: 'piggy-bank', expense: 'shopping-bag', debt: 'cardholder', modifier: 'sliders-horizontal' };
 
     function planPanel() {
         const nameB = bind('plan.name', {
@@ -302,8 +302,6 @@
         start: (p) => (p.role === 'debt' ? 'Already owed' : 'Plan start'),
         end: () => 'No end',
         lockUntil: () => 'Not locked',
-        bought: () => '--/--/--',
-        sold: () => '--/--/--',
     };
 
     function paramSpec(node, key) {
@@ -348,7 +346,6 @@
         return C.fieldsFor(p).filter((k) => {
             if (k === 'payMonth') return per === 'year';
             if (k === 'end') return per !== 'once';
-            if (k === 'sellCost') return !!node.params.sold;
             if (k === 'cashBackTo') return node.params.cashBack > 0;
             return true;
         });
@@ -404,7 +401,6 @@
 
         const outs = plan().links.filter((l) => l.from === id);
         const ins = plan().links.filter((l) => l.to === id);
-        // An asset that is not sold and collects no rent has nothing to send.
         const sends = C.ROLES[role].hasOut && P.basesFor(node).length ? section('Outgoing Rules',
             outs.length
                 ? `<ul class="insp-links">${outs.map((l) => linkRow(l, Store.node(l.to))).join('')}</ul>`
@@ -422,8 +418,7 @@
                 <div class="insp-titles">${nameB.html}</div>
             </div>
             <div class="insp-sub"><span class="chip" data-role="${role}">${esc(C.ROLES[role].label)}</span>
-                ${D.CATEGORY_NAME[p.cat] !== C.ROLES[role].label ? `<span class="chip">${esc(D.CATEGORY_NAME[p.cat])}</span>` : ''}
-                ${node.dock && Store.node(node.dock) ? `<button class="chip" type="button" data-select="node:${esc(node.dock)}">Secures ${esc(Store.node(node.dock).name)}</button>` : ''}</div>
+                ${D.CATEGORY_NAME[p.cat] !== C.ROLES[role].label ? `<span class="chip">${esc(D.CATEGORY_NAME[p.cat])}</span>` : ''}</div>
             ${settings}
             </div>
             ${receives}${sends}
@@ -468,19 +463,6 @@
                 + stat('Deposits', money(nr.totals.in))
                 + stat('Growth', money(nr.totals.earnings))
                 + (nr.totals.out > 0.5 ? stat('Sent on', money(nr.totals.out)) : '');
-        } else if (role === 'asset') {
-            const end = nr.balance[m];
-            const docks = P.docksOf(plan(), node.id);
-            const owed = docks.reduce((a, d) => a + (r.nodes[d.id] ? r.nodes[d.id].balance[m] : 0), 0);
-            const sold = r.milestones.find((x) => x.code === 'sold' && x.nodeId === node.id);
-            const change = nr.totals.earnings;
-            stats = (sold ? stat('Sold', D.monthLabel(plan(), sold.month)) + stat('Sale after costs', money(nr.totals.out)) : '')
-                + (owed > 0.5 ? stat('Equity at end', money(end - owed), end - owed >= 0 ? 'up' : 'down') + stat('Owed on loans', money(owed)) : '')
-                + (sold ? '' : stat('Value at end', money(end)))
-                + (nr.totals.in > 0.5 ? stat('Paid in', money(nr.totals.in)) : '')
-                + stat(change >= 0 ? 'Appreciation' : 'Depreciation', money(Math.abs(change)), change >= 0 ? 'up' : 'down')
-                + (nr.totals.produced > 0.5 ? stat('Rent collected', money(nr.totals.produced)) : '')
-                + (nr.totals.consumed > 0.5 ? stat('Selling costs', money(nr.totals.consumed)) : '');
         } else if (role === 'debt') {
             const paidOff = r.milestones.find((x) => x.code === 'paid-off' && x.nodeId === node.id);
             stats = (nr.payment ? stat('Payment', `${money(nr.payment)}/mo`) : '')

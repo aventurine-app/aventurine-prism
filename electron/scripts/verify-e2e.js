@@ -142,62 +142,6 @@ app.whenReady().then(async () => {
         const saved = JSON.parse(await js(`api('GET', '/api/plans/' + Store.state.activeId).then((r) => JSON.stringify(r.body.plan))`));
         check('the saved plan holds the edit', saved.nodes.length === 7 && saved.links.length === 8);
 
-        // A loan docks under a property, and the strips hang below the stack.
-        const dock = JSON.parse(await js(`(() => {
-            const home = Store.addNode('home', 2400, 0);
-            const loan = Store.addLoan(home.id, 'mortgage');
-            return JSON.stringify({ home: home.id, loan: loan.id, hx: home.x, hy: home.y, lx: loan.x, ly: loan.y });
-        })()`));
-        await sleep(150);
-        check('a mortgage docks directly under the home', dock.lx === dock.hx && dock.ly === dock.hy + 112);
-        check('the home draws a "+ debt" strip below its loan', await js(`(() => {
-            const f = document.querySelector('.node[data-id="${dock.home}"] .node-foot');
-            return !!f && !f.hidden && f.style.top === '184px' && !!f.querySelector('[data-foot="add"]');
-        })()`));
-        check('a loan nobody pays shows an empty payer dot', await js(`document.querySelector('.node[data-id="${dock.loan}"]').classList.contains('is-unpaid')`));
-        check('the home shows equity', (await js(`document.querySelector('.node[data-id="${dock.home}"] .node-unit').textContent`)) === 'equity');
-        await js(`Store.beginGesture(); Store.gestureMove((pl) => { pl.nodes.find((n) => n.id === '${dock.home}').x += 96; }); Store.endGesture();`);
-        check('moving the home moves its loan with it', (await js(`Store.node('${dock.loan}').x - Store.node('${dock.home}').x`)) === 0);
-        await js(`Store.undockLoan('${dock.loan}')`);
-        check('detaching sets the loan beside the home', (await js(`Store.node('${dock.loan}').dock === undefined && Store.node('${dock.loan}').x > Store.node('${dock.home}').x`)));
-        await js(`Store.dockLoan('${dock.loan}', '${dock.home}')`);
-        check('a loan can be attached again', (await js(`Store.node('${dock.loan}').dock`)) === dock.home);
-
-        // The selection ring wraps the whole module: card, docked loan and strip.
-        await js(`Store.select({ kind: 'node', id: '${dock.home}' })`);
-        await sleep(150);
-        check('the selection ring wraps a property with its loan and strip', await js(`(() => {
-            const el = document.querySelector('.node[data-id="${dock.home}"]');
-            return Math.round(parseFloat(getComputedStyle(el, '::after').height)) === 112 + 72 + 32 + 8;
-        })()`));
-        await js(`Store.select({ kind: 'node', id: '${dock.loan}' })`);
-        await sleep(150);
-        check('a selected docked loan has no ring of its own', await js(`(() => {
-            const el = document.querySelector('.node[data-id="${dock.loan}"]');
-            return getComputedStyle(el, '::after').display === 'none';
-        })()`));
-
-        // Dropping a link on a property pays the loan docked under it.
-        await js('Canvas.fit()');
-        await sleep(250);
-        check('dropping a link on a home pays its docked loan', await js(`(() => {
-            const stage = document.getElementById('stage');
-            const salary = Store.state.plan.nodes.find((n) => n.type === 'salary');
-            const port = document.querySelector('.node[data-id="' + salary.id + '"] .node-port--out');
-            const home = document.querySelector('.node[data-id="${dock.home}"]').getBoundingClientRect();
-            const p = port.getBoundingClientRect();
-            const fire = (el, type, x, y) => el.dispatchEvent(new PointerEvent(type, {
-                bubbles: true, cancelable: true, pointerId: 11, button: 0, clientX: x, clientY: y }));
-            fire(port, 'pointerdown', p.left + p.width / 2, p.top + p.height / 2);
-            fire(stage, 'pointermove', home.left + home.width / 2, home.top + 30);
-            fire(stage, 'pointerup', home.left + home.width / 2, home.top + 30);
-            const links = Store.state.plan.links;
-            return links.some((l) => l.from === salary.id && l.to === '${dock.loan}')
-                && !links.some((l) => l.from === salary.id && l.to === '${dock.home}');
-        })()`));
-        await sleep(100);
-        check('a paid loan loses its empty payer dot', await js(`!document.querySelector('.node[data-id="${dock.loan}"]').classList.contains('is-unpaid')`));
-
         // A spending module picks the card that pays for it.
         const spend = await js(`(() => {
             const sp = Store.state.plan.nodes.find((n) => n.type === 'rent') || Store.addNode('rent', 2400, 400);

@@ -9,19 +9,11 @@
 //   { id, name, version, createdAt, updatedAt,
 //     settings: { start: 'YYYY-MM', years, inflation },
 //     view:     { x, y, zoom },            canvas camera, restored on open
-//     nodes:    [{ id, type, name, x, y, params, icon?, dock? }],
+//     nodes:    [{ id, type, name, x, y, params, icon? }],
 //     links:    [{ id, from, to, mode, value, basis, when, month, date,
 //                  start, end, growth }] }
 //
 // `type` is a preset id from catalog.js, which fixes the node's role.
-//
-// DOCKS. A loan secured by something (a mortgage on a home, a car loan on a
-// vehicle) is a debt node with `dock` set to that asset's id. It is drawn
-// snapped under the asset, shares its outline, and moves with it: its own x
-// and y are derived from the asset by relayout(), never set by hand. Nothing
-// else about it changes: it is still a debt, payments still reach it by links,
-// and the asset's equity is its value minus what its docked loans owe. When
-// the asset is sold, its docked loans are paid off first from the sale.
 //
 // LINK RULES. Every link answers one question: how much of the money at its
 // source moves to its target. The answer is a mode and a basis:
@@ -41,9 +33,6 @@
 //          earnings  accounts only: this month's interest or returns
 //          balance   accounts only: the balance itself (withdrawals)
 //          proceeds  debts with a start date only: the amount borrowed
-//          sale      assets with a sold date only: what the sale leaves after
-//                    selling costs and the loans docked under it
-//          rent      rental assets only: the month's rent
 //          charges   credit cards only: a purchase the card pays for, charged
 //                    to its balance (fixed amounts, sent to spending)
 //
@@ -75,10 +64,13 @@
     // survivor, wearing the icon the old preset had and keeping the name it
     // was given. A preset that was only a name and icon on another's behaviour
     // (Freelance on Paycheck, Checking on Bank account) is retired this way.
-    // 'new-car' was spending; a bought car is now a Vehicle asset with a Bought
-    // date, but an old plan keeps its links valid as a one-off purchase.
     const retireInto = (type, icons) => Object.fromEntries(
         Object.entries(icons).map(([old, icon]) => [old, { type, icon }]));
+
+    // Presets removed outright. A saved plan that holds one opens without it:
+    // the module and its links are dropped, and a loan that was docked under it
+    // stands on its own.
+    const REMOVED_TYPES = new Set(['real-estate', 'rental-property', 'vehicle', 'home', 'land']);
 
     const RETIRED_TYPES = {
         ...retireInto('paycheck', { 'side-hustle': 'laptop', 'freelance': 'laptop', 'other-income': 'coins' }),
@@ -92,7 +84,6 @@
             'gold': 'diamond' }),
         ...retireInto('pretax-account', { '401k': 'plant', 'trad-ira': 'tree', 'hsa': 'heartbeat' }),
         ...retireInto('tax-free-account', { 'roth-ira': 'tree-evergreen', '529': 'graduation-cap' }),
-        ...retireInto('real-estate', { 'home': 'house-line', 'land': 'mountains' }),
         ...retireInto('expense', {
             'rent': 'house', 'groceries': 'basket', 'dining': 'fork-knife', 'utilities': 'lightning',
             'transport': 'bus', 'insurance': 'shield-check', 'healthcare': 'first-aid', 'subscriptions': 'repeat',
@@ -113,8 +104,7 @@
     // limits exist so a corrupt or hostile document cannot make the backend
     // write, or the engine walk, something unbounded.
     // Card geometry shared with canvas.js and canvas.css (change all together).
-    const GEOM = { NODE_W: 208, NODE_H: 112, DOCK_H: 72, DOCK_GAP: 0 };
-    const MAX_DOCKS = 3;
+    const GEOM = { NODE_W: 208, NODE_H: 112 };
 
     const LIMITS = {
         nodes:    400,
@@ -199,16 +189,12 @@
             earnings: ['percent', 'rest'],
             balance:  ['due', 'percent', 'fixed', 'rest', 'above'],
         },
-        asset:    {
-            sale:     ['percent', 'rest'],
-            rent:     ['percent', 'fixed', 'rest'],
-        },
     };
 
     /** The `when` values a rule offers. The first is the default. */
     function timingsFor(basis, mode) {
-        if (basis === 'proceeds' || basis === 'sale') return ['once'];
-        if (basis === 'rent' || mode === 'due') return ['monthly'];
+        if (basis === 'proceeds') return ['once'];
+        if (mode === 'due') return ['monthly'];
         if (basis === 'charges') return ['monthly', 'yearly', 'once'];
         if (basis === 'inflow') return mode === 'fixed' ? ['monthly', 'yearly', 'once'] : ['monthly'];
         if (basis === 'earnings') return ['monthly', 'yearly'];
@@ -218,18 +204,13 @@
 
     /** Bases a node offers to its outgoing links. A debt only borrows (and so
      *  only has proceeds to send) when it starts inside the plan. A credit card
-     *  only has purchases: it is paid, never paid onward. An asset sends
-     *  nothing until it has a sold date, and only a rental collects rent. */
+     *  only has purchases: it is paid, never paid onward. */
     function basesFor(node) {
         const p = Catalog.preset(node.type);
         if (!p) return [];
         const bases = Object.keys(RULES[p.role]);
         // Spending consumes what it receives; it sends nothing on.
         if (p.role === 'expense') return [];
-        if (p.role === 'asset') {
-            return bases.filter((b) => (b !== 'sale' || node.params.sold)
-                && (b !== 'rent' || Catalog.fieldsFor(p).includes('rent')));
-        }
         if (p.role !== 'debt') return bases;
         if (p.kind === 'card') return ['charges'];
         return bases.filter((b) => b !== 'charges' && (b !== 'proceeds' || node.params.start));
@@ -280,77 +261,7 @@
         return Catalog.LINK_TARGETS[roleOf(node)] || [];
     }
 
-    // ── Docks ──────────────────────────────────────────────────────────────
-
     const nodeById = (plan, id) => plan.nodes.find((n) => n.id === id);
-
-    /** The loans docked under an asset, top to bottom. */
-    function docksOf(plan, assetId) {
-        return plan.nodes.filter((n) => n.dock === assetId);
-    }
-
-    /** The debt presets an asset can hold as a secured loan (none for most). */
-    function loanOptions(node) {
-        const p = node && Catalog.preset(node.type);
-        return (p && p.loans) || [];
-    }
-
-    /** Whether `debt` may be docked under `asset`, and why not. */
-    function canDock(plan, debtId, assetId) {
-        const debt = nodeById(plan, debtId);
-        const asset = nodeById(plan, assetId);
-        if (!debt || !asset || debtId === assetId) return { ok: false, reason: 'missing' };
-        if (!loanOptions(asset).length || asset.dock) return { ok: false, reason: 'asset' };
-        if (!loanOptions(asset).includes(debt.type)) return { ok: false, reason: 'kind' };
-        if (debt.dock === assetId) return { ok: false, reason: 'docked' };
-        if (docksOf(plan, assetId).length >= MAX_DOCKS) return { ok: false, reason: 'full' };
-        return { ok: true };
-    }
-
-    /** Put every docked loan directly under its asset, in plan order. Run after
-     *  any change, so a loan's own x and y can never drift from its asset's. */
-    function relayout(plan) {
-        const slot = new Map();
-        for (const n of plan.nodes) {
-            if (!n.dock) continue;
-            const asset = nodeById(plan, n.dock);
-            if (!asset) { delete n.dock; continue; }
-            const i = slot.get(asset.id) || 0;
-            slot.set(asset.id, i + 1);
-            n.x = asset.x;
-            n.y = asset.y + GEOM.NODE_H + i * GEOM.DOCK_H;
-        }
-        return plan;
-    }
-
-    /** Dock an existing loan under an asset. */
-    function dockLoan(plan, debtId, assetId) {
-        if (!canDock(plan, debtId, assetId).ok) return false;
-        nodeById(plan, debtId).dock = assetId;
-        relayout(plan);
-        return true;
-    }
-
-    /** Pop a loan out of its dock, to stand beside the asset it secured. */
-    function undockLoan(plan, debtId) {
-        const node = nodeById(plan, debtId);
-        const asset = node && node.dock ? nodeById(plan, node.dock) : null;
-        if (!node) return;
-        delete node.dock;
-        if (asset) placeBeside(node, asset);
-        relayout(plan);
-    }
-
-    /** Stand a loan to the right of the asset it was docked under. */
-    function placeBeside(node, asset) {
-        node.x = asset.x + GEOM.NODE_W + 56;
-        node.y = asset.y;
-    }
-
-    /** What an asset is worth net of the loans docked under it. */
-    function equityOf(valueAt, loanBalancesAt) {
-        return valueAt - loanBalancesAt.reduce((a, b) => a + b, 0);
-    }
 
     /** The roles a module may send to on any of its bases. */
     function targetRoles(node) {
@@ -468,13 +379,11 @@
             case 'earnings':
                 return Object.assign(rule, { mode: 'percent', value: 50 });
             case 'balance': {
-                if (tp.role === 'asset') return Object.assign(rule, purchaseRule(plan, to));
                 if (tp.role === 'debt') return Object.assign(rule, { mode: 'due' });
                 if (tp.inLink) return Object.assign(rule, priceRule(plan, tp.inLink));
                 return Object.assign(rule, { mode: 'fixed', value: 500 });
             }
             case 'proceeds':
-            case 'sale':
                 return Object.assign(rule, { mode: 'rest', when: 'once' });
             default:
                 if (tp.inLink && modesFor(from, basis, to).includes('fixed')) {
@@ -489,13 +398,6 @@
     function priceRule(plan, buy) {
         return { mode: 'fixed', value: buy.value, when: buy.when, month: buy.month || 1,
             date: buy.relDate != null ? ymAdd(plan.settings.start, buy.relDate) : null };
-    }
-
-    /** Paying for an asset: its price, once, the month it is bought (or the
-     *  plan's first month when it has no date). */
-    function purchaseRule(plan, asset) {
-        return { mode: 'fixed', value: Number(asset.params.value) || 0, when: 'once',
-            date: asset.params.bought || plan.settings.start };
     }
 
     function startingRule(plan, from, to) {
@@ -518,25 +420,6 @@
             const basis = fp.role === 'account' ? 'balance' : 'inflow';
             if (RULES[fp.role][basis] && RULES[fp.role][basis].includes('fixed')) {
                 return Object.assign(rule, { basis }, priceRule(plan, tp.inLink));
-            }
-        }
-
-        // An asset sends its sale proceeds once sold, else its rent.
-        if (fp.role === 'asset') {
-            const bases = basesFor(from);
-            if (bases.includes('sale') && !existing.some((l) => l.basis === 'sale')) {
-                return Object.assign(rule, { basis: 'sale', mode: 'rest', when: 'once' });
-            }
-            return Object.assign(rule, { basis: bases.includes('rent') ? 'rent' : bases[0] || 'sale',
-                mode: hasRest('rent') ? 'percent' : 'rest', value: hasRest('rent') ? 25 : 0 });
-        }
-
-        // Buying an asset: income or an account pays its price on the day.
-        // A loan's proceeds take the debt branch below.
-        if (tp.role === 'asset' && fp.role !== 'debt') {
-            const basis = fp.role === 'account' ? 'balance' : 'inflow';
-            if (RULES[fp.role][basis] && RULES[fp.role][basis].includes('fixed')) {
-                return Object.assign(rule, { basis }, purchaseRule(plan, to));
             }
         }
 
@@ -664,11 +547,7 @@
         const out = {};
         const fields = Catalog.ROLE_FIELDS[p.role];
         const base = Catalog.defaultParams(p);
-        let src = isObj(raw) ? raw : {};
-        // Property was once an account, its value stored as `balance`.
-        if (p.role === 'asset' && src.value == null && typeof src.balance === 'number') {
-            src = { ...src, value: src.balance };
-        }
+        const src = isObj(raw) ? raw : {};
         for (const key of fields) {
             const spec = Catalog.FIELDS[key];
             const v = Object.prototype.hasOwnProperty.call(src, key) ? src[key] : base[key];
@@ -704,7 +583,7 @@
     }
 
     const MODES = ['percent', 'fixed', 'rest', 'above', 'due'];
-    const BASES = ['inflow', 'earnings', 'balance', 'proceeds', 'charges', 'sale', 'rent'];
+    const BASES = ['inflow', 'earnings', 'balance', 'proceeds', 'charges'];
     const WHENS = ['monthly', 'yearly', 'once'];
 
     function cleanLink(raw, nodesById, i) {
@@ -735,8 +614,8 @@
             fail(`link ${i} sends ${link.basis} to a module that cannot take it`);
         }
         if (link.mode === 'percent') link.value = Math.min(link.value, 100);
-        // Proceeds and a sale happen on the module's own date, not the link's.
-        if (link.when === 'once' && link.basis !== 'proceeds' && link.basis !== 'sale' && !link.date) {
+        // Proceeds happen on the module's own date, not the link's.
+        if (link.when === 'once' && link.basis !== 'proceeds' && !link.date) {
             fail(`link ${i} needs a date`);
         }
         return link;
@@ -772,8 +651,10 @@
         };
 
         const nodesById = new Map();
+        const removedIds = new Set();
         raw.nodes.forEach((n, i) => {
             if (!isObj(n)) fail(`module ${i} is malformed`);
+            if (REMOVED_TYPES.has(n.type)) { removedIds.add(n.id); return; }
             const retired = RETIRED_TYPES[n.type];
             const p = Catalog.preset(retired ? retired.type : n.type);
             if (!p) fail(`module ${i} has an unknown type`);
@@ -793,26 +674,6 @@
             nodesById.set(node.id, node);
             plan.nodes.push(node);
         });
-
-        // Docks: a loan secured by an asset, snapped under it.
-        raw.nodes.forEach((n, i) => {
-            if (n.dock == null) return;
-            const node = plan.nodes[i];
-            const asset = nodesById.get(n.dock);
-            const dp = Catalog.preset(node.type);
-            if (!asset || asset.dock || !loanOptions(asset).length || dp.role !== 'debt' || dp.kind === 'card') {
-                fail(`module ${i} is docked under something that cannot hold it`);
-            }
-            // A loan the asset no longer takes (an unsecured personal loan once
-            // could dock) stands on its own instead of failing the whole plan.
-            if (!loanOptions(asset).includes(node.type)) {
-                placeBeside(node, asset);
-                return;
-            }
-            node.dock = asset.id;
-            if (docksOf(plan, asset.id).length > MAX_DOCKS) fail(`module ${asset.id} holds too many loans`);
-        });
-        relayout(plan);
 
         // Cash back lands in an account that exists, else it credits the card.
         for (const n of plan.nodes) {
@@ -853,9 +714,10 @@
             if (roleOf(from) === 'expense') return true;
             return l.basis === 'charges' && Catalog.preset(to.type).kind === 'group';
         };
+        const touchesRemoved = (l) => isObj(l) && (removedIds.has(l.from) || removedIds.has(l.to));
         const seenLinks = new Set();
         const seenPairs = new Set();
-        raw.links.filter((l) => !sinkLink(l) && !retiredCardLink(l)).forEach((l, i) => {
+        raw.links.filter((l) => !sinkLink(l) && !retiredCardLink(l) && !touchesRemoved(l)).forEach((l, i) => {
             const link = cleanLink(l, nodesById, i);
             if (seenLinks.has(link.id)) fail(`link id ${link.id} is used twice`);
             const pair = `${link.from}>${link.to}>${link.basis}`;
@@ -891,7 +753,6 @@
             n.id = id;
         }
         for (const n of copy.nodes) {
-            if (n.dock) n.dock = map.get(n.dock);
             if (n.params && n.params.cashBackTo) n.params.cashBackTo = map.get(n.params.cashBackTo) || null;
         }
         for (const l of copy.links) {
@@ -903,11 +764,10 @@
     }
 
     return {
-        PLAN_VERSION, LIMITS, GEOM, MAX_DOCKS, MONTHS, RULES, PlanError,
+        PLAN_VERSION, LIMITS, GEOM, MONTHS, RULES, PlanError, REMOVED_TYPES,
         ymParse, ymFormat, ymNow, ymAdd, ymDiff, ymLabel,
         newId, roleOf, basesFor, modesFor, timingsFor, portTargets, targetRoles, basesBetween, changeBasis, loanPayment, isPretax,
         createPlan, createNode, iconOf, RETIRED_TYPES, canConnect, createLink, defaultRule, fitRule,
-        docksOf, loanOptions, canDock, relayout, dockLoan, undockLoan, equityOf,
         validatePlan, cloneWithNewIds,
     };
 }));
