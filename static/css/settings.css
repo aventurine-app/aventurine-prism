@@ -90,14 +90,6 @@
     font-size: var(--size-small);
     text-align: right;
 }
-.settings-path {
-    max-width: 100%;
-    color: var(--text-secondary);
-    font-family: var(--font-mono);
-    font-size: var(--size-small);
-    word-break: break-all;
-    user-select: text;
-}
 
 /* Theme swatches: background band, surface, accent strip. */
 .theme-options { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -178,61 +170,14 @@
 /* The currency symbol: three characters at most, centred. */
 .field-input--symbol { width: 72px; text-align: center; }
 
-/* Password form fields. */
-.pw-dialog { width: 420px; }
-.pw-field { display: flex; flex-direction: column; gap: 6px; }
-.pw-field + .pw-field { margin-top: var(--space-12); }
-.pw-label { color: var(--text-secondary); font-size: var(--size-small); font-weight: var(--weight-medium); }
-.pw-warning {
-    margin-top: var(--space-16);
-    padding: var(--space-12);
-    border-radius: var(--radius-control);
-    background: var(--warning-fill);
-    color: var(--text-primary);
-    font-size: var(--size-small);
-    line-height: var(--lh-normal);
-}
-.form-error { margin: var(--space-12) 0 0; color: var(--accent-negative); font-size: var(--size-small); }
-
-/* ── Updates (About tab) ────────────────────────────────────────────────── */
-
-.update-actions {
+/* The buttons at the end of a settings row. */
+.settings-actions {
     display: flex;
     flex-shrink: 0;
     gap: var(--space-8);
 }
 
-.update-error {
-    color: var(--accent-negative);
-    font-size: var(--size-small);
-    line-height: var(--lh-normal);
-}
-
-.update-progress {
-    width: 100%;
-    max-width: 320px;
-    height: 4px;
-    margin-top: var(--space-4);
-    border-radius: 2px;
-    background: var(--surface3);
-    overflow: hidden;
-}
-
-/* Scaled rather than sized, so each progress step is a compositor-only
-   change instead of a layout. */
-.update-progress-bar {
-    height: 100%;
-    background: var(--accent-primary);
-    transform: scaleX(0);
-    transform-origin: left center;
-    transition: transform 200ms ease;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .update-progress-bar { transition: none; }
-}
-
-/* ── Lock screen ────────────────────────────────────────────────────────── */
+/* ── Waiting screen (another tab is editing) ────────────────────────────────────────────────────────── */
 .lockscreen {
     position: fixed;
     inset: var(--titlebar-height) 0 0 0;
@@ -254,8 +199,4 @@
     box-shadow: var(--shadow-card);
 }
 .lock-title { margin: 0; font-size: var(--size-h2); font-weight: var(--weight-semibold); letter-spacing: var(--track-tight); }
-.lock-path { color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--size-micro); word-break: break-all; }
 .lock-note { margin: 0; color: var(--text-secondary); font-size: var(--size-small); line-height: var(--lh-normal); }
-.lock-form { display: flex; flex-direction: column; gap: var(--space-12); }
-.lock-form .field-input { height: 36px; font-size: var(--size-body); }
-.lock-form .button-primary { height: 36px; }

@@ -1,9 +1,6 @@
-<!-- Shared window chrome: the frameless title bar (with the plan tabs) and the
-     Preferences and password dialogs. Spliced into pages/*.html by the app://
-     protocol handler (electron/main.js) and by web/assemble.js. Markup only the
-     desktop app or only the web app can use is marked data-desktop-only or
-     data-web-only (style.css). The tabs are built by app/tabs.js,
-     Preferences is wired by shell/settings.js. -->
+<!-- Shared page chrome: the top bar (with the plan tabs) and the Preferences
+     dialog. Spliced into pages/index.html by scripts/assemble.js. The tabs are
+     built by app/tabs.js, Preferences is wired by shell/settings.js. -->
     <div class="titlebar">
         <div class="titlebar-lead">
             <img class="titlebar-icon" src="/static/icons/logo/logo.svg" alt="" draggable="false">
@@ -11,18 +8,6 @@
         <nav class="tabs" id="tabs" aria-label="Plans"></nav>
         <div class="titlebar-drag"></div>
         <div class="save-state" id="save-state" data-state="saved" aria-live="polite" hidden>Saved</div>
-        <div class="titlebar-controls" data-desktop-only>
-            <button class="titlebar-btn titlebar-btn-min" data-action="min" aria-label="Minimize" tabindex="-1">
-                <svg viewBox="0 0 12 12" fill="none"><path d="M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-            </button>
-            <button class="titlebar-btn titlebar-btn-max" data-action="max" aria-label="Maximize" tabindex="-1">
-                <svg class="tb-glyph-default" viewBox="0 0 12 12" fill="none"><rect x="2.5" y="2.5" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>
-                <svg class="tb-glyph-mac" viewBox="0 0 12 12" fill="none"><path d="M6 2.5v7M2.5 6h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-            </button>
-            <button class="titlebar-btn titlebar-btn-close" data-action="close" aria-label="Close" tabindex="-1">
-                <svg viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-            </button>
-        </div>
     </div>
 
     <div class="modal-overlay" id="prefs" hidden>
@@ -65,16 +50,6 @@
                                 <button class="seg-switch-btn" type="button" data-value="off">Off</button>
                             </div>
                         </div>
-                        <div class="settings-row" data-desktop-only>
-                            <div class="settings-row-name">Interface Zoom</div>
-                            <select class="field-select" data-pref="ui-zoom" aria-label="Interface zoom">
-                                <option value="0.8">80%</option>
-                                <option value="0.9">90%</option>
-                                <option value="1">100%</option>
-                                <option value="1.1">110%</option>
-                                <option value="1.25">125%</option>
-                            </select>
-                        </div>
                     </div>
                 </div>
 
@@ -103,7 +78,7 @@
                 </div>
 
                 <div class="settings-panel" role="tabpanel" data-panel="storage" hidden>
-                    <div class="settings-section" data-web-only>
+                    <div class="settings-section">
                         <div class="settings-section-header eyebrow">Browser Storage</div>
                         <div class="settings-card">
                             <div class="settings-row settings-row--stack">
@@ -115,43 +90,9 @@
                                     <div class="settings-row-name">Storage Protection</div>
                                     <div class="settings-row-desc" data-persist-desc role="status" aria-live="polite">Checking…</div>
                                 </div>
-                                <div class="update-actions">
+                                <div class="settings-actions">
                                     <button class="button-secondary" type="button" data-persist-request hidden>Keep My Plans</button>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="settings-section" data-desktop-only>
-                        <div class="settings-section-header eyebrow">Plans File</div>
-                        <div class="settings-card">
-                            <div class="settings-row settings-row--stack">
-                                <div class="settings-row-name">Location</div>
-                                <div class="settings-path" data-file-path>—</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="settings-section" data-desktop-only>
-                        <div class="settings-section-header eyebrow">Encryption</div>
-                        <div class="settings-card">
-                            <div class="settings-row">
-                                <div class="settings-row-name">Status</div>
-                                <div class="settings-value" data-enc-status>—</div>
-                            </div>
-                            <div class="settings-row" data-enc-row="encrypt" hidden>
-                                <div class="settings-row-name">Encrypt Plans File</div>
-                                <button class="button-secondary" type="button" data-enc-action="encrypt">Encrypt…</button>
-                            </div>
-                            <div class="settings-row" data-enc-row="change" hidden>
-                                <div class="settings-row-name">Change Password</div>
-                                <button class="button-secondary" type="button" data-enc-action="change">Change…</button>
-                            </div>
-                            <div class="settings-row" data-enc-row="lock" hidden>
-                                <div class="settings-row-name">Lock Now</div>
-                                <button class="button-secondary" type="button" data-enc-lock>Lock</button>
-                            </div>
-                            <div class="settings-row" data-enc-row="decrypt" hidden>
-                                <div class="settings-row-name">Remove Encryption</div>
-                                <button class="button-danger" type="button" data-enc-action="decrypt">Remove…</button>
                             </div>
                         </div>
                     </div>
@@ -168,80 +109,8 @@
                         </div>
                     </div>
 
-                    <!-- Updates. Driven by shell/updates.js against the
-                         electronUpdater bridge (electron/updater.js). Hidden
-                         until that bridge answers, so a plain browser never
-                         shows controls that can't work. The status line and the
-                         one action button beside it change with the update
-                         state; the description under Automatic Updates changes
-                         with what this install can do (updatePolicy.js,
-                         resolveUpdateMode). -->
-                    <div class="settings-section" data-updates-section hidden>
-                        <div class="settings-section-header eyebrow">Updates</div>
-                        <div class="settings-card">
-                            <div class="settings-row">
-                                <div class="settings-row-label">
-                                    <div class="settings-row-name" id="update-auto-name">Automatic Updates</div>
-                                    <div class="settings-row-desc" data-update-auto-desc></div>
-                                </div>
-                                <div class="seg-switch" data-update-auto role="group" aria-labelledby="update-auto-name">
-                                    <button class="seg-switch-btn" type="button" data-value="on">On</button>
-                                    <button class="seg-switch-btn" type="button" data-value="off">Off</button>
-                                </div>
-                            </div>
-                            <div class="settings-row">
-                                <div class="settings-row-label">
-                                    <div class="settings-row-name">Software Update</div>
-                                    <div class="settings-row-desc" data-update-status role="status" aria-live="polite"></div>
-                                    <div class="update-progress" data-update-progress role="progressbar"
-                                         aria-label="Download progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
-                                        <div class="update-progress-bar" data-update-progress-bar></div>
-                                    </div>
-                                    <div class="update-error" data-update-error role="alert" hidden></div>
-                                </div>
-                                <div class="update-actions">
-                                    <button class="button-secondary" type="button" data-update-action="check">Check for Updates</button>
-                                    <button class="button-primary" type="button" data-update-action="download" hidden>Download</button>
-                                    <button class="button-primary" type="button" data-update-action="install" hidden>Restart &amp; Install</button>
-                                    <button class="button-primary" type="button" data-update-action="open-download-page" hidden>Open Download Page</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
-            </div>
-        </div>
-    </div>
-
-    <!-- One encryption action at a time; shell/settings.js shows only the
-         fields that action needs. The password is never stored: losing it
-         loses the file's contents. -->
-    <div class="modal-overlay" id="pw-modal" hidden>
-        <div class="modal pw-dialog" role="dialog" aria-modal="true" aria-labelledby="pw-title">
-            <div class="modal-header">
-                <h2 class="modal-title" id="pw-title">Encryption</h2>
-                <button class="modal-close" type="button" data-close aria-label="Close">×</button>
-            </div>
-            <form class="modal-body" id="pw-form" autocomplete="off">
-                <label class="pw-field" data-pw="current" hidden>
-                    <span class="pw-label">Current password</span>
-                    <input class="field-input" type="password" name="current" autocomplete="current-password">
-                </label>
-                <label class="pw-field" data-pw="new" hidden>
-                    <span class="pw-label">New password</span>
-                    <input class="field-input" type="password" name="password" autocomplete="new-password">
-                </label>
-                <label class="pw-field" data-pw="confirm" hidden>
-                    <span class="pw-label">Confirm new password</span>
-                    <input class="field-input" type="password" name="confirm" autocomplete="new-password">
-                </label>
-                <div class="pw-warning" data-pw="warning" hidden>If you lose this password, the plans file cannot be opened and its plans cannot be recovered.</div>
-                <p class="form-error" data-pw-error hidden></p>
-            </form>
-            <div class="modal-footer">
-                <button class="button-secondary" type="button" data-close>Cancel</button>
-                <button class="button-primary" type="submit" form="pw-form" data-pw-submit>Apply</button>
             </div>
         </div>
     </div>

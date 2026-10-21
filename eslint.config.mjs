@@ -36,7 +36,7 @@ const appGlobals = {
     Inspector: 'readonly',
     Chart: 'readonly',
     Outlook: 'readonly',
-    Lock: 'readonly',
+    OtherTab: 'readonly',
     // web/ (the browser backend; each file adds its parts to this one object)
     PrismWeb: 'readonly',
     // the data bridge installed by static/js/web/boot.js

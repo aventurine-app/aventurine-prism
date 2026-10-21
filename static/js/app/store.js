@@ -271,10 +271,6 @@
                 dirty.add(id);
                 lastError = r.body && r.body.error;
                 console.error('[store] save failed', r.status, r.body);
-                if (r.status === 423) {
-                    location.reload();
-                    return false;
-                }
             }
             setSave(ok ? 'saved' : 'error');
             if (!ok) {
@@ -429,12 +425,12 @@
     }
 
     /** Load the tabs and open the active plan. A fresh install gets a blank
-     *  plan, which opens on the empty-plan card. Returns false while the file is locked. */
+     *  plan, which opens on the empty-plan card. Returns false while another tab is editing. */
     async function boot() {
-        const st = await api('GET', '/api/file/status');
+        const st = await api('GET', '/api/status');
         if (!st.ok) throw new Error('backend unavailable');
         state.status = st.body;
-        if (st.body.locked) return false;
+        if (st.body.busy) return false;
         const r = await api('GET', '/api/plans');
         if (!r.ok) throw new Error(r.body.error || 'plans could not be listed');
         state.tabs = r.body.order.slice();

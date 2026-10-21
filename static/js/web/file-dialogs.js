@@ -1,8 +1,7 @@
 'use strict';
 
 // ─── file-dialogs.js ────────────────────────────────────────────────────────
-// Saving and picking plan files in the browser. The desktop app used native
-// dialogs; here:
+// Saving and picking plan files in the browser:
 //
 //   save   a "save as" dialog where the browser has one (Chrome, Edge), else
 //          an ordinary download

@@ -1,26 +1,22 @@
 'use strict';
 
 // ─── boot.js ────────────────────────────────────────────────────────────────
-// Puts the browser backend where the desktop app's preload bridge used to be:
-// window.citrineApi.request(method, url, body), which core/api.js calls. Order
-// of events:
+// Installs window.citrineApi.request(method, url, body), which core/api.js
+// calls for everything the app reads or saves. Order of events:
 //
 //   1. claim the editing-tab lock (session.js)
 //   2. once held, open IndexedDB and load the plans (storage.js, workspace.js)
 //   3. answer requests through the router (backend.js)
 //
 // Until the plans are loaded, requests wait. Two answers are given early:
-//   GET /api/file/status  says "busy" if another tab is editing, so the app can
-//                         show its waiting screen instead of hanging
-//   GET /api/file/ready   waits until this tab has the plans, for that screen
-//
-// Inside the desktop shell the bridge already exists and none of this runs.
+//   GET /api/status   says "busy" if another tab is editing, so the app can
+//                     show its waiting screen instead of hanging
+//   GET /api/ready    waits until this tab has the plans, for that screen
 
 (function () {
-    if (window.citrineApi) return;
     const { claimEditor, openIndexedDb, createWorkspace, createBackend, fileDialogs } = window.PrismWeb;
 
-    const BUSY_STATUS = { storage: 'browser', encrypted: false, locked: true, reason: 'busy' };
+    const BUSY_STATUS = { storage: 'browser', busy: true };
     const UNAVAILABLE = { status: 503, body: { ok: false, error: 'storage unavailable' } };
 
     let backend = null;
@@ -41,12 +37,12 @@
     /** Requests that arrive before the plans are loaded. */
     async function whenReady(method, url, body) {
         const claim = await claimed;
-        if (method === 'GET' && url === '/api/file/status' && !claim.owned) {
+        if (method === 'GET' && url === '/api/status' && !claim.owned) {
             return { status: 200, body: BUSY_STATUS };
         }
         try {
             const loaded = await ready;
-            return loaded.dispatch(method, url === '/api/file/ready' ? '/api/file/status' : url, body);
+            return loaded.dispatch(method, url === '/api/ready' ? '/api/status' : url, body);
         } catch {
             return UNAVAILABLE;
         }

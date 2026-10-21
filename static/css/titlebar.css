@@ -1,7 +1,6 @@
 /* ============================================================================
-   titlebar.css — the frameless window's title bar, which also holds the plan
-   tabs. Same bar as Aventurine (surface3, 40px, platform-dressed window
-   controls); the centre carries the tabs instead of a file name.
+   titlebar.css — the bar across the top of the app: the logo, the plan tabs and
+   the save state. Same bar as Aventurine (surface3, 40px).
    ============================================================================ */
 
 :root { --titlebar-frost: rgba(255, 255, 255, 0.60); }
@@ -39,7 +38,6 @@ html[data-theme="dark"] { --titlebar-frost: rgba(255, 255, 255, 0.10); }
     overflow: hidden;
     white-space: nowrap;
     transition: width 0.18s ease;
-    -webkit-app-region: drag;
 }
 
 .titlebar-icon {
@@ -54,7 +52,6 @@ html[data-theme="dark"] { --titlebar-frost: rgba(255, 255, 255, 0.10); }
 .titlebar-drag {
     flex: 1;
     min-width: var(--space-48);
-    -webkit-app-region: drag;
 }
 
 /* ── Plan tabs ──────────────────────────────────────────────────────────── */
@@ -69,7 +66,6 @@ html[data-theme="dark"] { --titlebar-frost: rgba(255, 255, 255, 0.10); }
     margin-left: calc(-1 * var(--border-width));
     position: relative;
     z-index: 1;
-    -webkit-app-region: no-drag;
 }
 
 .tabs-list {
@@ -193,7 +189,6 @@ html[data-theme="dark"] { --titlebar-frost: rgba(255, 255, 255, 0.10); }
     font-weight: var(--weight-semibold);
     letter-spacing: var(--track-wide);
     white-space: nowrap;
-    -webkit-app-region: no-drag;
 }
 .save-state::before {
     content: '';
@@ -206,68 +201,6 @@ html[data-theme="dark"] { --titlebar-frost: rgba(255, 255, 255, 0.10); }
 .save-state[data-state="error"] { color: var(--accent-negative); }
 .save-state[data-state="error"]::before { background: var(--accent-negative); }
 
-/* ── Window controls (Windows/Linux default; macOS traffic lights below) ── */
-.titlebar-controls {
-    display: flex;
-    align-items: stretch;
-    -webkit-app-region: no-drag;
-}
-
-.titlebar-btn {
-    width: 46px;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    border: none;
-    border-radius: 0;
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: background-color 120ms ease, color 120ms ease;
-}
-.titlebar-btn svg { width: 10px; height: 10px; }
-.titlebar-btn:hover { background: var(--titlebar-frost); color: var(--text-primary); }
-.titlebar-btn-close:hover { background: #c42b1c; color: #fff; }
-.titlebar-btn:focus { outline: none; }
-.titlebar-btn:focus-visible { box-shadow: inset 0 0 0 1px var(--stroke-strong); }
-
-.tb-glyph-mac { display: none; }
-
-/* The traffic lights sit over the left of the lead block, so they do not push
-   the tabs off the canvas edge. The icon steps right to clear them. */
-[data-platform="mac"] { --mac-controls-width: 72px; }
-[data-platform="mac"] .titlebar-controls {
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: var(--mac-controls-width);
-    align-items: center;
-    gap: 8px;
-    padding: 0 8px 0 12px;
-}
-[data-platform="mac"] .titlebar-icon { margin-left: calc(var(--mac-controls-width) + var(--space-12)); }
-[data-platform="mac"] .titlebar-btn {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.2);
-    color: rgba(0, 0, 0, 0.55);
-}
-[data-platform="mac"] .titlebar-btn-close { background: #ff5f57; order: 0; }
-[data-platform="mac"] .titlebar-btn-min   { background: #febc2e; order: 1; }
-[data-platform="mac"] .titlebar-btn-max   { background: #28c840; order: 2; }
-[data-platform="mac"] .titlebar-btn:hover { color: rgba(0, 0, 0, 0.55); }
-[data-platform="mac"] .titlebar-btn-close:hover { background: #ff5f57; }
-[data-platform="mac"] .titlebar-btn-min:hover   { background: #febc2e; }
-[data-platform="mac"] .titlebar-btn-max:hover   { background: #28c840; }
-[data-platform="mac"] .titlebar-btn svg { width: 7px; height: 7px; opacity: 0; transition: opacity 100ms ease; }
-[data-platform="mac"] .titlebar-controls:hover .titlebar-btn svg { opacity: 1; }
-[data-platform="mac"] .tb-glyph-default { display: none; }
-[data-platform="mac"] .tb-glyph-mac { display: block; }
-
 @media (prefers-reduced-motion: reduce) {
-    .tab, .tab-menu, .tab-new, .titlebar-btn { transition: none; }
+    .tab, .tab-menu, .tab-new { transition: none; }
 }

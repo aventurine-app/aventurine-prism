@@ -3,7 +3,7 @@
 // ─── api-error.js ───────────────────────────────────────────────────────────
 // The failure type of the browser backend (static/js/web/). A handler throws
 // ApiError(message, status) and backend.js turns it into a { status, body }
-// answer, the same shape the desktop backend's router produced.
+// answer.
 //
 // Dual-environment: window.PrismWeb.ApiError in the page, CommonJS for tests.
 

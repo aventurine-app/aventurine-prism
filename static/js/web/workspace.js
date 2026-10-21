@@ -2,8 +2,8 @@
 
 // ─── workspace.js ───────────────────────────────────────────────────────────
 // The user's plans, kept in memory and mirrored to browser storage. It answers
-// the same questions the desktop backend's workspace did (list, get, add, put,
-// delete, reorder), so the app's code does not know where plans live.
+// the app's questions about them (list, get, add, put, delete, reorder), so the
+// app's code does not know where plans live.
 //
 // Reads are synchronous and come from memory. Writes are async functions: they
 // validate and update memory right away, start the storage write in the same
@@ -116,7 +116,7 @@
         }
 
         function status() {
-            return { storage: 'browser', encrypted: false, locked: false, plans: plans.size, quarantined: unreadable };
+            return { storage: 'browser', busy: false, plans: plans.size, quarantined: unreadable };
         }
 
         // ── Writes ─────────────────────────────────────────────────────────

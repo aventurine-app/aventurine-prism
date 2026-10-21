@@ -7,7 +7,7 @@
 // as the page closes, the one-editing-tab rule, export and import, and the
 // Storage preferences. Exits 0 on PASS.
 //
-//   npm run web:verify        (from electron/)
+//   npm run verify
 
 const fs = require('fs');
 const os = require('os');
@@ -58,9 +58,7 @@ async function main(url) {
     const { js } = first;
     check('the app boots', await until(js, appReady));
 
-    check('it runs as the web shell, with no desktop bridge',
-        await js('document.documentElement.dataset.shell === "web" && !window.electronWindow && !!window.citrineApi'));
-    check('window controls are hidden', await js('getComputedStyle(document.querySelector(".titlebar-controls")).display === "none"'));
+    check('the data bridge is installed', await js('!!window.citrineApi'));
     check('a first visit opens one blank plan', await js('Store.state.tabs.length === 1 && Store.state.plan.nodes.length === 0'));
 
     // Build something, save it, and look inside IndexedDB itself.
@@ -112,12 +110,8 @@ async function main(url) {
 
     // Preferences → Storage speaks of the browser, not a file.
     await js('Settings.open("storage")');
-    check('the Storage tab shows browser storage and no plans file',
-        await until(js, `document.querySelector('[data-persist-desc]').textContent !== 'Checking…'`)
-        && await js(`getComputedStyle(document.querySelector('[data-panel="storage"] [data-web-only]')).display !== 'none'
-            && getComputedStyle(document.querySelector('[data-panel="storage"] [data-desktop-only]')).display === 'none'`));
-    check('the zoom row is hidden (the browser has its own zoom)',
-        await js(`getComputedStyle(document.querySelector('[data-pref="ui-zoom"]').closest('.settings-row')).display === 'none'`));
+    check('the Storage tab says whether the browser will keep the plans',
+        await until(js, `document.querySelector('[data-persist-desc]').textContent !== 'Checking…'`));
     await js('Settings.open("about"); true');
     check('About shows the build version',
         await until(js, `document.querySelector('[data-app-version]').textContent === ${JSON.stringify(require('./assemble').readVersion())}`));

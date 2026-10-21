@@ -1,9 +1,9 @@
 'use strict';
 
 // ─── api.js ─────────────────────────────────────────────────────────────────
-// The one data seam. Every call to the backend goes through api(), which
-// crosses IPC (window.citrineApi from preload.js) to the in-process backend.
-// No HTTP, no socket, no port.
+// The one data seam. Every call to the backend goes through api(), which hands
+// it to window.citrineApi (installed by js/web/boot.js), the browser-side
+// backend that keeps plans in IndexedDB. There is no network request.
 //
 //   const r = await api('GET', '/api/plans');
 //   if (r.ok) use(r.body); else show(r.body.error);

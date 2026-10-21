@@ -14,7 +14,7 @@
     "build": "node scripts/build.js",
     "test": "node --test",
     "lint": "eslint .",
-    "verify": "electron scripts/verify.js",
+    "verify": "electron scripts/verify.js --no-sandbox",
     "icons:ui": "node scripts/make-ui-icons.js"
   },
   "devDependencies": {

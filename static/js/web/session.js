@@ -2,9 +2,8 @@
 
 // ─── session.js ─────────────────────────────────────────────────────────────
 // One editing tab at a time. Each tab loads every plan into memory and writes
-// back what it changes, so two tabs would overwrite each other's edits. The
-// desktop app avoided this with a single-instance lock; the browser's
-// equivalent is a Web Lock held for as long as the page lives (the browser
+// back what it changes, so two tabs would overwrite each other's edits. A Web
+// Lock, held for as long as the page lives, lets only one tab edit (the browser
 // releases it when the tab closes or crashes).
 //
 // A tab that finds the lock taken does not fail: `acquired` settles when the

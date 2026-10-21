@@ -1,19 +1,16 @@
 'use strict';
 
 // ─── settings.js ────────────────────────────────────────────────────────────
-// Preferences: Appearance (surface theme, flow animation, interface zoom), Format (currency
-// symbol, its position, digit separators), Storage (in the browser: whether it
-// has promised to keep the plans; on the desktop: where the plans file is, and
-// encrypting it), About.
+// Preferences: Appearance (surface theme, flow animation), Format (currency
+// symbol, its position, digit separators), Storage (whether the browser has
+// promised to keep the plans), About.
 //
-// Appearance and Format live in localStorage (per machine, read pre-paint by
-// theme-init.js and by core/format.js). Desktop encryption is a property of the
-// file and goes through the backend. A Format change fires 'citrine:format' so
-// the app can redraw its numbers.
+// Appearance and Format live in localStorage (per browser, read pre-paint by
+// theme-init.js and by core/format.js). A Format change fires 'citrine:format'
+// so the app can redraw its numbers.
 
 (function () {
     const overlay = document.getElementById('prefs');
-    const pwOverlay = document.getElementById('pw-modal');
     if (!overlay) return;
     const html = document.documentElement;
 
@@ -82,13 +79,6 @@
         markSwitch('flow-motion', b.dataset.value);
     });
 
-    const zoomSelect = overlay.querySelector('[data-pref="ui-zoom"]');
-
-    zoomSelect.addEventListener('change', () => {
-        Prefs.set('ui-zoom', zoomSelect.value);
-        if (window.electronWindow) window.electronWindow.setZoom(Number(zoomSelect.value));
-    });
-
     // ── Format ─────────────────────────────────────────────────────────────
 
     const formatChanged = () => window.dispatchEvent(new Event('citrine:format'));
@@ -114,22 +104,14 @@
     function refreshAppearance() {
         markTheme();
         markSwitch('flow-motion', Prefs.get('flow-motion', 'on'));
-        zoomSelect.value = Prefs.get('ui-zoom', '1');
         symbolInput.value = Fmt.prefs.symbol;
         markSwitch('symbol-position', Fmt.prefs.position);
         numberSelect.value = Fmt.prefs.numberFormat;
     }
 
     // ── Storage ────────────────────────────────────────────────────────────
+    // Has the browser promised not to clear the plans when space runs low?
 
-    const isDesktop = html.dataset.shell === 'desktop';
-
-    function refreshStorage() {
-        if (isDesktop) refreshPlansFile();
-        else refreshBrowserStorage();
-    }
-
-    // In the browser: has it promised not to clear the plans when space runs low?
     const persistDesc = overlay.querySelector('[data-persist-desc]');
     const persistBtn = overlay.querySelector('[data-persist-request]');
     const PERSIST_TEXT = {
@@ -144,7 +126,7 @@
         persistBtn.hidden = state !== 'open';
     }
 
-    async function refreshBrowserStorage() {
+    async function refreshStorage() {
         const store = navigator.storage;
         if (!store || typeof store.persisted !== 'function' || typeof store.persist !== 'function') {
             showPersistence('unsupported');
@@ -170,110 +152,12 @@
         }
     });
 
-    // On the desktop: the plans file and its encryption.
-
-    async function refreshPlansFile() {
-        const r = await api('GET', '/api/file/status');
-        if (!r.ok) return;
-        const s = r.body;
-        overlay.querySelector('[data-file-path]').textContent = s.path;
-        overlay.querySelector('[data-enc-status]').textContent = s.encrypted ? 'Encrypted' : 'Not encrypted';
-        const show = (row, on) => { overlay.querySelector(`[data-enc-row="${row}"]`).hidden = !on; };
-        show('encrypt', !s.encrypted);
-        show('change', s.encrypted);
-        show('lock', s.encrypted);
-        show('decrypt', s.encrypted);
-    }
-
-    overlay.querySelector('[data-panel="storage"]').addEventListener('click', async (e) => {
-        const act = e.target.closest('[data-enc-action]');
-        if (act) {
-            openPassword(act.dataset.encAction);
-            return;
-        }
-        if (e.target.closest('[data-enc-lock]')) {
-            // Locking reloads the page, so edits that could not be saved would
-            // be lost; Store has already said why, with a Retry.
-            if (!(await Store.flush())) return;
-            const r = await api('POST', '/api/file/lock');
-            if (r.ok) location.reload();
-        }
-    });
-
-    // ── Password form ──────────────────────────────────────────────────────
-
-    const FIELDS = {
-        encrypt: ['new', 'confirm', 'warning'],
-        change:  ['current', 'new', 'confirm', 'warning'],
-        decrypt: ['current'],
-    };
-    const TITLES = { encrypt: 'Encrypt Plans File', change: 'Change Password', decrypt: 'Remove Encryption' };
-    const ERRORS = {
-        wrong_password: 'That password is not correct.',
-        password_too_short: 'Use at least 8 characters.',
-        password_too_long: 'That password is too long.',
-    };
-
-    let pwAction = null;
-    const pwForm = document.getElementById('pw-form');
-    const pwError = pwOverlay.querySelector('[data-pw-error]');
-    const pwSubmit = pwOverlay.querySelector('[data-pw-submit]');
-
-    function openPassword(action) {
-        pwAction = action;
-        pwForm.reset();
-        pwError.hidden = true;
-        pwOverlay.querySelector('#pw-title').textContent = TITLES[action];
-        pwSubmit.textContent = action === 'decrypt' ? 'Remove' : action === 'change' ? 'Change' : 'Encrypt';
-        pwSubmit.className = action === 'decrypt' ? 'button-danger' : 'button-primary';
-        pwOverlay.querySelectorAll('[data-pw]').forEach((f) => { f.hidden = !FIELDS[action].includes(f.dataset.pw); });
-        UI.openModal(pwOverlay, { initialFocus: pwForm.querySelector('[data-pw]:not([hidden]) input') });
-    }
-
-    function fail(message) {
-        pwError.textContent = message;
-        pwError.hidden = false;
-    }
-
-    pwForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const current = pwForm.elements.current.value;
-        const password = pwForm.elements.password.value;
-        const confirm = pwForm.elements.confirm.value;
-        if (pwAction !== 'decrypt') {
-            if ([...password].length < 8) return fail(ERRORS.password_too_short);
-            if (password !== confirm) return fail('The two new passwords do not match.');
-        }
-        pwSubmit.disabled = true;
-        pwSubmit.classList.add('is-busy');
-        await Store.flush();
-        const r = await api('POST', '/api/file/encryption', { action: pwAction, current, password });
-        pwSubmit.disabled = false;
-        pwSubmit.classList.remove('is-busy');
-        if (!r.ok) return fail(ERRORS[r.body.error] || 'That did not work. The file is unchanged.');
-        UI.closeModal(pwOverlay);
-        pwForm.reset();
-        refreshPlansFile();
-        UI.toast(pwAction === 'decrypt' ? 'Encryption removed.' : pwAction === 'change' ? 'Password changed.' : 'Plans file encrypted.', { type: 'success' });
-        return undefined;
-    });
-
     // ── About ──────────────────────────────────────────────────────────────
 
-    /** The version: from the desktop shell, or from the page for the web app (web/assemble.js writes it). */
-    async function appVersion() {
-        if (window.electronApp) return window.electronApp.getVersion();
+    /** The version, written into the page at build time (scripts/assemble.js). */
+    function refreshAbout() {
         const meta = document.querySelector('meta[name="prism-version"]');
-        return meta ? meta.content : '—';
-    }
-
-    async function refreshAbout() {
-        const el = overlay.querySelector('[data-app-version]');
-        try {
-            el.textContent = await appVersion();
-        } catch {
-            el.textContent = '—';
-        }
+        overlay.querySelector('[data-app-version]').textContent = meta ? meta.content : '—';
     }
 
     function open(tab = 'appearance') {

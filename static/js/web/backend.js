@@ -11,9 +11,9 @@
 //   - a handler throws ApiError(message, status)   -> { ok: false, error, ...extra }
 //   - no route                                     -> 404
 //
-// Bodies are copied on the way in and out (structuredClone), as the desktop
-// IPC did. The workspace therefore never shares an object with the page, and
-// an edit the page makes to its own copy cannot reach stored data unsaved.
+// Bodies are copied on the way in and out (structuredClone), as a network call
+// would. The workspace therefore never shares an object with the page, and an
+// edit the page makes to its own copy cannot reach stored data unsaved.
 //
 // `files` is { save({ name, text }) -> Promise<boolean>, open() -> Promise<string|null> }
 // (file-dialogs.js). Both resolve false/null when the user cancels.
@@ -63,7 +63,7 @@
         // Literal segments ('/api/plans/import', '/api/plans/order') are listed
         // before the '<id>' patterns beside them.
         const routes = [
-            ['GET',    '/api/file/status',        () => workspace.status()],
+            ['GET',    '/api/status',             () => workspace.status()],
             ['GET',    '/api/plans',              () => workspace.listPlans()],
             ['POST',   '/api/plans',              async ({ body }) => ({ plan: await workspace.addPlan(planBody(body)) })],
             ['POST',   '/api/plans/import',       importPlan],

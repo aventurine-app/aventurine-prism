@@ -13,8 +13,7 @@
     <script src="/static/js/sim/plan.js"></script>
     <script src="/static/js/sim/engine.js"></script>
     <!-- The browser backend: plans in IndexedDB behind window.citrineApi. The
-         order is load-bearing (boot.js uses all the rest); boot.js does
-         nothing inside the desktop shell, which brings its own bridge. -->
+         order is load-bearing (boot.js uses all the rest). -->
     <script src="/static/js/web/api-error.js"></script>
     <script src="/static/js/web/plan-files.js"></script>
     <script src="/static/js/web/session.js"></script>
@@ -24,9 +23,4 @@
     <script src="/static/js/web/file-dialogs.js"></script>
     <script src="/static/js/web/boot.js"></script>
     <script src="/static/js/shell/ui.js"></script>
-    <script src="/static/js/shell/titlebar.js"></script>
     <script src="/static/js/shell/settings.js"></script>
-    <!-- The Updates section of Preferences → About. Needs ui.js (toasts) and
-         the About markup in chrome.html; reads Store, if present, only on
-         Restart & Install, so it may load before the app scripts. -->
-    <script src="/static/js/shell/updates.js"></script>

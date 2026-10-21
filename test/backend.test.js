@@ -65,11 +65,11 @@ test('a plan is created, listed, read, saved and deleted over the same URLs as b
     assert.equal((await call('GET', `/api/plans/${id}`)).status, 404);
 });
 
-test('status says the plans are in the browser, unencrypted and open', async () => {
+test('status says the plans are in the browser and open for editing', async () => {
     const { call } = await setup();
-    const r = await call('GET', '/api/file/status');
+    const r = await call('GET', '/api/status');
     assert.equal(r.status, 200);
-    assert.deepEqual(r.body, { storage: 'browser', encrypted: false, locked: false, plans: 0, quarantined: 0 });
+    assert.deepEqual(r.body, { storage: 'browser', busy: false, plans: 0, quarantined: 0 });
 });
 
 test('errors keep the { ok: false, error } shape and the statuses the app checks', async () => {
@@ -82,13 +82,6 @@ test('errors keep the { ok: false, error } shape and the statuses the app checks
     assert.equal((await call('GET', '/api/plans/missing')).status, 404);
     assert.equal((await call('DELETE', '/api/plans/missing')).status, 404);
     assert.equal((await call('GET', '/api/plans/%E0%A4%A')).status, 400, 'a malformed escape is a bad request');
-});
-
-test('encryption and locking are not offered in the browser', async () => {
-    const { call } = await setup();
-    assert.equal((await call('POST', '/api/file/unlock', { password: 'x' })).status, 404);
-    assert.equal((await call('POST', '/api/file/lock')).status, 404);
-    assert.equal((await call('POST', '/api/file/encryption', { action: 'encrypt' })).status, 404);
 });
 
 test('what the page sends and receives is a copy, never the stored object', async () => {

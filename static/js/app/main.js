@@ -1,7 +1,7 @@
 'use strict';
 
 // ─── main.js ────────────────────────────────────────────────────────────────
-// Boot: load the plans (or show the lock screen), then hand over to the
+// Boot: load the plans (or wait, if another tab is editing), then hand over to the
 // modules, which all render from Store events. Also the app-wide shortcuts.
 
 (function () {
@@ -10,10 +10,10 @@
     async function boot() {
         app.hidden = false;
         try {
-            const unlocked = await Store.boot();
-            if (!unlocked) {
+            const loaded = await Store.boot();
+            if (!loaded) {
                 app.hidden = true;
-                Lock.show(Store.state.status, boot);
+                OtherTab.show(boot);
             }
         } catch (e) {
             console.error('[boot]', e);

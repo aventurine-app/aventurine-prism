@@ -34,7 +34,7 @@ const rejectsWith = (promise, status, message) =>
 test('a new browser starts with no plans', async () => {
     const { ws } = await open();
     assert.deepEqual(ws.listPlans(), { plans: [], order: [], active: null });
-    assert.deepEqual(ws.status(), { storage: 'browser', encrypted: false, locked: false, plans: 0, quarantined: 0 });
+    assert.deepEqual(ws.status(), { storage: 'browser', busy: false, plans: 0, quarantined: 0 });
 });
 
 test('adding a plan stores it with the tab order and makes it active', async () => {
