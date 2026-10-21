@@ -30,6 +30,7 @@
     let built = null;           // what the panel shows: 'plan' | 'node:<id>' | 'link:<id>'
     let binds = new Map();      // data-bind key → { type, get, set, ... }
     let statsEl = null;
+    let issuesEl = null;
 
     // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -221,11 +222,11 @@
         const more = all.length - list.length;
         return section('Issues', `<ul class="issues">${list.map((w) => {
             const d = D.warning(w, plan());
-            const icon = d.level === 'info' ? 'info' : 'warning';
+            const icon = d.level === 'warn' ? 'warning' : 'info';
             const attrs = d.select ? `data-select="${d.select.kind}:${esc(d.select.id)}"` : '';
             const tag = d.select ? 'button type="button"' : 'li';
             const close = d.select ? 'button' : 'li';
-            return `${d.select ? '<li>' : ''}<${tag} class="issue${d.level === 'info' ? ' issue--info' : ''}" ${attrs}>${iconSvg(icon)}<span>${esc(d.text)}</span></${close}>${d.select ? '</li>' : ''}`;
+            return `${d.select ? '<li>' : ''}<${tag} class="issue${d.level === 'warn' ? '' : ` issue--${d.level}`}" ${attrs}>${iconSvg(icon)}<span>${esc(d.text)}</span></${close}>${d.select ? '</li>' : ''}`;
         }).join('')}${more > 0 ? `<li class="insp-none">${more} more</li>` : ''}</ul>`);
     }
 
@@ -378,7 +379,7 @@
                 <span class="insp-link-name">${esc(other.name)}</span>
                 <span class="insp-link-amount" data-flow="${esc(l.id)}">${esc(flowText(l.id))}</span>
             </span>
-            <span class="chip${short ? ' chip--warn' : ''}">${esc(D.linkShort(l, Store.node(l.from), Store.node(l.to)))}</span>
+            <span class="chip${short ? ' chip--warn' : ''}">${esc(D.linkShort(l, Store.node(l.from)))}</span>
             ${iconSvg('caret-right', { cls: 'icon-caret' })}
         </button></li>`;
     }
@@ -421,6 +422,7 @@
                 ${D.CATEGORY_NAME[p.cat] !== C.ROLES[role].label ? `<span class="chip">${esc(D.CATEGORY_NAME[p.cat])}</span>` : ''}</div>
             ${settings}
             </div>
+            <div data-issues></div>
             ${receives}${sends}
             <div data-stats></div>`;
     }
@@ -472,7 +474,8 @@
                 + stat('Interest', money(nr.totals.interest));
             if (kind === 'card') {
                 const net = nr.totals.cashback - nr.totals.fees;
-                stats += stat('Spent on card', money(nr.totals.charged))
+                stats += (node.params.limit > 0 ? stat('Credit limit', money(node.params.limit)) : '')
+                    + stat('Spent on card', money(nr.totals.charged))
                     + stat('Cash back', money(nr.totals.cashback))
                     + (nr.totals.fees > 0.5 ? stat('Annual fees', money(nr.totals.fees)) : '')
                     + (nr.totals.cashback + nr.totals.fees > 0.5
@@ -499,13 +502,19 @@
         }
         const unplaced = nr.totals.unplaced;
         if (unplaced > 0.5 && role !== 'account') stats += stat('Unassigned', money(unplaced));
-        const issues = r.warnings.filter((w) => w.nodeId === node.id || (w.nodeIds && w.nodeIds.includes(node.id)));
-        return section('Outlook', `<div class="insp-stats">${stats}</div>`) + issuesHtml(issues);
+        return section('Outlook', `<div class="insp-stats">${stats}</div>`);
+    }
+
+    /** What the last run flagged on a module, shown right under its settings. */
+    function nodeIssues(node) {
+        const r = results();
+        if (!r) return '';
+        return issuesHtml(r.warnings.filter((w) => w.nodeId === node.id || (w.nodeIds && w.nodeIds.includes(node.id))));
     }
 
     // ── Link panel ─────────────────────────────────────────────────────────
 
-    const MODE_LABEL = { due: 'Due', percent: '%', fixed: null, rest: 'Rest', above: 'Above' };
+    const MODE_LABEL = { percent: '%', fixed: null, rest: 'Rest', above: 'Above' };
     const WHEN_LABEL = { monthly: 'Every month', yearly: 'Every year', once: 'Once' };
 
     function linkPanel(link) {
@@ -514,15 +523,15 @@
         const id = link.id;
         const L = () => Store.link(id) || link;
         const ends = (pl, l) => [pl.nodes.find((n) => n.id === l.from), pl.nodes.find((n) => n.id === l.to)];
-        const setL = (fn) => (pl, v) => { const l = pl.links.find((x) => x.id === id); fn(l, v); P.fitRule(l, ...ends(pl, l)); };
+        const setL = (fn) => (pl, v) => { const l = pl.links.find((x) => x.id === id); fn(l, v); P.fitRule(l, ends(pl, l)[0]); };
 
         const bases = P.basesFor(from);
-        const modes = P.modesFor(from, link.basis, to);
+        const modes = P.modesFor(from, link.basis);
         const timings = P.timingsFor(link.basis, link.mode);
         const sym = Fmt.symbolParts().symbol;
 
         let rule = '';
-        // What the link carries (deposits, earnings, balance...) is picked here;
+        // What the link carries (a card's purchases, a loan's proceeds...) is picked here;
         // the other links between this pair hold the bases they already use.
         const sources = bases.filter((b) => b === link.basis || P.basesBetween(plan(), from, to, link.id).includes(b));
         if (sources.length > 1) {
@@ -538,7 +547,7 @@
             `<button class="segctl-btn" type="button" data-mode="${m}" aria-pressed="${link.mode === m}">${esc(MODE_LABEL[m] || sym)}</button>`).join('')}</div>`,
         { wide: modes.length > 3 });
         if (link.mode === 'percent') {
-            rule += field('Percent', 'link.value', {
+            rule += field(link.basis === 'charges' ? 'Of limit' : 'Percent', 'link.value', {
                 type: 'percent', min: 0, max: 100,
                 get: () => L().value,
                 set: setL((l, v) => { l.value = v; }),
@@ -636,6 +645,7 @@
         else if (key.startsWith('node:')) html = nodeStats(Store.node(key.slice(5)));
         else if (key.startsWith('link:')) html = linkStats(Store.link(key.slice(5)));
         statsEl.innerHTML = html;
+        if (issuesEl) issuesEl.innerHTML = key.startsWith('node:') ? nodeIssues(Store.node(key.slice(5))) : '';
         for (const el of root.querySelectorAll('[data-flow]')) el.textContent = flowText(el.dataset.flow);
     }
 
@@ -662,6 +672,7 @@
         }
         builtSig = structureSig();
         statsEl = root.querySelector('[data-stats]');
+        issuesEl = root.querySelector('[data-issues]');
         sync();
         renderStats();
     }
@@ -744,14 +755,9 @@
                 }
                 if (next === 'percent' && (l.mode !== 'percent')) l.value = Math.min(l.value || 25, 100) || 25;
                 if (next === 'fixed' && l.mode === 'percent') l.value = 500;
-                // From 'due' to a fixed amount: start at the payment it was making.
-                if (next === 'fixed' && l.mode === 'due') {
-                    const target = pl.nodes.find((n) => n.id === l.to);
-                    l.value = Math.round(P.loanPayment(target.params)) || 500;
-                }
                 if (next === 'above' && l.mode !== 'above') l.value = 10000;
                 l.mode = next;
-                P.fitRule(l, pl.nodes.find((n) => n.id === l.from), pl.nodes.find((n) => n.id === l.to));
+                P.fitRule(l, pl.nodes.find((n) => n.id === l.from));
                 return true;
             });
             rebuild();

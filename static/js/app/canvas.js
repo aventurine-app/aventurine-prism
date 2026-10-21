@@ -377,14 +377,17 @@
 
         const warns = nodeWarnings(node.id, plan, res);
         const done = f.done;
-        const flagSig = warns.length ? `w:${warns.map((w) => w.code).join(',')}` : done ? 'done' : '';
+        // A module whose only issues are notices (a card's high utilization) wears
+        // a yellow info flag; any real warning makes it the orange warning flag.
+        const notice = warns.length > 0 && warns.every((w) => D.warning(w, plan).level === 'notice');
+        const flagSig = warns.length ? `${notice ? 'n' : 'w'}:${warns.map((w) => w.code).join(',')}` : done ? 'done' : '';
         put(view, 'flag', flagSig, () => {
             if (view.flag) { view.flag.remove(); view.flag = null; }
             if (warns.length) {
                 view.flag = document.createElement('span');
-                view.flag.className = 'node-flag';
+                view.flag.className = notice ? 'node-flag node-flag--notice' : 'node-flag';
                 view.flag.title = warns.map((w) => D.warning(w, plan).text).join('\n');
-                view.flag.innerHTML = iconSvg('warning');
+                view.flag.innerHTML = iconSvg(notice ? 'info' : 'warning');
             } else if (done) {
                 view.flag = document.createElement('span');
                 view.flag.className = 'node-check';
@@ -464,7 +467,7 @@
             view.flow.classList.toggle('is-idle', idle);
         });
 
-        const text = vp && !vp.all ? Fmt.money(amount, { compact: amount >= 1e4 }) : D.linkShort(link, from, to);
+        const text = vp && !vp.all ? Fmt.money(amount, { compact: amount >= 1e4 }) : D.linkShort(link, from);
         put(view, 'text', text, (t) => { view.label.textContent = t; });
         put(view, 'short', !!(lr && lr.short > 0.005), (v) => view.label.classList.toggle('is-short', v));
         put(view, 'title', `${from.name} to ${to.name}`, (t) => view.label.setAttribute('aria-label', t));

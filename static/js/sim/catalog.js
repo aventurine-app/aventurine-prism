@@ -89,13 +89,14 @@
         cashBack:   { type: 'percent',   label: 'Cash back',        min: 0,    max: 100 },
         cashBackTo: { type: 'account',   label: 'Cash back to',     optional: true },
         annualFee:  { type: 'money',     label: 'Annual fee',       min: 0,    max: 1e10, optional: true },
+        limit:      { type: 'money',     label: 'Credit limit',     min: 0,    max: 1e10, optional: true },
     };
 
     const ROLE_FIELDS = {
         source:   ['amount', 'per', 'payMonth', 'growth', 'tax', 'start', 'end'],
         account:  ['balance', 'rate', 'lockUntil', 'capYearly'],
         expense:  [],
-        debt:     ['balance', 'rate', 'term', 'minPayment', 'start', 'cashBack', 'cashBackTo', 'annualFee'],
+        debt:     ['balance', 'rate', 'term', 'minPayment', 'start', 'cashBack', 'cashBackTo', 'annualFee', 'limit'],
         modifier: ['rate', 'capYearly'],
     };
 
@@ -103,7 +104,7 @@
         source:   { amount: 0, per: 'month', payMonth: 0, growth: 0, tax: 0, start: null, end: null },
         account:  { balance: 0, rate: 0, lockUntil: null, capYearly: null },
         expense:  {},
-        debt:     { balance: 0, rate: 0, term: null, minPayment: null, start: null, cashBack: 0, cashBackTo: null, annualFee: null },
+        debt:     { balance: 0, rate: 0, term: null, minPayment: null, start: null, cashBack: 0, cashBackTo: null, annualFee: null, limit: null },
         modifier: { rate: 0, capYearly: null },
     };
 
@@ -232,7 +233,8 @@
         // other debt is a balance owed at a rate, repaid over a term.
         P('debt', 'debt', 'credit-card', 'Credit card', 'credit-card', {
             kind: 'card',
-            fields: ['balance', 'rate', 'minPayment', 'cashBack', 'cashBackTo', 'annualFee'],
+            fixed: { minPayment: null },
+            fields: ['balance', 'rate', 'limit', 'cashBack', 'cashBackTo', 'annualFee'],
             labels: { balance: 'Balance owed', rate: 'APR' },
             keywords: 'cash back rewards points miles travel revolving debt' }),
         P('debt', 'debt', 'loan', 'Loan', 'handshake', {

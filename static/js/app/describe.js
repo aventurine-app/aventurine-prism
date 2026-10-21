@@ -20,22 +20,20 @@
     /** What a link's basis is called, from the source's side. */
     function basisNoun(from, basis) {
         const p = presetOf(from);
-        if (basis === 'earnings') return 'earnings';
         if (basis === 'balance') return 'balance';
         if (basis === 'proceeds') return 'loan proceeds';
-        if (basis === 'charges') return 'purchases';
+        if (basis === 'charges') return 'credit limit';
         switch (p.role) {
             case 'source':  return 'income';
-            case 'account': return 'deposits';
             case 'expense': return 'spending';
             case 'debt':    return 'overpayment';
             default:        return 'output';
         }
     }
 
-    const INFLOW_PORT = { source: 'Pay', account: 'Deposits', expense: 'Spending', modifier: 'Passes on', debt: 'Overpayment' };
-    const BASIS_PORT = { earnings: 'Earnings', balance: 'Balance', proceeds: 'Loan proceeds', charges: 'Purchases' };
-    const INFLOW_FLOW = { source: 'pay', account: 'deposits', expense: 'spending', modifier: 'passes', debt: 'overflow' };
+    const INFLOW_PORT = { source: 'Pay', expense: 'Spending', modifier: 'Passes on', debt: 'Overpayment' };
+    const BASIS_PORT = { balance: 'Balance', proceeds: 'Loan proceeds', charges: 'Purchases' };
+    const INFLOW_FLOW = { source: 'pay', expense: 'spending', modifier: 'passes', debt: 'overflow' };
 
     /** What a link carries out of a module, as a label: 'Deposits', 'Purchases'. */
     function portLabel(node, basis) {
@@ -70,19 +68,10 @@
      *  no timing of their own. */
     const ON_ARRIVAL = new Set(['inflow', 'proceeds']);
 
-    /** A 'due' link's amount: a card's whole balance, a loan's payment. */
-    const dueWords = (to, short) => {
-        const card = to && presetOf(to).kind === 'card';
-        if (short) return card ? 'Full balance' : 'Payment due';
-        return card ? 'the full balance' : 'the payment due';
-    };
-
-    function linkShort(link, from, to = null) {
+    function linkShort(link, from) {
         const onArrival = ON_ARRIVAL.has(link.basis);
-        const tag = onArrival ? '' : ` ${link.basis === 'earnings' ? 'of earnings' : 'of balance'}`;
+        const tag = onArrival ? '' : link.basis === 'charges' ? ' of limit' : ' of balance';
         switch (link.mode) {
-            case 'due':
-                return dueWords(to, true);
             case 'percent':
                 return `${Fmt.number(link.value, 2)}%${tag}${onArrival ? '' : timingShort(link).replace('/mo', '')}`.trim();
             case 'fixed':
@@ -91,7 +80,7 @@
                 return `Above ${compact(link.value)}`;
             default:
                 if (link.basis === 'balance') return `Everything${timingShort(link).replace('/mo', ' monthly')}`;
-                if (link.basis === 'earnings') return 'Rest of earnings';
+                if (link.basis === 'charges') return 'Credit left';
                 if (link.basis === 'proceeds') return 'Proceeds';
                 return roleOf(from) === 'debt' ? 'Overpayment' : 'Rest';
         }
@@ -106,8 +95,7 @@
         let what;
         switch (link.mode) {
             case 'percent':
-                what = `${b(`${Fmt.number(link.value, 2)}%`)} of ${link.basis === 'earnings' && link.when === 'yearly'
-                    ? "each year's earnings" : `the ${noun}`}`;
+                what = `${b(`${Fmt.number(link.value, 2)}%`)} of the ${noun}`;
                 break;
             case 'fixed':
                 what = b(Fmt.money(link.value, { decimals: link.value % 1 ? 2 : 0 }));
@@ -115,18 +103,18 @@
             case 'above':
                 what = `everything above ${b(Fmt.money(link.value))}`;
                 break;
-            case 'due':
-                what = b(dueWords(to, false));
-                break;
             default:
-                what = link.basis === 'balance' ? 'the whole balance' : `the rest of the ${noun}`;
+                what = link.basis === 'balance' ? 'the whole balance'
+                    : link.basis === 'charges' ? 'the credit left' : `the rest of the ${noun}`;
         }
-        const parts = [link.basis === 'charges'
-            ? `Charge ${what} of ${target} to ${b(from.name)}`
-            : `Send ${what} to ${target}`];
-        const onArrival = ON_ARRIVAL.has(link.basis) && !(link.basis === 'inflow' && (link.mode === 'fixed' || link.mode === 'due'));
+        // A card's fixed purchase names what it buys; a share of its limit or
+        // the credit left is charged to the card for that spending.
+        const parts = [link.basis !== 'charges' ? `Send ${what} to ${target}`
+            : link.mode === 'fixed' ? `Charge ${what} of ${target} to ${b(from.name)}`
+                : `Charge ${what} on ${b(from.name)} for ${target}`];
+        const onArrival = ON_ARRIVAL.has(link.basis) && !(link.basis === 'inflow' && link.mode === 'fixed');
         // A percent or rest already says "of the pay before tax".
-        if (pretax && (link.mode === 'fixed' || link.mode === 'due')) parts.push('before tax');
+        if (pretax && link.mode === 'fixed') parts.push('before tax');
         if (!onArrival) parts.push(timingWords(link));
         if (link.mode === 'fixed' && link.growth) parts.push(`growing ${b(`${Fmt.number(link.growth, 2)}%`)} a year`);
         if (link.start && link.end) parts.push(`from ${P.ymLabel(link.start)} to ${P.ymLabel(link.end)}`);
@@ -214,6 +202,16 @@
                 return {
                     level: 'warn', select: { kind: 'node', id: w.nodeId },
                     text: `${nameOf(plan, w.nodeId)} reaches its yearly limit in ${m(w.month)}; ${Fmt.money(w.amount, { compact: true })} lands in Unassigned.`,
+                };
+            case 'no-limit':
+                return {
+                    level: 'warn', select: { kind: 'node', id: w.nodeId },
+                    text: `${nameOf(plan, w.nodeId)} charges a share of its limit or the credit left, but has no credit limit set.`,
+                };
+            case 'utilization':
+                return {
+                    level: 'notice', select: { kind: 'node', id: w.nodeId },
+                    text: `${nameOf(plan, w.nodeId)} uses up to ${Fmt.number(w.amount, 0)}% of its limit. Reducing usage below 30% turns this off.`,
                 };
             case 'underpaid':
                 return {

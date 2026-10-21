@@ -203,55 +203,39 @@ test('a fixed link fed by two arrivals in one month is topped up, not double pai
 
 // ── Accounts ─────────────────────────────────────────────────────────────────
 
-test('deposit links pass arriving money straight through a checking account', () => {
+test('an account keeps what arrives: only its balance moves on', () => {
     const plan = mkPlan('2026-01', 1);
     const pay = node(plan, 'paycheck', { amount: 4000, per: 'month' });
     const checking = node(plan, 'bank-account', { balance: 0, rate: 0 });
-    const savings = node(plan, 'bank-account', { balance: 0, rate: 0 });
-    link(plan, pay, checking);
-    link(plan, checking, savings, { basis: 'inflow', mode: 'percent', value: 25 });
-    const r = run(plan);
-    close(last(r.nodes[savings.id].balance), 12000);
-    close(last(r.nodes[checking.id].balance), 36000);
-});
-
-test('a fixed deposit link pays its amount from what arrives and says when deposits fall short', () => {
-    const plan = mkPlan('2026-01', 1);
-    const pay = node(plan, 'paycheck', { amount: 4000, per: 'month', end: '2026-06' });
-    const checking = node(plan, 'bank-account', { balance: 10000, rate: 0 });
     const rent = node(plan, 'expense');
     link(plan, pay, checking);
-    const l = link(plan, checking, rent, { basis: 'inflow', mode: 'fixed', value: 1500 });
+    const l = link(plan, checking, rent, { basis: 'balance', mode: 'fixed', value: 1500 });
     const r = run(plan);
-    close(r.links[l.id].total, 9000);
-    close(last(r.nodes[checking.id].balance), 10000 + 2500 * 6);
+    close(r.links[l.id].total, 18000);
+    close(last(r.nodes[checking.id].balance), 2500 * 12);
+});
+
+test('a fixed link out of a balance pays what the balance holds and says when it falls short', () => {
+    const plan = mkPlan('2026-01', 1);
+    const pay = node(plan, 'paycheck', { amount: 1000, per: 'month', end: '2026-02' });
+    const checking = node(plan, 'bank-account', { balance: 2000, rate: 0 });
+    const rent = node(plan, 'expense');
+    link(plan, pay, checking);
+    const l = link(plan, checking, rent, { basis: 'balance', mode: 'fixed', value: 1500 });
+    const r = run(plan);
+    close(r.links[l.id].total, 4000);
+    close(last(r.nodes[checking.id].balance), 0);
     const short = r.warnings.find((w) => w.code === 'short' && w.linkId === l.id);
-    close(short.amount, 9000);
+    close(short.amount, 500 + 9 * 1500);
 });
 
-test('earnings links send a share of growth and compound the rest', () => {
+test('interest stays in the account and compounds', () => {
     const plan = mkPlan('2026-01', 1);
     const brokerage = node(plan, 'investment', { balance: 100000, rate: 12 });
-    const savings = node(plan, 'bank-account', { balance: 0, rate: 0 });
-    const l = link(plan, brokerage, savings, { basis: 'earnings', mode: 'percent', value: 50 });
     const r = run(plan);
-    const monthly = Math.pow(1.12, 1 / 12) - 1;
-    close(r.links[l.id].flow[0], 100000 * monthly / 2);
-    close(r.links[l.id].total, r.nodes[brokerage.id].totals.earnings / 2);
-    close(last(r.nodes[savings.id].balance), r.links[l.id].total);
-});
-
-test('yearly earnings links hold their share and pay it out in their month', () => {
-    const plan = mkPlan('2026-01', 1);
-    const brokerage = node(plan, 'investment', { balance: 100000, rate: 12 });
-    const savings = node(plan, 'bank-account', { balance: 0, rate: 0 });
-    const l = link(plan, brokerage, savings, {
-        basis: 'earnings', mode: 'percent', value: 50, when: 'yearly', month: 12,
-    });
-    const r = run(plan);
-    const flow = r.links[l.id].flow;
-    assert.equal(flow.slice(0, 11).reduce((a, b) => a + b, 0), 0);
-    close(flow[11], r.nodes[brokerage.id].totals.earnings / 2);
+    close(last(r.nodes[brokerage.id].balance), 112000);
+    close(r.nodes[brokerage.id].totals.earnings, 12000);
+    close(r.totals.unassigned, 0);
 });
 
 test('a percent of balance every year: the 4% rule', () => {
@@ -320,10 +304,10 @@ test('a loan with a term is paid its scheduled payment and clears on time', () =
     const pay = node(plan, 'paycheck', { amount: 2000, per: 'month' });
     const loan = node(plan, 'loan', { balance: 20000, rate: 7, term: 3 });
     const savings = node(plan, 'bank-account');
-    link(plan, pay, loan, { mode: 'due' });
+    const due = Plan.loanPayment({ balance: 20000, rate: 7, term: 3 });
+    link(plan, pay, loan, { mode: 'fixed', value: due });
     link(plan, pay, savings, { mode: 'rest' });
     const r = run(plan);
-    const due = Plan.loanPayment({ balance: 20000, rate: 7, term: 3 });
     close(r.links.l_0.flow[0], due);
     close(r.nodes[loan.id].payment, due);
     assert.ok(Math.abs(last(r.nodes[loan.id].balance)) < 1e-4);
@@ -355,32 +339,19 @@ test('withdrawals from a balance stop at payoff too', () => {
     close(r.totals.unassigned, 0);
 });
 
-test('"due" pays a card in full: no interest is ever charged', () => {
+test('a card paid its purchases each month is never charged interest', () => {
     const plan = mkPlan('2026-01', 1);
     const pay = node(plan, 'paycheck', { amount: 3000, per: 'month' });
     const card = node(plan, 'credit-card', { balance: 0, rate: 24 });
     const dining = node(plan, 'expense');
     const savings = node(plan, 'bank-account');
     link(plan, card, dining, { basis: 'charges', mode: 'fixed', value: 800 });
-    link(plan, pay, card, { mode: 'due' });
+    link(plan, pay, card, { mode: 'fixed', value: 800 });
     link(plan, pay, savings, { mode: 'rest' });
     const r = run(plan);
     close(r.nodes[card.id].totals.interest, 0);
     close(last(r.nodes[card.id].balance), 0);
     close(last(r.nodes[savings.id].balance), 12 * 2200);
-});
-
-test('two payers on "due" split one payment, they do not each pay it', () => {
-    const plan = mkPlan('2026-01', 1);
-    const a = node(plan, 'paycheck', { amount: 300, per: 'month' });
-    const b = node(plan, 'paycheck', { amount: 1000, per: 'month' });
-    const loan = node(plan, 'loan', { balance: 24000, rate: 0, term: 2 });
-    link(plan, a, loan, { mode: 'due' });
-    link(plan, b, loan, { mode: 'due' });
-    const r = run(plan);
-    close(r.nodes[loan.id].paid[0], 1000);
-    close(r.links.l_0.flow[0], 300);
-    close(r.links.l_1.flow[0], 700);
 });
 
 test('payments under the minimum are flagged', () => {
@@ -570,8 +541,8 @@ test('a once link moves its amount on its date only', () => {
 test('a loop that passes everything around settles, flags itself and conserves money', () => {
     const plan = mkPlan('2026-01', 1);
     const pay = node(plan, 'paycheck', { amount: 1000, per: 'month' });
-    const a = node(plan, 'bank-account', { balance: 0, rate: 0 });
-    const b = node(plan, 'bank-account', { balance: 0, rate: 0 });
+    const a = node(plan, 'living');
+    const b = node(plan, 'living');
     link(plan, pay, a);
     link(plan, a, b, { basis: 'inflow', mode: 'rest' });
     link(plan, b, a, { basis: 'inflow', mode: 'rest' });
@@ -583,15 +554,15 @@ test('a loop that passes everything around settles, flags itself and conserves m
 test('a loop that passes on part of the money converges without hitting the guard', () => {
     const plan = mkPlan('2026-01', 1);
     const pay = node(plan, 'paycheck', { amount: 1000, per: 'month' });
-    const a = node(plan, 'bank-account', { balance: 0, rate: 0 });
-    const b = node(plan, 'bank-account', { balance: 0, rate: 0 });
+    const a = node(plan, 'living');
+    const b = node(plan, 'living');
     link(plan, pay, a);
     link(plan, a, b, { basis: 'inflow', mode: 'percent', value: 50 });
     link(plan, b, a, { basis: 'inflow', mode: 'percent', value: 50 });
     const r = run(plan);
     assert.ok(codes(r).includes('loop'));
     assert.ok(!codes(r).includes('runaway'));
-    close(r.totals.endNetWorth, 12000);
+    close(r.totals.spent, 12000);   // what the groups cannot hand on is spent in them
 });
 
 test('the outlook example: salary, spending, savings, brokerage, card, five years', () => {
@@ -605,7 +576,6 @@ test('the outlook example: salary, spending, savings, brokerage, card, five year
     link(plan, salary, living, { mode: 'percent', value: 60 });
     link(plan, salary, savings, { mode: 'percent', value: 15 });
     link(plan, salary, brokerage, { mode: 'rest' });
-    link(plan, brokerage, savings, { basis: 'earnings', mode: 'percent', value: 50, when: 'yearly', month: 12 });
     link(plan, salary, card, { mode: 'fixed', value: 450 });
     link(plan, card, dining, { basis: 'charges', mode: 'fixed', value: 450 });
     const r = run(plan);
@@ -643,4 +613,87 @@ test('a card with no annual fee charges nothing', () => {
     const card = node(plan, 'credit-card', { cashBack: 2 });
     const r = run(plan);
     close(r.nodes[card.id].totals.fees, 0);
+});
+
+test('a card never charges past its limit: purchases are held to the credit left', () => {
+    const plan = mkPlan('2026-01', 1);
+    const card = node(plan, 'credit-card', { rate: 0, limit: 1000 });
+    const dining = node(plan, 'expense');
+    const l = link(plan, card, dining, { basis: 'charges', mode: 'fixed', value: 800 });
+    const r = run(plan);
+    close(r.nodes[card.id].totals.charged, 1000);        // 800, then the 200 that was left
+    close(last(r.nodes[card.id].balance), 1000);
+    close(r.links[l.id].total, 1000);
+    assert.ok(codes(r).includes('short'));
+});
+
+test('a percent link on a card charges that share of its limit each time', () => {
+    const plan = mkPlan('2026-01', 1);
+    const card = node(plan, 'credit-card', { rate: 0, limit: 5000 });
+    const dining = node(plan, 'expense');
+    const l = link(plan, card, dining, { basis: 'charges', mode: 'percent', value: 10 });
+    const r = run(plan);
+    close(r.links[l.id].flow[0], 500);
+    close(r.links[l.id].total, 5000);                     // ten months of 500, then the limit is reached
+    close(last(r.nodes[card.id].balance), 5000);
+});
+
+test('a rest link on a card charges the credit left after the others', () => {
+    const plan = mkPlan('2026-01', 1);
+    const card = node(plan, 'credit-card', { rate: 0, limit: 1000 });
+    const dining = node(plan, 'expense');
+    const travel = node(plan, 'expense');
+    link(plan, card, dining, { basis: 'charges', mode: 'fixed', value: 300 });
+    const rest = link(plan, card, travel, { basis: 'charges', mode: 'rest' });
+    const r = run(plan);
+    close(r.links[rest.id].flow[0], 700);
+    close(r.nodes[card.id].totals.charged, 1000);
+});
+
+test('payments free up credit for a rest link on a card', () => {
+    const plan = mkPlan('2026-01', 1);
+    const pay = node(plan, 'paycheck', { amount: 400, per: 'month' });
+    const card = node(plan, 'credit-card', { rate: 0, limit: 1000 });
+    const travel = node(plan, 'expense');
+    link(plan, pay, card, { mode: 'fixed', value: 400 });
+    link(plan, card, travel, { basis: 'charges', mode: 'rest' });
+    const r = run(plan);
+    close(r.nodes[card.id].totals.charged, 1000 + 11 * 400);
+    close(last(r.nodes[card.id].balance), 600);   // the month's payment lands after its purchases
+});
+
+test('percent and rest links on a card without a limit charge nothing and say so', () => {
+    const plan = mkPlan('2026-01', 1);
+    const card = node(plan, 'credit-card', { rate: 0 });
+    const dining = node(plan, 'expense');
+    link(plan, card, dining, { basis: 'charges', mode: 'rest' });
+    const r = run(plan);
+    close(r.nodes[card.id].totals.charged, 0);
+    assert.ok(codes(r).includes('no-limit'));
+});
+
+test('a card using more than 30% of its limit is flagged, at the month\'s peak', () => {
+    const plan = mkPlan('2026-01', 1);
+    const pay = node(plan, 'paycheck', { amount: 2000, per: 'month' });
+    const card = node(plan, 'credit-card', { rate: 0, limit: 5000 });
+    const shop = node(plan, 'expense');
+    link(plan, card, shop, { basis: 'charges', mode: 'fixed', value: 1600 });
+    link(plan, pay, card, { mode: 'fixed', value: 1600 });     // paid off every month
+    const r = run(plan);
+    close(last(r.nodes[card.id].balance), 0);                 // nothing owed at month end...
+    const w = r.warnings.find((x) => x.code === 'utilization');
+    assert.ok(w);                                              // ...but 32% at the peak
+    assert.equal(w.month, 0);
+    close(w.amount, 32);
+});
+
+test('a card at 30% or under, or with no limit, is not flagged', () => {
+    const plan = mkPlan('2026-01', 1);
+    const card = node(plan, 'credit-card', { rate: 0, limit: 5000 });
+    link(plan, card, node(plan, 'expense'), { basis: 'charges', mode: 'fixed', value: 1500, when: 'once', date: '2026-01' });
+    const noLimit = node(plan, 'credit-card', { rate: 0 });
+    link(plan, noLimit, node(plan, 'expense'), { basis: 'charges', mode: 'fixed', value: 9000, when: 'once', date: '2026-01' });
+    const r = run(plan);
+    assert.ok(!codes(r).includes('utilization'));
+    close(r.nodes[card.id].totals.charged, 1500);
 });

@@ -2,7 +2,7 @@
 
 // ─── example.js ─────────────────────────────────────────────────────────────
 // The starter plan: a salary split into spending, savings and investing, with
-// investment earnings and card rewards flowing back into savings. It is the
+// card rewards flowing back into savings. It is the
 // first plan on a fresh install and what "Load example" draws on an empty one.
 //
 // Laid out left to right in five columns so every link runs forward into the
@@ -40,7 +40,7 @@
         dining.name = 'Dining out';
         const brokerage = at(1, ROW * 2, 'investment', { balance: 10000, rate: 7 });
         brokerage.name = 'Brokerage';
-        const card = at(2, 0, 'credit-card', { cashBack: 2 });
+        const card = at(2, 0, 'credit-card', { cashBack: 2, limit: 5000 });
         const savings = at(4, ROW, 'bank-account', { balance: 5000, rate: 4 });
         savings.name = 'Savings';
         card.params.cashBackTo = savings.id;
@@ -49,7 +49,6 @@
         link(salary, card, { mode: 'fixed', value: 450, basis: 'inflow' });
         link(salary, savings, { mode: 'percent', value: 15, basis: 'inflow' });
         link(salary, brokerage, { mode: 'rest', basis: 'inflow' });
-        link(brokerage, savings, { mode: 'percent', value: 50, basis: 'earnings', when: 'yearly', month: 12 });
         link(card, dining, { mode: 'fixed', value: 450, basis: 'charges' });
 
         return plan;

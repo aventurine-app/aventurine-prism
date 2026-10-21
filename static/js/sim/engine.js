@@ -9,11 +9,11 @@
 // One month, in order:
 //   1. Debts that start this month become owed, and their proceeds are paid
 //      out along their proceeds links.
-//   2. Balances move. Accounts earn (or lose) at their rate; debts accrue
-//      interest. Earnings links pay out their share and the rest compounds.
+//   2. Balances move. Accounts earn (or lose) at their rate and keep it;
+//      debts accrue interest. Cards make their purchases.
 //   3. Income arrives and is split along their links. Money keeps
-//      moving through spending, modifiers and account deposit links until it
-//      comes to rest.
+//      moving through spending and modifiers until it comes to rest. An
+//      account keeps whatever arrives.
 //   4. Scheduled moves out of account balances run (withdrawals, sweeps,
 //      "everything above"), upstream accounts first, so a transfer made early
 //      in the pass is seen by the accounts below it in the same month.
@@ -33,9 +33,14 @@
 // to the payer's later links (its rest, usually savings). A debt that has its
 // own Overpayment links is the exception: that is a snowball, and the freed
 // payments go on along them instead. (Only loans have them. A card is paid
-// down and no further: what it cannot take stays with the payer.) A 'due' link pays what the debt asks for
-// this month: a loan's scheduled payment (from its years left) or a card's
-// whole balance.
+// down and no further: what it cannot take stays with the payer.)
+//
+// Credit limits. A card with a limit never charges past it: purchases are held
+// to the credit left (limit less balance owed). On a card, a percent link
+// charges that share of the limit each time it fires and a rest link charges
+// whatever credit is left after the others. Without a limit neither charges
+// anything. A card owing more than 30% of its limit at the month's peak (after
+// purchases, before payments) is flagged as `utilization`.
 //
 // Conservation. Money enters only as income, an employer
 // match, cash back, growth or a loan's proceeds, and leaves only as spending,
@@ -64,10 +69,13 @@
     // month the remainder is parked in Unassigned and the plan is flagged.
     const MAX_ARRIVALS_PER_MONTH = 20000;
 
-    // Evaluation order inside one basis: payments due are paid first, then
-    // fixed amounts, then percentages (each of the full amount), then "above",
-    // then the rest.
-    const MODE_ORDER = { due: 0, fixed: 1, percent: 2, above: 3, rest: 4 };
+    // Evaluation order inside one basis: fixed amounts first, then percentages
+    // (each of the full amount), then "above", then the rest.
+    const MODE_ORDER = { fixed: 1, percent: 2, above: 3, rest: 4 };
+
+    // Share of a card's limit past which carrying a balance is a red flag.
+    // (1% to 10% is the ideal range; only the red flag is reported.)
+    const UTILIZATION_FLAG = 30;
 
     const PER_MONTH = { week: 52 / 12, biweek: 26 / 12, month: 1 };
 
@@ -104,7 +112,6 @@
                 flow: series(),
                 short: 0, shortFirst: -1,
                 givenMonth: -1, given: 0,   // fixed links: paid so far this month
-                acc: 0,                     // yearly earnings links: owed so far
             };
             // A source keeps its pre-tax links apart: they split gross pay.
             const group = link.basis === 'inflow' && from.role === 'source' && Plan.isPretax(plan, link)
@@ -176,16 +183,6 @@
             queue.push(L.to, amount);
         }
 
-        /** What a debt asks for this month, less what 'due' links have already
-         *  sent. Worked out once a month, after interest and card purchases. */
-        function dueLeft(d) {
-            if (d.dueMonth !== t) {
-                d.dueMonth = t;
-                d.dueLeft = d.kind === 'card' ? d.owedBeforePay : Math.min(d.scheduled, d.owedBeforePay);
-            }
-            return d.dueLeft;
-        }
-
         /** How much more a debt can take this month: what it owes less what is
          *  already on its way to it. Unlimited for a snowball (Overpayment links),
          *  whose overpayments move on. */
@@ -212,9 +209,6 @@
                     if (!firesNow(L)) continue;
                     if (L.givenMonth !== t) { L.givenMonth = t; L.given = 0; }
                     want = fixedValue(L) - L.given;
-                } else if (L.mode === 'due') {
-                    if (L.to.role !== 'debt') continue;
-                    want = dueLeft(L.to);
                 } else if (L.mode === 'percent') {
                     want = amount * L.value / 100;
                 } else if (L.mode === 'rest') {
@@ -226,7 +220,6 @@
                 if (want <= EPS) continue;
                 const give = Math.min(want, remaining);
                 if (L.mode === 'fixed') L.given += give;
-                if (L.mode === 'due') L.to.dueLeft -= give;
                 // A fixed amount can still be topped up by a later arrival this
                 // month, so its shortfall is settled at month end instead.
                 if (L.mode === 'percent' && want - give > EPS) noteShort(L, want - give);
@@ -273,10 +266,6 @@
                     s.depositsThisYear += accepted;
                     s.inflow[t] += accepted;
                     s.bal += accepted;
-                    if (s.outs.inflow.length && !locked(s)) {
-                        const kept = allocate(s, 'inflow', accepted);
-                        s.bal -= accepted - kept;
-                    }
                     return;
                 }
                 case 'expense': {
@@ -350,15 +339,24 @@
         }
 
         /** A card's purchases this month. Each charges link adds its amount to
-         *  the balance and sends it to the spending it pays for. Cash back is
-         *  deposited in the card's cash back account, or else credits the
-         *  balance. */
+         *  the balance and sends it to the spending it pays for, held to the
+         *  credit left under the card's limit (if it has one). A percent link
+         *  charges a share of the limit; a rest link charges the credit left.
+         *  Cash back is deposited in the card's cash back account, or else
+         *  credits the balance. */
         function chargeCard(s) {
+            const limit = s.params.limit > 0 ? s.params.limit : null;
             for (const L of s.outs.charges) {
                 if (!activeAt(L) || !firesNow(L)) continue;
-                const amount = fixedValue(L);
+                const available = limit == null ? Infinity : Math.max(0, limit - s.bal);
+                let want;
+                if (L.mode === 'fixed') want = fixedValue(L);
+                else if (limit == null) want = 0;
+                else want = L.mode === 'percent' ? limit * L.value / 100 : available;
+                const amount = Math.min(want, available);
                 L.givenMonth = t;
                 L.given = amount;
+                if (L.mode === 'percent' && want - amount > EPS) noteShort(L, want - amount);
                 if (amount <= EPS) continue;
                 s.bal += amount;
                 s.charged[t] += amount;
@@ -376,35 +374,12 @@
                 transfer(L, amount);
             }
             s.owedBeforePay = s.bal;
-        }
-
-        function payEarnings(s, earned) {
-            let remaining = earned;
-            for (const L of s.outs.earnings) {
-                if (!activeAt(L) || remaining <= EPS) continue;
-                const share = L.mode === 'percent'
-                    ? Math.min(earned * L.value / 100, remaining)
-                    : remaining;
-                if (share <= EPS) continue;
-                remaining -= share;
-                if (L.when === 'yearly') {
-                    L.acc += share;
-                } else {
-                    s.bal -= share;
-                    transfer(L, share);
-                }
-            }
-        }
-
-        function payYearlyEarnings(s) {
-            for (const L of s.outs.earnings) {
-                if (L.when !== 'yearly' || cal !== L.month || L.acc <= EPS || !activeAt(L)) continue;
-                const give = Math.min(L.acc, s.bal);
-                L.acc = 0;
-                if (give > EPS) {
-                    s.bal -= give;
-                    transfer(L, give);
-                }
+            // Utilization is read at the month's peak, once purchases are on and
+            // before payments land, which is when a statement would close.
+            if (limit != null) {
+                const used = s.bal / limit * 100;
+                if (used > s.utilPeak) s.utilPeak = used;
+                if (used > UTILIZATION_FLAG && s.utilFirst < 0) s.utilFirst = t;
             }
         }
 
@@ -419,14 +394,12 @@
                         L.givenMonth = t;
                         L.given = 0;
                         break;
-                    case 'due':     want = L.to.role === 'debt' ? dueLeft(L.to) : 0; break;
                     case 'percent': want = base * L.value / 100; break;
                     case 'above':   want = Math.max(0, s.bal - L.value); break;
                     default:        want = s.bal;
                 }
                 const give = Math.min(capToDebt(L, want), s.bal);
                 if (L.mode === 'fixed') L.given = give;
-                if (L.mode === 'due') L.to.dueLeft -= give;
                 if (give > EPS) {
                     s.bal -= give;
                     transfer(L, give);
@@ -436,7 +409,7 @@
 
         function settleFixedShortfalls() {
             for (const L of linkStates) {
-                if (L.mode !== 'fixed' || L.basis === 'earnings' || !activeAt(L) || !firesNow(L)) continue;
+                if (L.mode !== 'fixed' || !activeAt(L) || !firesNow(L)) continue;
                 // A payment to a debt that is paid off is not short: nothing is owed.
                 if (L.to.role === 'debt' && L.to.bal <= EPS) continue;
                 const given = L.givenMonth === t ? L.given : 0;
@@ -489,9 +462,7 @@
                     s.bal += earned;
                     s.earnings[t] = earned;
                     totals.growth[t] += earned;
-                    if (earned > EPS && !locked(s)) payEarnings(s, earned);
                 }
-                if (!locked(s)) payYearlyEarnings(s);
             }
             for (const s of debts) {
                 if (s.bal > EPS && s.params.rate > 0) {
@@ -564,7 +535,7 @@
         const s = {
             id: node.id, node, preset, role, kind: preset.kind || null, params, index,
             bal: 0,
-            outs: role === 'account' ? { inflow: [], earnings: [], balance: [] }
+            outs: role === 'account' ? { balance: [] }
                 : role === 'debt' ? { inflow: [], proceeds: [], ...(preset.kind === 'card' ? { charges: [] } : {}) }
                     : { inflow: [] },
             outflow: series(),
@@ -609,12 +580,12 @@
             s.owedBeforePay = 0;
             s.scheduled = preset.kind === 'card' ? 0 : Plan.loanPayment(params);
             s.pending = 0;          // payments queued but not yet arrived
-            s.dueMonth = -1;
-            s.dueLeft = 0;
             if (s.kind === 'card') {
                 s.charged = series();
                 s.cashback = series();
                 s.fees = series();
+                s.utilPeak = 0;         // highest share of the limit owed, in percent
+                s.utilFirst = -1;       // first month it passed UTILIZATION_FLAG
             }
         }
         if (role === 'modifier') {
@@ -749,6 +720,13 @@
             }
             if (s.role === 'account' && s.capped > 0.005) {
                 warnings.push({ code: 'cap', nodeId: s.id, amount: s.capped, month: s.cappedFirst });
+            }
+            if (s.kind === 'card' && !(s.params.limit > 0)
+                && s.outs.charges.some((L) => L.mode !== 'fixed')) {
+                warnings.push({ code: 'no-limit', nodeId: s.id });
+            }
+            if (s.kind === 'card' && s.utilFirst >= 0) {
+                warnings.push({ code: 'utilization', nodeId: s.id, amount: s.utilPeak, month: s.utilFirst });
             }
             if (s.role === 'debt') {
                 if (s.paidOffAt >= 0) milestones.push({ code: 'paid-off', nodeId: s.id, month: s.paidOffAt });

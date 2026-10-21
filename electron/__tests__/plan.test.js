@@ -87,11 +87,10 @@ test('default rules: links start on %, the first at 100, the next a slice, a pri
     assert.deepEqual([third.mode, third.value, third.when], ['fixed', 0, 'monthly']);
 });
 
-test('default rules: accounts send earnings to accounts and pay bills from the balance', () => {
+test('default rules: an account sends a fixed amount from its balance', () => {
     const { plan, nodes: [brokerage, savings, rent] } = planWith('investment', 'bank-account', 'expense');
-    brokerage.params.rate = 7;
     const toAccount = Plan.createLink(plan, brokerage.id, savings.id);
-    assert.deepEqual([toAccount.basis, toAccount.mode, toAccount.value], ['earnings', 'percent', 50]);
+    assert.deepEqual([toAccount.basis, toAccount.mode, toAccount.value, toAccount.when], ['balance', 'fixed', 500, 'monthly']);
     const toBill = Plan.createLink(plan, savings.id, rent.id);
     assert.deepEqual([toBill.basis, toBill.mode], ['balance', 'fixed']);
 });
@@ -106,15 +105,26 @@ test('a debt dated inside the plan offers its proceeds first', () => {
     assert.equal(l.basis, 'inflow');
 });
 
-test('"due" is offered only into a debt, and a saved one elsewhere is refitted', () => {
-    const { plan, nodes: [salary, loan, savings] } = planWith('salary', 'loan', 'bank-account');
-    assert.ok(Plan.modesFor(salary, 'inflow', loan).includes('due'));
-    assert.ok(!Plan.modesFor(salary, 'inflow', savings).includes('due'));
-    const l = Plan.createLink(plan, salary.id, savings.id);
-    l.mode = 'due';
-    plan.links.push(l);
-    const v = Plan.validatePlan(JSON.parse(JSON.stringify(plan)));
-    assert.notEqual(v.links[0].mode, 'due');
+test('no rule asks for "the payment due": a saved one becomes the fixed payment it was making', () => {
+    const { plan, nodes: [salary, loan, card, shop] } = planWith('salary', 'loan', 'credit-card', 'expense');
+    Object.assign(loan.params, { balance: 20000, rate: 7, term: 3 });
+    Object.assign(card.params, { balance: 300 });
+    for (const node of [salary, loan, card]) {
+        for (const basis of Object.keys(Plan.RULES[Plan.roleOf(node)])) {
+            assert.ok(!Plan.modesFor(node, basis).includes('due'), `${node.type} ${basis}`);
+        }
+    }
+    const rule = { value: 0, when: 'monthly', month: 1, date: null, start: null, end: null, growth: 0 };
+    plan.links.push(
+        { id: 'l_loan', from: salary.id, to: loan.id, ...rule, basis: 'inflow', mode: 'due' },
+        { id: 'l_card', from: salary.id, to: card.id, ...rule, basis: 'inflow', mode: 'due' },
+        { id: 'l_buy', from: card.id, to: shop.id, ...rule, basis: 'charges', mode: 'fixed', value: 100 },
+    );
+    const v = roundTrip(plan);
+    const get = (id) => v.links.find((l) => l.id === id);
+    assert.deepEqual([get('l_loan').mode, get('l_loan').when], ['fixed', 'monthly']);
+    close(get('l_loan').value, Plan.loanPayment(loan.params));
+    assert.deepEqual([get('l_card').mode, get('l_card').value], ['fixed', 400], 'the balance plus a month of purchases');
 });
 
 test('pre-tax links: income into a 401(k), HSA or Traditional IRA, or a match that feeds one', () => {
@@ -163,7 +173,7 @@ test('validatePlan normalizes numbers and rejects structure it cannot trust', ()
     bad((p) => { p.nodes[0].type = 'nope'; }, /unknown type/);
     bad((p) => { p.links[0].to = 'n_ghost'; }, /does not exist/);
     bad((p) => { p.links.push({ ...p.links[0], id: 'l_dup' }); }, /duplicates/);
-    bad((p) => { p.links[0].from = p.nodes[1].id; p.links[0].to = p.nodes[0].id; }, /cannot be linked/);
+    bad((p) => { Object.assign(p.links[0], { from: p.nodes[1].id, to: p.nodes[0].id, basis: 'balance' }); }, /cannot be linked/);
     bad((p) => { p.nodes[0].params.amount = 'lots'; }, /must be a number/);
     bad((p) => { p.settings.start = 'soon'; }, /month/);
     bad((p) => { p.nodes[0].id = '<script>'; }, /valid id/);
@@ -190,10 +200,11 @@ test('cloneWithNewIds gives a plan that shares no id with the original', () => {
 
 test('default rules: a debt is paid what it asks for, a match a slice of pay', () => {
     const { plan, nodes: [salary, loan, match, savings] } = planWith('salary', 'loan', 'employer-match', 'bank-account');
+    Object.assign(loan.params, { balance: 12000, rate: 0, term: 1 });
     const pay = Plan.createLink(plan, salary.id, loan.id);
-    assert.deepEqual([pay.mode, pay.when], ['due', 'monthly']);
+    assert.deepEqual([pay.mode, pay.value, pay.when], ['fixed', 1000, 'monthly']);
     const fromSavings = Plan.createLink(plan, savings.id, loan.id);
-    assert.deepEqual([fromSavings.basis, fromSavings.mode], ['balance', 'due']);
+    assert.deepEqual([fromSavings.basis, fromSavings.mode, fromSavings.value], ['balance', 'fixed', 1000]);
     const contribute = Plan.createLink(plan, salary.id, match.id);
     assert.deepEqual([contribute.mode, contribute.value], ['percent', 6]);
 });
@@ -204,7 +215,7 @@ test('each module can send one thing per basis', () => {
     const { nodes: [salary, checking, groceries, living, mortgage, card] } = planWith('salary', 'bank-account', 'expense', 'living', 'loan', 'credit-card');
     const bases = (n) => Plan.basesFor(n);
     assert.deepEqual(bases(salary), ['inflow']);
-    assert.deepEqual(bases(checking), ['inflow', 'earnings', 'balance']);
+    assert.deepEqual(bases(checking), ['balance'], 'an account sends only from its balance');
     assert.deepEqual(bases(groceries), []);
     assert.deepEqual(bases(living), ['inflow']);
     assert.deepEqual(bases(mortgage), ['inflow']);
@@ -221,32 +232,36 @@ test('a basis reaches only the roles it can send to', () => {
     assert.equal(Plan.canConnect(plan, card.id, savings.id).reason, 'basis', 'cash back is a setting, not a link');
     assert.equal(Plan.canConnect(plan, card.id, mortgage.id).reason, 'basis');
     assert.equal(Plan.canConnect(plan, mortgage.id, savings.id, 'inflow').ok, true, 'a loan still passes overpayment on');
-    assert.equal(Plan.canConnect(plan, checking.id, mortgage.id, 'earnings').ok, true);
+    assert.equal(Plan.canConnect(plan, checking.id, mortgage.id, 'balance').ok, true);
+    assert.equal(Plan.canConnect(plan, checking.id, mortgage.id, 'inflow').reason, 'basis', 'no deposits port on an account');
+    assert.equal(Plan.canConnect(plan, checking.id, mortgage.id, 'earnings').reason, 'basis');
     assert.equal(Plan.canConnect(plan, checking.id, mortgage.id, 'charges').reason, 'basis');
 });
 
 test('two modules link once per basis, not once in all', () => {
-    const { plan, nodes: [checking, savings] } = planWith('bank-account', 'bank-account');
-    const a = Plan.createLink(plan, checking.id, savings.id, 'earnings');
-    assert.equal(a.basis, 'earnings');
+    const { plan, nodes: [loan, savings] } = planWith('loan', 'bank-account');
+    loan.params.start = '2027-01';
+    const a = Plan.createLink(plan, loan.id, savings.id, 'proceeds');
+    assert.equal(a.basis, 'proceeds');
     plan.links.push(a);
-    assert.equal(Plan.canConnect(plan, checking.id, savings.id, 'earnings').reason, 'duplicate');
-    assert.equal(Plan.canConnect(plan, checking.id, savings.id, 'inflow').ok, true);
+    assert.equal(Plan.canConnect(plan, loan.id, savings.id, 'proceeds').reason, 'duplicate');
+    assert.equal(Plan.canConnect(plan, loan.id, savings.id, 'inflow').ok, true);
 });
 
 test('a link asked to start on a basis starts there with a sensible rule', () => {
-    const { plan, nodes: [checking, savings, card] } = planWith('bank-account', 'bank-account', 'credit-card');
-    const earn = Plan.createLink(plan, checking.id, savings.id, 'earnings');
-    assert.deepEqual([earn.basis, earn.mode, earn.value], ['earnings', 'percent', 50]);
+    const { plan, nodes: [loan, savings, checking, card] } = planWith('loan', 'bank-account', 'bank-account', 'credit-card');
+    loan.params.start = '2027-01';
+    const proceeds = Plan.createLink(plan, loan.id, savings.id, 'proceeds');
+    assert.deepEqual([proceeds.basis, proceeds.mode, proceeds.when], ['proceeds', 'percent', 'once']);
     const bal = Plan.createLink(plan, checking.id, card.id, 'balance');
-    assert.deepEqual([bal.basis, bal.mode], ['balance', 'due']);
+    assert.deepEqual([bal.basis, bal.mode], ['balance', 'fixed']);
 });
 
-test('a deposits link into Rent can send a fixed amount, and starts as one', () => {
+test('a balance link into Rent can send a fixed amount, and starts as one', () => {
     const { plan, nodes: [checking, rent] } = planWith('bank-account', 'expense');
-    assert.deepEqual(Plan.modesFor(checking, 'inflow', rent), ['percent', 'fixed', 'rest']);
-    const l = Plan.createLink(plan, checking.id, rent.id, 'inflow');
-    assert.deepEqual([l.basis, l.mode, l.when], ['inflow', 'fixed', 'monthly']);
+    assert.deepEqual(Plan.modesFor(checking, 'balance'), ['percent', 'fixed', 'rest', 'above']);
+    const l = Plan.createLink(plan, checking.id, rent.id, 'balance');
+    assert.deepEqual([l.basis, l.mode, l.when], ['balance', 'fixed', 'monthly']);
 });
 
 test('validatePlan rejects a link on a basis that cannot reach the target', () => {
@@ -259,9 +274,10 @@ test('validatePlan rejects a link on a basis that cannot reach the target', () =
 });
 
 test('a plan with two links between the same modules on different bases saves', () => {
-    const { plan, nodes: [checking, savings] } = planWith('bank-account', 'bank-account');
-    plan.links.push(Plan.createLink(plan, checking.id, savings.id, 'earnings'));
-    plan.links.push(Plan.createLink(plan, checking.id, savings.id, 'inflow'));
+    const { plan, nodes: [loan, savings] } = planWith('loan', 'bank-account');
+    loan.params.start = '2027-01';
+    plan.links.push(Plan.createLink(plan, loan.id, savings.id, 'proceeds'));
+    plan.links.push(Plan.createLink(plan, loan.id, savings.id, 'inflow'));
     assert.doesNotThrow(() => Plan.validatePlan(JSON.parse(JSON.stringify(plan))));
 });
 
@@ -318,41 +334,44 @@ test('retired banking types open as a Bank account or Term deposit wearing their
 });
 
 test('connecting a pair again takes the next free basis, until none is left', () => {
-    const { plan, nodes: [a, b] } = planWith('bank-account', 'bank-account');
+    const { plan, nodes: [a, b] } = planWith('loan', 'bank-account');
+    a.params.start = '2027-01';
     const seen = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
         assert.equal(Plan.canConnect(plan, a.id, b.id).ok, true);
         const l = Plan.createLink(plan, a.id, b.id);
         seen.push(l.basis);
         plan.links.push(l);
     }
-    assert.deepEqual(seen.sort(), ['balance', 'earnings', 'inflow']);
+    assert.deepEqual(seen.sort(), ['inflow', 'proceeds']);
     assert.equal(Plan.canConnect(plan, a.id, b.id).reason, 'duplicate');
     assert.doesNotThrow(() => Plan.validatePlan(JSON.parse(JSON.stringify(plan))));
 });
 
 test('a link may move to any basis the pair has free, and to no other', () => {
-    const { plan, nodes: [a, b] } = planWith('bank-account', 'bank-account');
-    const l = Plan.createLink(plan, a.id, b.id, 'earnings');
+    const { plan, nodes: [a, b] } = planWith('loan', 'bank-account');
+    a.params.start = '2027-01';
+    const l = Plan.createLink(plan, a.id, b.id, 'proceeds');
     plan.links.push(l);
-    assert.deepEqual(Plan.basesBetween(plan, a, b, l.id), ['inflow', 'earnings', 'balance']);
-    assert.deepEqual(Plan.basesBetween(plan, a, b), ['inflow', 'balance']);
-    const other = Plan.createLink(plan, a.id, b.id, 'balance');
+    assert.deepEqual(Plan.basesBetween(plan, a, b, l.id), ['inflow', 'proceeds']);
+    assert.deepEqual(Plan.basesBetween(plan, a, b), ['inflow']);
+    const other = Plan.createLink(plan, a.id, b.id, 'inflow');
     plan.links.push(other);
-    assert.equal(Plan.changeBasis(plan, l, 'balance'), false, 'taken by another link');
-    assert.equal(l.basis, 'earnings');
+    assert.equal(Plan.changeBasis(plan, l, 'inflow'), false, 'taken by another link');
+    assert.equal(l.basis, 'proceeds');
+    plan.links.pop();
     assert.equal(Plan.changeBasis(plan, l, 'inflow'), true);
     assert.equal(l.basis, 'inflow');
 });
 
 test('moving a link to another basis restarts its amount, and keeps its window', () => {
-    const { plan, nodes: [a, b] } = planWith('bank-account', 'bank-account');
-    a.params.rate = 4;
-    const l = Plan.createLink(plan, a.id, b.id, 'balance');
+    const { plan, nodes: [a, b] } = planWith('loan', 'bank-account');
+    a.params.start = '2027-01';
+    const l = Plan.createLink(plan, a.id, b.id, 'inflow');
     Object.assign(l, { mode: 'fixed', value: 500, start: '2027-01', end: '2028-01' });
     plan.links.push(l);
-    assert.equal(Plan.changeBasis(plan, l, 'earnings'), true);
-    assert.deepEqual([l.basis, l.mode, l.value, l.start, l.end], ['earnings', 'percent', 50, '2027-01', '2028-01']);
+    assert.equal(Plan.changeBasis(plan, l, 'proceeds'), true);
+    assert.deepEqual([l.basis, l.mode, l.value, l.start, l.end], ['proceeds', 'percent', 100, '2027-01', '2028-01']);
     assert.doesNotThrow(() => Plan.validatePlan(JSON.parse(JSON.stringify(plan))));
 });
 
@@ -431,4 +450,55 @@ test('a loan can still pass overpayment on', () => {
     plan.links.push(l);
     assert.doesNotThrow(() => roundTrip(plan));
     assert.equal(roundTrip(plan).links.length, 1);
+});
+
+// ── Account outflows and card limits ─────────────────────────────────────────
+
+test('saved deposit and earnings links out of an account follow the balance rule', () => {
+    const { plan, nodes: [checking, savings, brokerage, rent] } = planWith('bank-account', 'bank-account', 'investment', 'expense');
+    const rule = { value: 0, when: 'monthly', month: 1, date: null, start: null, end: null, growth: 0 };
+    plan.links.push(
+        // A fixed deposit link becomes the same amount from the balance.
+        { id: 'l_fixed', from: checking.id, to: rent.id, ...rule, basis: 'inflow', mode: 'fixed', value: 1500 },
+        // A share of deposits or earnings has no equivalent and is dropped.
+        { id: 'l_share', from: checking.id, to: savings.id, ...rule, basis: 'inflow', mode: 'percent', value: 25 },
+        { id: 'l_earn', from: brokerage.id, to: savings.id, ...rule, basis: 'earnings', mode: 'percent', value: 50 },
+        // A fixed deposit link beside a balance link on the same pair cannot also stand.
+        { id: 'l_twin_a', from: savings.id, to: rent.id, ...rule, basis: 'inflow', mode: 'fixed', value: 100 },
+        { id: 'l_twin_b', from: savings.id, to: rent.id, ...rule, basis: 'balance', mode: 'fixed', value: 200 },
+    );
+    const v = roundTrip(plan);
+    assert.deepEqual(v.links.map((l) => [l.id, l.basis, l.value]), [
+        ['l_fixed', 'balance', 1500], ['l_twin_b', 'balance', 200]]);
+});
+
+test('a card has a credit limit setting, and its purchases can be a share of it or the credit left', () => {
+    const { plan, nodes: [card, shop] } = planWith('credit-card', 'expense');
+    assert.equal(card.params.limit, null);
+    assert.ok(Catalog.fieldsFor(Catalog.preset('credit-card')).includes('limit'));
+    assert.ok(!Catalog.fieldsFor(Catalog.preset('loan')).includes('limit'), 'only a card has a limit');
+    assert.deepEqual(Plan.modesFor(card, 'charges'), ['fixed', 'percent', 'rest']);
+    card.params.limit = 8000;
+    for (const mode of ['percent', 'rest']) {
+        const l = { ...Plan.createLink(plan, card.id, shop.id, 'charges'), mode, value: 10 };
+        plan.links = [l];
+        const v = roundTrip(plan);
+        assert.equal(v.nodes[0].params.limit, 8000);
+        assert.equal(v.links[0].mode, mode);
+    }
+    card.params.limit = -5;
+    assert.equal(roundTrip(plan).nodes[0].params.limit, 0, 'a limit is clamped into range');
+    card.params.limit = null;
+    assert.equal(roundTrip(plan).nodes[0].params.limit, null);
+});
+
+test('a credit card has no minimum payment, and a saved one is cleared', () => {
+    const { plan, nodes: [card, loan] } = planWith('credit-card', 'loan');
+    assert.ok(!Catalog.fieldsFor(Catalog.preset('credit-card')).includes('minPayment'));
+    assert.ok(Catalog.fieldsFor(Catalog.preset('loan')).includes('minPayment'));
+    card.params.minPayment = 200;
+    loan.params.minPayment = 200;
+    const v = roundTrip(plan);
+    assert.equal(v.nodes[0].params.minPayment, null);
+    assert.equal(v.nodes[1].params.minPayment, 200);
 });

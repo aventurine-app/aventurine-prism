@@ -120,6 +120,12 @@
     --warning:         #b97a00;
     --warning-fill:    color-mix(in srgb, var(--warning) 15%, transparent);
     --info:            #1d4ed8;
+    /* The bright orange of a module's warning flag, and the issue callouts that match it. */
+    --flag:            #ff7e4d;
+    --flag-ink:        #1c0a00;
+    /* A notice (not yet a warning) is the same flag in yellow, with an info icon. */
+    --notice:          #ffd23f;
+    --notice-ink:      #1f1700;
 
     --frost-2:     rgba(0, 0, 0, 0.05);
     --frost-3:     rgba(0, 0, 0, 0.10);
@@ -166,14 +172,12 @@
     --role-none: var(--color-base-500);
 
     /* Output ports and the links leaving them. Each is the colour of what is
-       sent: pay and deposits borrow their module's role colour. */
+       sent: pay borrows its module's role colour. */
     --flow-pay:       var(--role-source);
-    --flow-deposits:  var(--role-account);
     --flow-spending:  var(--role-expense);
     --flow-passes:    var(--role-modifier);
     --flow-overflow:  var(--role-none);
     --flow-proceeds:  var(--role-debt);
-    --flow-earnings:  #1f9ea3;
     --flow-balance:   #5b63c9;
     --flow-charges:   #b9920f;
 

@@ -65,12 +65,10 @@
    wears the colour of what it sends (--flow). */
 .link { --link: var(--link-line); }
 [data-flow="pay"]       { --flow: var(--flow-pay); }
-[data-flow="deposits"]  { --flow: var(--flow-deposits); }
 [data-flow="spending"]  { --flow: var(--flow-spending); }
 [data-flow="passes"]    { --flow: var(--flow-passes); }
 [data-flow="overflow"]  { --flow: var(--flow-overflow); }
 [data-flow="proceeds"]  { --flow: var(--flow-proceeds); }
-[data-flow="earnings"]  { --flow: var(--flow-earnings); }
 [data-flow="balance"]   { --flow: var(--flow-balance); }
 [data-flow="charges"]   { --flow: var(--flow-charges); }
 
@@ -302,13 +300,12 @@
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: #ff6a00;
+    background: var(--flag);
     box-shadow: 0 0 0 2px var(--canvas-bg);
-    color: #1c0a00;
+    color: var(--flag-ink);
 }
+.node-flag--notice { background: var(--notice); color: var(--notice-ink); }
 .node-flag .icon { width: 12px; height: 12px; }
-
-.node-check { top: 4px; right: 4px; }
 
 .node-check {
     position: absolute;
@@ -328,7 +325,7 @@
 
 /* ── Ports ──────────────────────────────────────────────────────────────── */
 /* Both ports sit on the vertical centre: money comes in on the left and leaves
-   on the right. What a link carries (deposits, earnings, balance...) is chosen
+   on the right. What a link carries (a card's purchases, a loan's proceeds...) is chosen
    on the link, not by which port it leaves, so the output port wears the
    module's own colour. */
 .node-port {

@@ -22,25 +22,23 @@
 //          fixed    value (a currency amount) each time the link fires
 //          rest     whatever is left of the basis after the other links
 //          above    accounts only: the part of the balance over `value`
-//          due      into a debt only: the payment it asks for this month. A
-//                   loan's scheduled payment (from its term), or a card's
-//                   whole balance (paid in full)
 //
 //   basis  inflow    money arriving at the source. For income that is the
 //                    paycheck; for spending, the spending; for a debt, what is
 //                    paid beyond the payoff (loans only; a card sends nothing
-//                    on); for an account, its deposits.
-//          earnings  accounts only: this month's interest or returns
-//          balance   accounts only: the balance itself (withdrawals)
+//                    on).
+//          balance   accounts only, and their only basis: everything an account
+//                    sends comes out of its balance
 //          proceeds  debts with a start date only: the amount borrowed
 //          charges   credit cards only: a purchase the card pays for, charged
-//                    to its balance (fixed amounts, sent to spending)
+//                    to its balance and sent to spending. Percent is a share
+//                    of the card's limit, rest is the credit left under it
 //
 // A card's cash back is not a link. It is the card's `cashBackTo` setting:
 // empty credits the card's balance, an account's id deposits it there.
 //
 // A module has one output port. The basis is the link's own setting, chosen
-// when it is edited ("From": deposits, earnings, balance...), and two modules
+// when it is edited ("From": a card's purchases or a loan's proceeds, say), and two modules
 // may be linked once per basis.
 //
 // Timing (`when`) is monthly, yearly (in `month`) or once (on `date`), with an
@@ -176,28 +174,22 @@
     // ── Link rule space ────────────────────────────────────────────────────
     // Which modes each basis offers, per source role. Order is display order.
     const RULES = {
-        source:   { inflow: ['due', 'percent', 'fixed', 'rest'] },
+        source:   { inflow: ['percent', 'fixed', 'rest'] },
         expense:  { inflow: ['percent', 'fixed', 'rest'] },
-        modifier: { inflow: ['due', 'percent', 'fixed', 'rest'] },
+        modifier: { inflow: ['percent', 'fixed', 'rest'] },
         debt:     {
             inflow:   ['percent', 'fixed', 'rest'],
             proceeds: ['percent', 'rest'],
-            charges:  ['fixed'],
+            charges:  ['fixed', 'percent', 'rest'],
         },
-        account:  {
-            inflow:   ['percent', 'fixed', 'rest'],
-            earnings: ['percent', 'rest'],
-            balance:  ['due', 'percent', 'fixed', 'rest', 'above'],
-        },
+        account:  { balance: ['percent', 'fixed', 'rest', 'above'] },
     };
 
     /** The `when` values a rule offers. The first is the default. */
     function timingsFor(basis, mode) {
         if (basis === 'proceeds') return ['once'];
-        if (mode === 'due') return ['monthly'];
         if (basis === 'charges') return ['monthly', 'yearly', 'once'];
         if (basis === 'inflow') return mode === 'fixed' ? ['monthly', 'yearly', 'once'] : ['monthly'];
-        if (basis === 'earnings') return ['monthly', 'yearly'];
         if (mode === 'above') return ['monthly', 'yearly'];
         return ['monthly', 'yearly', 'once'];
     }
@@ -216,12 +208,10 @@
         return bases.filter((b) => b !== 'charges' && (b !== 'proceeds' || node.params.start));
     }
 
-    /** The modes a link on `basis` offers. 'due' only reaches a debt, so a
-     *  known target that is not one drops it. */
-    function modesFor(node, basis, to = null) {
+    /** The modes a link on `basis` offers. */
+    function modesFor(node, basis) {
         const p = Catalog.preset(node.type);
-        const modes = (p && RULES[p.role][basis]) || [];
-        return !to || roleOf(to) === 'debt' ? modes : modes.filter((m) => m !== 'due');
+        return (p && RULES[p.role][basis]) || [];
     }
 
     /** Whether income sent along `link` is a pre-tax contribution: it leaves
@@ -240,7 +230,7 @@
 
     /** A loan's monthly payment: the level payment that clears `balance` over
      *  its years left at its APR. Without a term it is the minimum payment the
-     *  user set, or nothing. A card has no schedule (see 'due'). */
+     *  user set, or nothing. A card has no schedule. */
     function loanPayment(params) {
         const principal = params.balance || 0;
         const n = params.term ? Math.max(1, Math.round(params.term * 12)) : 0;
@@ -308,7 +298,7 @@
     }
 
     /** Whether a link from `fromId` to `toId` may be drawn, and why not. Two
-     *  modules may be linked once per basis (deposits, earnings, balance...),
+     *  modules may be linked once per basis (a card's purchases, a loan's proceeds...),
      *  so a pair is full only when every basis that reaches the target is
      *  taken. With a `basis`, only that one is checked. */
     function canConnect(plan, fromId, toId, basis = null) {
@@ -334,15 +324,15 @@
 
     /** The rule a freshly drawn link starts with. Picked so the first link
      *  usually does what was meant without opening the editor: income's first
-     *  link takes the rest, later ones take a slice of it, an account feeding
-     *  another account sends part of its earnings, and a target with a natural
-     *  price (Rent, a wedding) asks for that price. */
+     *  link takes the rest, later ones take a slice of it, an account sends a
+     *  fixed amount from its balance, a debt is paid what it asks, and a target
+     *  with a natural price (Rent, a wedding) asks for that price. */
     function defaultRule(plan, from, to, basis = null) {
         const rule = startingRule(plan, from, to);
-        if (basis) return rule.basis === basis ? preferPercent(rule, from, to) : ruleOnBasis(plan, from, to, basis);
+        if (basis) return rule.basis === basis ? preferPercent(rule, from) : ruleOnBasis(plan, from, to, basis);
         // The usual basis may already link this pair: take the next free one.
         const free = basesBetween(plan, from, to);
-        return free.length && !free.includes(rule.basis) ? ruleOnBasis(plan, from, to, free[0]) : preferPercent(rule, from, to);
+        return free.length && !free.includes(rule.basis) ? ruleOnBasis(plan, from, to, free[0]) : preferPercent(rule, from);
     }
 
     /** Whether a link claims all that is left: a rest link, or the 100% that
@@ -352,8 +342,8 @@
     /** A new link starts on % wherever that is on offer. A rule that would
      *  take the rest takes all (100%) instead, so the first link still gets
      *  everything and later ones carve their share out of it. */
-    function preferPercent(rule, from, to) {
-        if (rule.mode === 'rest' && modesFor(from, rule.basis, to).includes('percent')) {
+    function preferPercent(rule, from) {
+        if (rule.mode === 'rest' && modesFor(from, rule.basis).includes('percent')) {
             Object.assign(rule, { mode: 'percent', value: 100 });
         }
         return rule;
@@ -363,10 +353,10 @@
      *  basis may take the rest, so a later one takes a share instead. */
     function ruleOnBasis(plan, from, to, basis) {
         const rule = rawRuleOnBasis(plan, from, to, basis);
-        const modes = modesFor(from, basis, to);
+        const modes = modesFor(from, basis);
         const taken = plan.links.some((l) => l.from === from.id && l.basis === basis && takesRest(l));
         if (rule.mode === 'rest' && taken && modes.includes('percent')) Object.assign(rule, { mode: 'percent', value: 50 });
-        return preferPercent(rule, from, to);
+        return preferPercent(rule, from);
     }
 
     function rawRuleOnBasis(plan, from, to, basis) {
@@ -376,17 +366,15 @@
         switch (basis) {
             case 'charges':
                 return Object.assign(rule, priceRule(plan, tp.inLink || { when: 'monthly', value: 100 }));
-            case 'earnings':
-                return Object.assign(rule, { mode: 'percent', value: 50 });
             case 'balance': {
-                if (tp.role === 'debt') return Object.assign(rule, { mode: 'due' });
+                if (tp.role === 'debt') return Object.assign(rule, paymentRule(to));
                 if (tp.inLink) return Object.assign(rule, priceRule(plan, tp.inLink));
                 return Object.assign(rule, { mode: 'fixed', value: 500 });
             }
             case 'proceeds':
                 return Object.assign(rule, { mode: 'rest', when: 'once' });
             default:
-                if (tp.inLink && modesFor(from, basis, to).includes('fixed')) {
+                if (tp.inLink && modesFor(from, basis).includes('fixed')) {
                     return Object.assign(rule, priceRule(plan, tp.inLink));
                 }
                 return existing.some(takesRest) ? Object.assign(rule, { mode: 'percent', value: 25 }) : rule;
@@ -398,6 +386,13 @@
     function priceRule(plan, buy) {
         return { mode: 'fixed', value: buy.value, when: buy.when, month: buy.month || 1,
             date: buy.relDate != null ? ymAdd(plan.settings.start, buy.relDate) : null };
+    }
+
+    /** Paying a debt starts at what it asks each month: a loan's scheduled
+     *  payment, else its minimum payment, else a round figure to edit. */
+    function paymentRule(debt) {
+        const ask = Math.ceil(loanPayment(debt.params) * 100) / 100;
+        return { mode: 'fixed', value: ask > 0 ? ask : 500, when: 'monthly' };
     }
 
     function startingRule(plan, from, to) {
@@ -423,13 +418,10 @@
             }
         }
 
-        // Paying a debt pays what it asks for: a loan's scheduled payment, a
-        // card's balance in full. Either can be changed to a fixed amount.
-        if (tp.role === 'debt') {
+        // Paying a debt starts at what it asks each month.
+        if (tp.role === 'debt' && fp.role !== 'debt') {
             const basis = fp.role === 'account' ? 'balance' : 'inflow';
-            if (RULES[fp.role][basis] && RULES[fp.role][basis].includes('due')) {
-                return Object.assign(rule, { basis, mode: 'due' });
-            }
+            return Object.assign(rule, { basis }, paymentRule(to));
         }
         // A workplace contribution is usually a slice of pay.
         if (tp.kind === 'match' && fp.role === 'source') {
@@ -437,19 +429,8 @@
         }
 
         switch (fp.role) {
-            case 'account': {
-                const rate = Number(from.params.rate) || 0;
-                if (tp.role === 'account' && rate > 0) {
-                    return Object.assign(rule, { basis: 'earnings', mode: 'percent', value: 50 });
-                }
-                if (tp.role === 'expense' || tp.role === 'debt') {
-                    return Object.assign(rule, { basis: 'balance', mode: 'fixed', value: 500 });
-                }
-                if (!hasRest('inflow') && existing.length === 0) {
-                    return Object.assign(rule, { basis: 'inflow', mode: 'rest' });
-                }
-                return Object.assign(rule, { basis: 'inflow', mode: 'percent', value: 25 });
-            }
+            case 'account':
+                return Object.assign(rule, { basis: 'balance', mode: 'fixed', value: 500 });
             case 'debt':
                 if (from.params.start && !existing.some((l) => l.basis === 'proceeds')) {
                     return Object.assign(rule, { basis: 'proceeds', mode: 'rest', when: 'once' });
@@ -480,10 +461,10 @@
 
     /** Bring a link's rule back inside the space its source and target allow,
      *  after either or the rule changed. Keeps every field it can. */
-    function fitRule(link, from, to = null) {
+    function fitRule(link, from) {
         const bases = basesFor(from);
         if (!bases.includes(link.basis)) link.basis = bases[0] || 'inflow';
-        const modes = modesFor(from, link.basis, to);
+        const modes = modesFor(from, link.basis);
         if (!modes.includes(link.mode)) link.mode = modes.includes('percent') ? 'percent' : modes[0];
         const timings = timingsFor(link.basis, link.mode);
         if (!timings.includes(link.when)) link.when = timings[0];
@@ -500,7 +481,7 @@
         if (!from || !to || link.basis === basis || !basesBetween(plan, from, to, link.id).includes(basis)) return false;
         const { start, end, growth } = link;
         Object.assign(link, ruleOnBasis(plan, from, to, basis), { start, end, growth });
-        fitRule(link, from, to);
+        fitRule(link, from);
         return true;
     }
 
@@ -582,8 +563,8 @@
         return out;
     }
 
-    const MODES = ['percent', 'fixed', 'rest', 'above', 'due'];
-    const BASES = ['inflow', 'earnings', 'balance', 'proceeds', 'charges'];
+    const MODES = ['percent', 'fixed', 'rest', 'above'];
+    const BASES = ['inflow', 'balance', 'proceeds', 'charges'];
     const WHENS = ['monthly', 'yearly', 'once'];
 
     function cleanLink(raw, nodesById, i) {
@@ -609,7 +590,7 @@
         if (!Catalog.LINK_TARGETS[roleOf(from)].includes(roleOf(to))) {
             fail(`link ${i} joins modules that cannot be linked`);
         }
-        fitRule(link, from, to);
+        fitRule(link, from);
         if (!portTargets(from, link.basis).includes(roleOf(to))) {
             fail(`link ${i} sends ${link.basis} to a module that cannot take it`);
         }
@@ -715,9 +696,37 @@
             return l.basis === 'charges' && Catalog.preset(to.type).kind === 'group';
         };
         const touchesRemoved = (l) => isObj(l) && (removedIds.has(l.from) || removedIds.has(l.to));
+
+        // An account sends only from its balance, and a rule no longer asks for
+        // "the payment due". A saved fixed deposit link becomes the same fixed
+        // amount from the balance (unless the pair has one already); other
+        // deposit and earnings links have no equivalent and are dropped. A due
+        // link becomes the fixed payment it was making: a loan's scheduled
+        // payment, or a card's balance plus its monthly purchases.
+        const settleRule = (l) => {
+            const from = nodesById.get(l.from);
+            const to = nodesById.get(l.to);
+            if (!from || !to) return l;
+            let out = l;
+            if (roleOf(from) === 'account' && l.basis !== 'balance') {
+                const twin = raw.links.some((o) => isObj(o) && o !== l && o.from === l.from && o.to === l.to && o.basis === 'balance');
+                if (l.basis !== 'inflow' || l.mode !== 'fixed' || twin) return null;
+                out = { ...l, basis: 'balance' };
+            }
+            if (out.mode === 'due') {
+                const payment = Catalog.preset(to.type).kind === 'card'
+                    ? (to.params.balance || 0) + raw.links
+                        .filter((o) => isObj(o) && o.from === to.id && o.basis === 'charges' && o.mode === 'fixed' && o.when === 'monthly')
+                        .reduce((sum, o) => sum + (Number(o.value) || 0), 0)
+                    : loanPayment(to.params);
+                out = { ...out, mode: 'fixed', value: payment, when: 'monthly' };
+            }
+            return out;
+        };
         const seenLinks = new Set();
         const seenPairs = new Set();
-        raw.links.filter((l) => !sinkLink(l) && !retiredCardLink(l) && !touchesRemoved(l)).forEach((l, i) => {
+        raw.links.filter((l) => !sinkLink(l) && !retiredCardLink(l) && !touchesRemoved(l))
+            .map((l) => (isObj(l) ? settleRule(l) : l)).filter(Boolean).forEach((l, i) => {
             const link = cleanLink(l, nodesById, i);
             if (seenLinks.has(link.id)) fail(`link id ${link.id} is used twice`);
             const pair = `${link.from}>${link.to}>${link.basis}`;

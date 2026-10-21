@@ -46,7 +46,10 @@
 }
 .insp-card .chip { border-radius: 6px; }
 .insp-card > .insp-section { padding: var(--space-16); }
-.insp-card + .insp-section { border-top: 0; }
+/* Issues sit right under the settings card, lined up with its edges. */
+[data-issues] > .insp-section { padding: 0 var(--space-16) var(--space-16); border-top: 0; }
+.insp-card + .insp-section,
+.insp-card + [data-issues]:empty + .insp-section { border-top: 0; }
 .insp-card .field-input,
 .insp-card .field-select,
 .insp-card .field-affix-text { background: var(--surface1); }
@@ -234,14 +237,16 @@
     align-items: flex-start;
     padding: var(--space-8) var(--space-12);
     border-radius: var(--radius-control);
-    background: var(--warning-fill);
-    color: var(--text-primary);
+    background: var(--flag);
+    color: var(--flag-ink);
     font-size: var(--size-small);
     line-height: var(--lh-snug);
 }
-.issue .icon { width: 16px; height: 16px; margin-top: 1px; color: var(--warning); }
-.issue--info { background: var(--frost-2); }
+.issue .icon { width: 16px; height: 16px; margin-top: 1px; color: var(--flag-ink); }
+.issue--info { background: var(--frost-2); color: var(--text-primary); }
 .issue--info .icon { color: var(--text-tertiary); }
+.issue--notice { background: var(--notice); color: var(--notice-ink); }
+.issue--notice .icon { color: var(--notice-ink); }
 button.issue { width: 100%; border: 0; text-align: left; cursor: pointer; }
 button.issue:hover { filter: brightness(0.97); }
 button.issue:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 1px; }
