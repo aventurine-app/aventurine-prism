@@ -13,12 +13,12 @@
             const unlocked = await Store.boot();
             if (!unlocked) {
                 app.hidden = true;
-                Lock.show(Store.state.status);
+                Lock.show(Store.state.status, boot);
             }
         } catch (e) {
             console.error('[boot]', e);
             app.hidden = true;
-            UI.toast('The plans file could not be loaded.', { type: 'error', duration: 600000 });
+            UI.toast('Your plans could not be loaded.', { type: 'error', duration: 600000 });
         }
     }
 

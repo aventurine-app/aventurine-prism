@@ -9,6 +9,10 @@
   "license": "GPL-3.0-or-later",
   "scripts": {
     "start": "electron .",
+    "web": "node ../web/dev-server.js",
+    "web:build": "node ../web/build.js",
+    "web:test": "node --test ../web/__tests__/*.test.js",
+    "web:verify": "electron ../web/verify.js",
     "test": "node --test",
     "lint": "eslint ..",
     "smoke": "electron scripts/smoke.js",

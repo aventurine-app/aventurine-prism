@@ -12,6 +12,17 @@
     <script src="/static/js/sim/catalog.js"></script>
     <script src="/static/js/sim/plan.js"></script>
     <script src="/static/js/sim/engine.js"></script>
+    <!-- The browser backend: plans in IndexedDB behind window.citrineApi. The
+         order is load-bearing (boot.js uses all the rest); boot.js does
+         nothing inside the desktop shell, which brings its own bridge. -->
+    <script src="/static/js/web/api-error.js"></script>
+    <script src="/static/js/web/plan-files.js"></script>
+    <script src="/static/js/web/session.js"></script>
+    <script src="/static/js/web/storage.js"></script>
+    <script src="/static/js/web/workspace.js"></script>
+    <script src="/static/js/web/backend.js"></script>
+    <script src="/static/js/web/file-dialogs.js"></script>
+    <script src="/static/js/web/boot.js"></script>
     <script src="/static/js/shell/ui.js"></script>
     <script src="/static/js/shell/titlebar.js"></script>
     <script src="/static/js/shell/settings.js"></script>

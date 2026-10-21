@@ -2,13 +2,14 @@
 
 // ─── settings.js ────────────────────────────────────────────────────────────
 // Preferences: Appearance (surface theme, flow animation, interface zoom), Format (currency
-// symbol, its position, digit separators), Security (where the plans file is,
-// and encrypting it), About.
+// symbol, its position, digit separators), Storage (in the browser: whether it
+// has promised to keep the plans; on the desktop: where the plans file is, and
+// encrypting it), About.
 //
 // Appearance and Format live in localStorage (per machine, read pre-paint by
-// theme-init.js and by core/format.js). Encryption is a property of the file
-// and goes through the backend. A Format change fires 'citrine:format' so the
-// app can redraw its numbers.
+// theme-init.js and by core/format.js). Desktop encryption is a property of the
+// file and goes through the backend. A Format change fires 'citrine:format' so
+// the app can redraw its numbers.
 
 (function () {
     const overlay = document.getElementById('prefs');
@@ -27,7 +28,7 @@
             t.tabIndex = on ? 0 : -1;
         }
         overlay.querySelectorAll('.settings-panel').forEach((p) => { p.hidden = p.dataset.panel !== name; });
-        if (name === 'security') refreshSecurity();
+        if (name === 'storage') refreshStorage();
         if (name === 'about') refreshAbout();
     }
 
@@ -119,9 +120,59 @@
         numberSelect.value = Fmt.prefs.numberFormat;
     }
 
-    // ── Security ───────────────────────────────────────────────────────────
+    // ── Storage ────────────────────────────────────────────────────────────
 
-    async function refreshSecurity() {
+    const isDesktop = html.dataset.shell === 'desktop';
+
+    function refreshStorage() {
+        if (isDesktop) refreshPlansFile();
+        else refreshBrowserStorage();
+    }
+
+    // In the browser: has it promised not to clear the plans when space runs low?
+    const persistDesc = overlay.querySelector('[data-persist-desc]');
+    const persistBtn = overlay.querySelector('[data-persist-request]');
+    const PERSIST_TEXT = {
+        kept: 'The browser will not clear your plans when it runs low on space.',
+        open: 'The browser may clear your plans when it runs low on space. Ask it to keep them.',
+        declined: 'The browser declined. It may still clear your plans when space runs low, so export them often.',
+        unsupported: 'This browser cannot promise to keep your plans, so export them often.',
+    };
+
+    function showPersistence(state) {
+        persistDesc.textContent = PERSIST_TEXT[state];
+        persistBtn.hidden = state !== 'open';
+    }
+
+    async function refreshBrowserStorage() {
+        const store = navigator.storage;
+        if (!store || typeof store.persisted !== 'function' || typeof store.persist !== 'function') {
+            showPersistence('unsupported');
+            return;
+        }
+        try {
+            showPersistence((await store.persisted()) ? 'kept' : 'open');
+        } catch {
+            showPersistence('unsupported');
+        }
+    }
+
+    persistBtn.addEventListener('click', async () => {
+        persistBtn.disabled = true;
+        persistBtn.classList.add('is-busy');
+        try {
+            showPersistence((await navigator.storage.persist()) ? 'kept' : 'declined');
+        } catch {
+            showPersistence('declined');
+        } finally {
+            persistBtn.disabled = false;
+            persistBtn.classList.remove('is-busy');
+        }
+    });
+
+    // On the desktop: the plans file and its encryption.
+
+    async function refreshPlansFile() {
         const r = await api('GET', '/api/file/status');
         if (!r.ok) return;
         const s = r.body;
@@ -134,7 +185,7 @@
         show('decrypt', s.encrypted);
     }
 
-    overlay.querySelector('[data-panel="security"]').addEventListener('click', async (e) => {
+    overlay.querySelector('[data-panel="storage"]').addEventListener('click', async (e) => {
         const act = e.target.closest('[data-enc-action]');
         if (act) {
             openPassword(act.dataset.encAction);
@@ -202,17 +253,24 @@
         if (!r.ok) return fail(ERRORS[r.body.error] || 'That did not work. The file is unchanged.');
         UI.closeModal(pwOverlay);
         pwForm.reset();
-        refreshSecurity();
+        refreshPlansFile();
         UI.toast(pwAction === 'decrypt' ? 'Encryption removed.' : pwAction === 'change' ? 'Password changed.' : 'Plans file encrypted.', { type: 'success' });
         return undefined;
     });
 
     // ── About ──────────────────────────────────────────────────────────────
 
+    /** The version: from the desktop shell, or from the page for the web app (web/assemble.js writes it). */
+    async function appVersion() {
+        if (window.electronApp) return window.electronApp.getVersion();
+        const meta = document.querySelector('meta[name="prism-version"]');
+        return meta ? meta.content : '—';
+    }
+
     async function refreshAbout() {
         const el = overlay.querySelector('[data-app-version]');
         try {
-            el.textContent = window.electronApp ? await window.electronApp.getVersion() : '—';
+            el.textContent = await appVersion();
         } catch {
             el.textContent = '—';
         }

@@ -31,6 +31,9 @@
 
     if (window.electronWindow && zoom >= 0.5 && zoom <= 2) window.electronWindow.setZoom(zoom);
 
+    // 'desktop' inside the Electron shell (its preload bridge exists), else 'web'.
+    root.dataset.shell = window.electronWindow ? 'desktop' : 'web';
+
     const plat = window.electronWindow && window.electronWindow.platform;
     root.dataset.platform = plat === 'darwin' ? 'mac' : plat === 'win32' ? 'win' : 'linux';
 }());

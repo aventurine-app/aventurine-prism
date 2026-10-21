@@ -291,13 +291,19 @@
     }
 
     // On unload there is no awaiting a reply. The request still reaches the
-    // main process, which writes the file whether or not anyone is listening.
+    // backend, which starts the write whether or not anyone is listening.
     window.addEventListener('beforeunload', () => {
         if (!dirty.size || !window.citrineApi) return;
         for (const id of dirty) {
             const doc = plans.get(id);
             if (doc) window.citrineApi.request('PUT', `/api/plans/${encodeURIComponent(id)}`, { plan: doc });
         }
+    });
+
+    // A browser tab can be closed, discarded or put to sleep without beforeunload
+    // firing. Hiding is the last moment that is reliably announced, so save then.
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') flush();
     });
 
     // ── Plans (tabs) ───────────────────────────────────────────────────────

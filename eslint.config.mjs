@@ -9,6 +9,7 @@
 //                  documents the real cross-file API and anything unlisted
 //                  stays an error.
 //   electron/**    CommonJS under Node (main process, backend, scripts, tests).
+//   web/**         CommonJS under Node (the web app's build, dev server, tests).
 
 import { createRequire } from 'node:module';
 const require = createRequire(new URL('./electron/', import.meta.url));
@@ -40,6 +41,8 @@ const appGlobals = {
     Chart: 'readonly',
     Outlook: 'readonly',
     Lock: 'readonly',
+    // web/ (the browser backend; each file adds its parts to this one object)
+    PrismWeb: 'readonly',
     // electron/preload.js bridge (absent outside Electron; feature-detect)
     electronWindow: 'readonly',
     electronApp: 'readonly',
@@ -51,6 +54,7 @@ export default [
     {
         ignores: [
             'electron/dist/**',
+            'web/dist/**',
             '**/node_modules/**',
             '.scratch/**',
             'static/js/core/icon-data.js',
@@ -78,15 +82,15 @@ export default [
         },
     },
 
-    // The simulation core is dual-environment: classic scripts that also
-    // module.exports themselves for Node.
+    // The simulation core and the browser backend's logic are dual-environment:
+    // classic scripts that also module.exports themselves for Node.
     {
-        files: ['static/js/sim/*.js'],
+        files: ['static/js/sim/*.js', 'static/js/web/*.js'],
         languageOptions: { globals: { module: 'readonly', require: 'readonly' } },
     },
 
     {
-        files: ['electron/**/*.js'],
+        files: ['electron/**/*.js', 'web/**/*.js'],
         languageOptions: {
             ecmaVersion: 2024,
             sourceType: 'commonjs',

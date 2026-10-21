@@ -1,6 +1,8 @@
 <!-- Shared window chrome: the frameless title bar (with the plan tabs) and the
      Preferences and password dialogs. Spliced into pages/*.html by the app://
-     protocol handler (electron/main.js). The tabs are built by app/tabs.js,
+     protocol handler (electron/main.js) and by web/assemble.js. Markup only the
+     desktop app or only the web app can use is marked data-desktop-only or
+     data-web-only (style.css). The tabs are built by app/tabs.js,
      Preferences is wired by shell/settings.js. -->
     <div class="titlebar">
         <div class="titlebar-lead">
@@ -9,7 +11,7 @@
         <nav class="tabs" id="tabs" aria-label="Plans"></nav>
         <div class="titlebar-drag"></div>
         <div class="save-state" id="save-state" data-state="saved" aria-live="polite" hidden>Saved</div>
-        <div class="titlebar-controls">
+        <div class="titlebar-controls" data-desktop-only>
             <button class="titlebar-btn titlebar-btn-min" data-action="min" aria-label="Minimize" tabindex="-1">
                 <svg viewBox="0 0 12 12" fill="none"><path d="M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
             </button>
@@ -32,7 +34,7 @@
             <div class="settings-tabs" role="tablist" aria-label="Preferences sections">
                 <button class="settings-tab" type="button" role="tab" data-tab="appearance" aria-selected="true">Appearance</button>
                 <button class="settings-tab" type="button" role="tab" data-tab="format" aria-selected="false" tabindex="-1">Format</button>
-                <button class="settings-tab" type="button" role="tab" data-tab="security" aria-selected="false" tabindex="-1">Security</button>
+                <button class="settings-tab" type="button" role="tab" data-tab="storage" aria-selected="false" tabindex="-1">Storage</button>
                 <button class="settings-tab" type="button" role="tab" data-tab="about" aria-selected="false" tabindex="-1">About</button>
             </div>
             <div class="modal-body">
@@ -63,7 +65,7 @@
                                 <button class="seg-switch-btn" type="button" data-value="off">Off</button>
                             </div>
                         </div>
-                        <div class="settings-row">
+                        <div class="settings-row" data-desktop-only>
                             <div class="settings-row-name">Interface Zoom</div>
                             <select class="field-select" data-pref="ui-zoom" aria-label="Interface zoom">
                                 <option value="0.8">80%</option>
@@ -100,8 +102,26 @@
                     </div>
                 </div>
 
-                <div class="settings-panel" role="tabpanel" data-panel="security" hidden>
-                    <div class="settings-section">
+                <div class="settings-panel" role="tabpanel" data-panel="storage" hidden>
+                    <div class="settings-section" data-web-only>
+                        <div class="settings-section-header eyebrow">Browser Storage</div>
+                        <div class="settings-card">
+                            <div class="settings-row settings-row--stack">
+                                <div class="settings-row-name">Your plans stay in this browser</div>
+                                <div class="settings-row-desc">They are saved on this device and never sent to a server. Clearing your browser's site data deletes them, and they do not follow you to another browser or computer. Export your plans often to keep copies of your own.</div>
+                            </div>
+                            <div class="settings-row">
+                                <div class="settings-row-label">
+                                    <div class="settings-row-name">Storage Protection</div>
+                                    <div class="settings-row-desc" data-persist-desc role="status" aria-live="polite">Checking…</div>
+                                </div>
+                                <div class="update-actions">
+                                    <button class="button-secondary" type="button" data-persist-request hidden>Keep My Plans</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="settings-section" data-desktop-only>
                         <div class="settings-section-header eyebrow">Plans File</div>
                         <div class="settings-card">
                             <div class="settings-row settings-row--stack">
@@ -110,7 +130,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="settings-section">
+                    <div class="settings-section" data-desktop-only>
                         <div class="settings-section-header eyebrow">Encryption</div>
                         <div class="settings-card">
                             <div class="settings-row">

@@ -300,6 +300,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Every element that sets display: flex outranks the UA's [hidden] rule. */
 [hidden] { display: none !important; }
 
+/* The desktop app and the web app share this markup. theme-init.js sets
+   data-shell, and what only one of them can do is marked data-desktop-only
+   or data-web-only. */
+html[data-shell="web"] [data-desktop-only],
+html[data-shell="desktop"] [data-web-only] { display: none !important; }
+
 .body_container {
     display: flex;
     flex: 1;

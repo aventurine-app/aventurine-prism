@@ -13,6 +13,7 @@
 node_modules/
 electron/dist/
 electron/out/
+web/dist/
 
 # Claude Code local config and notes
 .claude/
