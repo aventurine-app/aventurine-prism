@@ -24,10 +24,10 @@
     if (!root) return;
 
     const OPEN_KEY = 'inspector-open';
-    let isOpenState = true;
-    try { isOpenState = localStorage.getItem(OPEN_KEY) !== '0'; } catch { /* default open */ }
+    let isOpenState = Prefs.get(OPEN_KEY) !== '0';
 
-    let built = null;           // what the panel shows: 'plan' | 'node:<id>' | 'link:<id>'
+    let built = null;           // what the panel shows: 'plan' | 'preset:<id>' | 'node:<id>' | 'link:<id>'
+    let builtSig = '';          // structureSig() of the built panel
     let binds = new Map();      // data-bind key → { type, get, set, ... }
     let statsEl = null;
     let issuesEl = null;
@@ -120,9 +120,6 @@
             if (el.value !== v) el.value = v;
             el.removeAttribute('aria-invalid');
         }
-        root.querySelectorAll('[data-years]').forEach((b) => {
-            b.setAttribute('aria-pressed', String(Number(b.dataset.years) === plan().settings.years));
-        });
         const iconTile = root.querySelector('[data-act="node-icon"]');
         const shown = iconTile && Store.node(built.slice(5));
         if (shown && iconTile.dataset.icon !== P.iconOf(shown)) {
@@ -186,7 +183,7 @@
 
     // ── Sparkline ──────────────────────────────────────────────────────────
 
-    function spark(values, role, marker) {
+    function spark(values, marker) {
         const n = values.length;
         if (n < 2) return '';
         let lo = 0; let hi = 0;
@@ -202,7 +199,7 @@
         const mark = marker != null
             ? `<line class="spark-zero" x1="${x(marker)}" x2="${x(marker)}" y1="0" y2="${H}" vector-effect="non-scaling-stroke"/>`
             : '';
-        return `<svg class="spark" data-role="${role}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+        return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
             <path class="spark-area" d="${area}"/>${zero}${mark}
             <path class="spark-line" d="${line}" vector-effect="non-scaling-stroke"/></svg>`;
     }
@@ -222,11 +219,12 @@
         const more = all.length - list.length;
         return section('Issues', `<ul class="issues">${list.map((w) => {
             const d = D.warning(w, plan());
-            const icon = d.level === 'warn' ? 'warning' : 'info';
-            const attrs = d.select ? `data-select="${d.select.kind}:${esc(d.select.id)}"` : '';
-            const tag = d.select ? 'button type="button"' : 'li';
-            const close = d.select ? 'button' : 'li';
-            return `${d.select ? '<li>' : ''}<${tag} class="issue${d.level === 'warn' ? '' : ` issue--${d.level}`}" ${attrs}>${iconSvg(icon)}<span>${esc(d.text)}</span></${close}>${d.select ? '</li>' : ''}`;
+            const cls = d.level === 'warn' ? 'issue' : `issue issue--${d.level}`;
+            const body = `${iconSvg(d.level === 'warn' ? 'warning' : 'info')}<span>${esc(d.text)}</span>`;
+            // One that points somewhere is a button that selects it.
+            return d.select
+                ? `<li><button type="button" class="${cls}" data-select="${d.select.kind}:${esc(d.select.id)}">${body}</button></li>`
+                : `<li class="${cls}">${body}</li>`;
         }).join('')}${more > 0 ? `<li class="insp-none">${more} more</li>` : ''}</ul>`);
     }
 
@@ -260,7 +258,7 @@
         </div>`;
         return `
             <div class="insp-header">
-                <span class="role-tile role-tile--lg" style="--tile: var(--accent-primary)">${iconSvg('sparkle')}</span>
+                <span class="role-tile role-tile--lg role-tile--accent">${iconSvg('sparkle')}</span>
                 <div class="insp-titles">${nameB.html}
                 </div>
             </div>
@@ -281,7 +279,7 @@
         const outlook = `
             <div class="worth-line"><span class="worth-from">${money(T.startNetWorth, { compact: true })} →</span>
                 <span class="worth-to">${money(T.endNetWorth)}</span></div>
-            ${spark(Array.from(r.netWorth), 'none', Store.state.scrub)}
+            ${spark(Array.from(r.netWorth), Store.state.scrub)}
             <div class="insp-stats">
                 ${stat('Change', money(delta, { sign: true }), delta >= 0 ? 'up' : 'down')}
                 ${stat('Earned', money(T.earned - T.withheld))}
@@ -368,6 +366,23 @@
         return `${money(amount)}/mo`;
     }
 
+    /** The Settings section: a control for each field the module shows now. */
+    function settingsSection(node) {
+        const keys = visibleFields(node);
+        if (!keys.length) return '';
+        const fields = keys.map((k) => field(labelFor(node, k), `param.${k}`, paramSpec(node, k))).join('');
+        return section('Settings', `<div class="insp-fields">${fields}</div>`);
+    }
+
+    /** The chips under a module's name: its role, and its category when that
+     *  is named differently. */
+    function roleChips(p) {
+        const role = C.ROLES[p.role].label;
+        const cat = D.CATEGORY_NAME[p.cat];
+        return `<div class="insp-sub"><span class="chip" data-role="${p.role}">${esc(role)}</span>
+            ${cat !== role ? `<span class="chip">${esc(cat)}</span>` : ''}</div>`;
+    }
+
     /** One row in Outgoing / Incoming Rules: the module at the other end, the
      *  money moving along the link, and the link's rule. */
     function linkRow(l, other) {
@@ -395,14 +410,9 @@
             fallback: () => p.name,
         });
 
-        const keys = visibleFields(node);
-        const settings = keys.length
-            ? section('Settings', `<div class="insp-fields">${keys.map((k) => field(labelFor(node, k), `param.${k}`, paramSpec(node, k))).join('')}</div>`)
-            : '';
-
         const outs = plan().links.filter((l) => l.from === id);
         const ins = plan().links.filter((l) => l.to === id);
-        const sends = C.ROLES[role].hasOut && P.basesFor(node).length ? section('Outgoing Rules',
+        const sends = P.basesFor(node).length ? section('Outgoing Rules',
             outs.length
                 ? `<ul class="insp-links">${outs.map((l) => linkRow(l, Store.node(l.to))).join('')}</ul>`
                 : '<p class="insp-none">No links yet</p>') : '';
@@ -418,9 +428,8 @@
                     data-icon="${esc(P.iconOf(node))}" aria-haspopup="dialog" aria-label="Change icon" title="Change icon">${iconSvg(P.iconOf(node))}</button>
                 <div class="insp-titles">${nameB.html}</div>
             </div>
-            <div class="insp-sub"><span class="chip" data-role="${role}">${esc(C.ROLES[role].label)}</span>
-                ${D.CATEGORY_NAME[p.cat] !== C.ROLES[role].label ? `<span class="chip">${esc(D.CATEGORY_NAME[p.cat])}</span>` : ''}</div>
-            ${settings}
+            ${roleChips(p)}
+            ${settingsSection(node)}
             </div>
             <div data-issues></div>
             ${receives}${sends}
@@ -432,10 +441,6 @@
         const p = C.preset(presetId);
         const role = p.role;
         const node = P.createNode(plan(), presetId, 0, 0);
-        const keys = visibleFields(node);
-        const settings = keys.length
-            ? section('Settings', `<div class="insp-fields">${keys.map((k) => field(labelFor(node, k), `param.${k}`, paramSpec(node, k))).join('')}</div>`)
-            : '';
         const icon = Store.state.previewIcon || p.icon;
         return `
             <div class="insp-card" data-role="${role}">
@@ -444,9 +449,8 @@
                     aria-haspopup="dialog" aria-label="Change icon" title="Change icon">${iconSvg(icon)}</button>
                 <div class="insp-titles"><div class="insp-name">${esc(p.name)}</div></div>
             </div>
-            <div class="insp-sub"><span class="chip" data-role="${role}">${esc(C.ROLES[role].label)}</span>
-                ${D.CATEGORY_NAME[p.cat] !== C.ROLES[role].label ? `<span class="chip">${esc(D.CATEGORY_NAME[p.cat])}</span>` : ''}</div>
-            ${settings}
+            ${roleChips(p)}
+            ${settingsSection(node)}
             </div>`;
     }
 
@@ -666,7 +670,7 @@
         else if (key.startsWith('preset:')) html = presetPanel(key.slice(7));
         else if (key.startsWith('node:')) html = nodePanel(Store.node(key.slice(5)));
         else html = linkPanel(Store.link(key.slice(5)));
-        root.innerHTML = `<div class="insp-scroll">${html}</div>`;
+        root.innerHTML = `<div class="insp-scroll scroll-y">${html}</div>`;
         if (key.startsWith('preset:')) {
             for (const el of root.querySelectorAll('[data-bind]')) el.disabled = true;
         }
@@ -712,7 +716,7 @@
         if (e.target.closest('input, select')) e.stopPropagation();
     });
 
-    root.addEventListener('click', async (e) => {
+    root.addEventListener('click', (e) => {
         const sel = e.target.closest('[data-select]');
         if (sel) {
             const [kind, ...rest] = sel.dataset.select.split(':');
@@ -726,19 +730,12 @@
             UI.monthPicker(month, {
                 value: spec.get(),
                 fallback: plan().settings.start,
-                clearLabel: spec.optional ? (spec.clearLabel || 'Clear') : null,
+                clearLabel: spec.optional ? 'Clear' : null,
                 onPick: (v) => {
                     Store.edit((pl) => spec.set(pl, v));
                     if (spec.rebuild) rebuild(); else sync();
                 },
             });
-            return;
-        }
-        const years = e.target.closest('[data-years]');
-        if (years) {
-            const y = Number(years.dataset.years);
-            Store.edit((pl) => { pl.settings.years = y; });
-            root.querySelectorAll('[data-years]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.years) === y)));
             return;
         }
         const mode = e.target.closest('[data-mode]');
@@ -753,9 +750,9 @@
                     UI.toast('Another link already takes the rest.');
                     return false;
                 }
-                if (next === 'percent' && (l.mode !== 'percent')) l.value = Math.min(l.value || 25, 100) || 25;
+                if (next === 'percent') l.value = Math.min(l.value || 25, 100) || 25;
                 if (next === 'fixed' && l.mode === 'percent') l.value = 500;
-                if (next === 'above' && l.mode !== 'above') l.value = 10000;
+                if (next === 'above') l.value = 10000;
                 l.mode = next;
                 P.fitRule(l, pl.nodes.find((n) => n.id === l.from));
                 return true;
@@ -794,7 +791,7 @@
 
     function toggle() {
         isOpenState = !isOpenState;
-        try { localStorage.setItem(OPEN_KEY, isOpenState ? '1' : '0'); } catch { /* not persisted */ }
+        Prefs.set(OPEN_KEY, isOpenState ? '1' : '0');
         built = null;
         render();
     }
@@ -833,7 +830,6 @@
         return '';
     }
 
-    let builtSig = '';
     function listsChanged() {
         const sig = structureSig();
         const changed = sig !== builtSig;
@@ -847,5 +843,5 @@
         render();
     }
 
-    window.Inspector = { render, refresh, toggle, isOpen: () => isOpenState };
+    window.Inspector = { refresh, toggle, isOpen: () => isOpenState };
 }());

@@ -21,13 +21,10 @@ const OUT = path.join(__dirname, '..', '..', 'static', 'js', 'core', 'icon-data.
 const UI_ICONS = [
     'plus', 'minus', 'x', 'trash', 'copy', 'magnifying-glass', 'caret-down', 'caret-right',
     'caret-left', 'caret-up', 'arrow-counter-clockwise', 'arrow-clockwise', 'corners-out',
-    'gear-six', 'folder', 'export', 'download-simple', 'upload-simple', 'lock-key',
-    'lock-key-open', 'warning', 'warning-circle', 'info', 'check', 'check-circle',
-    'dots-three', 'pencil-simple', 'arrow-right', 'chart-line', 'chart-bar', 'table',
-    'sidebar-simple', 'link-simple', 'flow-arrow', 'file-plus', 'calendar-blank',
-    'magnifying-glass-plus', 'magnifying-glass-minus', 'sparkle', 'tray', 'chart-line-up',
-    'squares-four', 'cursor-click', 'hand-grabbing', 'eye', 'clock-counter-clockwise',
-    'arrows-out-simple', 'shield-check', 'plugs-connected',
+    'gear-six', 'folder', 'export', 'download-simple', 'lock-key', 'warning', 'warning-circle',
+    'info', 'check', 'check-circle', 'dots-three', 'pencil-simple', 'arrow-right', 'chart-line',
+    'chart-bar', 'table', 'sidebar-simple', 'flow-arrow', 'file-plus', 'calendar-blank',
+    'sparkle', 'chart-line-up', 'squares-four', 'clock-counter-clockwise', 'shield-check',
 ];
 
 // Each asset is one <svg> of <path d="…"/> elements. Anything

@@ -6,6 +6,9 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
 
 const Catalog = require('../../static/js/sim/catalog.js');
 const Plan = require('../../static/js/sim/plan.js');
@@ -36,6 +39,23 @@ test('the catalog: every preset has a known role, category and icon name', () =>
         for (const k of Catalog.fieldsFor(p)) assert.ok(Catalog.FIELDS[k], `${p.id}.${k}`);
     }
     assert.ok(Catalog.PRESETS.length >= 15);
+});
+
+test('the catalog: the generated icon data holds every icon a module can wear', () => {
+    const file = path.join(__dirname, '..', '..', 'static', 'js', 'core', 'icon-data.js');
+    const sandbox = { window: {} };
+    vm.runInNewContext(fs.readFileSync(file, 'utf8'), sandbox);
+    const drawn = new Set(Object.keys(sandbox.window.CITRINE_ICON_DATA.regular));
+    const missing = Catalog.PRESETS.flatMap((p) => Catalog.iconChoices(p)).filter((icon) => !drawn.has(icon));
+    assert.deepEqual([...new Set(missing)], [], 'run `npm run icons:ui` after adding a module icon');
+});
+
+test('a retired preset folds into one whose category offers its old icon', () => {
+    for (const [old, { type, icon }] of Object.entries(Plan.RETIRED_TYPES)) {
+        const survivor = Catalog.preset(type);
+        assert.ok(survivor, `${old} folds into ${type}`);
+        assert.ok(Catalog.iconChoices(survivor).includes(icon), `${old} keeps its ${icon} icon as a ${type}`);
+    }
 });
 
 test('year-month arithmetic', () => {

@@ -33,16 +33,10 @@
 
     const INFLOW_PORT = { source: 'Pay', expense: 'Spending', modifier: 'Passes on', debt: 'Overpayment' };
     const BASIS_PORT = { balance: 'Balance', proceeds: 'Loan proceeds', charges: 'Purchases' };
-    const INFLOW_FLOW = { source: 'pay', expense: 'spending', modifier: 'passes', debt: 'overflow' };
 
     /** What a link carries out of a module, as a label: 'Deposits', 'Purchases'. */
     function portLabel(node, basis) {
         return BASIS_PORT[basis] || INFLOW_PORT[roleOf(node)] || 'Output';
-    }
-
-    /** The colour key of the links carrying `basis` out of `node`. */
-    function flowKey(node, basis) {
-        return basis === 'inflow' ? INFLOW_FLOW[roleOf(node)] || 'overflow' : basis;
     }
 
     /** Short timing word for a canvas label. */
@@ -63,11 +57,11 @@
         return Fmt.money(v, { compact: v >= 10000 });
     }
 
-    /** The label on a link's pill: '20%', '$1,800/mo', 'Rest', 'Above $20K'. */
     /** Bases whose money is split the moment it arrives, so their links have
      *  no timing of their own. */
     const ON_ARRIVAL = new Set(['inflow', 'proceeds']);
 
+    /** The label on a link's pill: '20%', '$1,800/mo', 'Rest', 'Above $20K'. */
     function linkShort(link, from) {
         const onArrival = ON_ARRIVAL.has(link.basis);
         const tag = onArrival ? '' : link.basis === 'charges' ? ' of limit' : ' of balance';
@@ -133,8 +127,7 @@
             case 'account': {
                 if (!r) return '';
                 const label = C.fieldLabel(p, 'rate');
-                const word = label === 'APY' ? 'APY' : label === 'Interest' ? 'interest'
-                    : label === 'Yield' ? 'yield' : 'return';
+                const word = label === 'APY' ? 'APY' : label === 'Interest' ? 'interest' : 'return';
                 return `${Fmt.pct(r)} ${word}`;
             }
             case 'debt': {
@@ -149,7 +142,7 @@
             case 'modifier':
                 if (p.kind === 'group') return '';
                 if (p.kind === 'match') return `+${Fmt.pct(r)} match`;
-                return `${Fmt.pct(r)} ${p.id === 'fee' ? 'fee' : 'tax'}`;
+                return `${Fmt.pct(r)} tax`;
             default:
                 return '';
         }
@@ -176,67 +169,64 @@
         return n ? n.name : 'A module';
     };
 
+    // How loud a warning is. A card's high utilization is a notice (not a
+    // problem yet) and money parked in Unassigned is information; every other
+    // warning is a warning.
+    const WARNING_LEVEL = { unassigned: 'info', utilization: 'notice' };
+
+    /** 'warn', 'notice' or 'info', without writing the warning's sentence. */
+    function warningLevel(w) {
+        return WARNING_LEVEL[w.code] || 'warn';
+    }
+
     /** A warning as a sentence, plus what to select when it is clicked. */
     function warning(w, plan) {
+        return { level: warningLevel(w), ...warningBody(w, plan) };
+    }
+
+    function warningBody(w, plan) {
         const m = (k) => monthLabel(plan, k);
+        const name = nameOf(plan, w.nodeId);
+        const node = { kind: 'node', id: w.nodeId };
         switch (w.code) {
             case 'short': {
                 const l = plan.links.find((x) => x.id === w.linkId);
                 const to = l ? nameOf(plan, l.to) : 'its target';
                 return {
-                    level: 'warn', select: { kind: 'link', id: w.linkId },
-                    text: `${nameOf(plan, w.nodeId)} to ${to} falls ${Fmt.money(w.amount, { compact: true })} short, starting ${m(w.month)}.`,
+                    select: { kind: 'link', id: w.linkId },
+                    text: `${name} to ${to} falls ${Fmt.money(w.amount, { compact: true })} short, starting ${m(w.month)}.`,
                 };
             }
             case 'over-100':
                 return {
-                    level: 'warn', select: { kind: 'node', id: w.nodeId },
-                    text: `${nameOf(plan, w.nodeId)} sends ${Fmt.number(w.amount, 2)}% of its ${basisNoun(plan.nodes.find((n) => n.id === w.nodeId), w.basis)}.`,
+                    select: node,
+                    text: `${name} sends ${Fmt.number(w.amount, 2)}% of its ${basisNoun(plan.nodes.find((n) => n.id === w.nodeId), w.basis)}.`,
                 };
             case 'unassigned':
-                return {
-                    level: 'info', select: { kind: 'node', id: w.nodeId },
-                    text: `${Fmt.money(w.amount, { compact: true })} from ${nameOf(plan, w.nodeId)} has no link and lands in Unassigned.`,
-                };
+                return { select: node, text: `${Fmt.money(w.amount, { compact: true })} from ${name} has no link and lands in Unassigned.` };
             case 'cap':
-                return {
-                    level: 'warn', select: { kind: 'node', id: w.nodeId },
-                    text: `${nameOf(plan, w.nodeId)} reaches its yearly limit in ${m(w.month)}; ${Fmt.money(w.amount, { compact: true })} lands in Unassigned.`,
-                };
+                return { select: node, text: `${name} reaches its yearly limit in ${m(w.month)}; ${Fmt.money(w.amount, { compact: true })} lands in Unassigned.` };
             case 'no-limit':
-                return {
-                    level: 'warn', select: { kind: 'node', id: w.nodeId },
-                    text: `${nameOf(plan, w.nodeId)} charges a share of its limit or the credit left, but has no credit limit set.`,
-                };
+                return { select: node, text: `${name} charges a share of its limit or the credit left, but has no credit limit set.` };
             case 'utilization':
-                return {
-                    level: 'notice', select: { kind: 'node', id: w.nodeId },
-                    text: `${nameOf(plan, w.nodeId)} uses up to ${Fmt.number(w.amount, 0)}% of its limit. Reducing usage below 30% turns this off.`,
-                };
+                return { select: node, text: `${name} uses up to ${Fmt.number(w.amount, 0)}% of its limit. Reducing usage below 30% turns this off.` };
             case 'underpaid':
-                return {
-                    level: 'warn', select: { kind: 'node', id: w.nodeId },
-                    text: `${nameOf(plan, w.nodeId)} is paid less than its minimum from ${m(w.month)}.`,
-                };
+                return { select: node, text: `${name} is paid less than its minimum from ${m(w.month)}.` };
             case 'debt-growing':
-                return {
-                    level: 'warn', select: { kind: 'node', id: w.nodeId },
-                    text: `${nameOf(plan, w.nodeId)} grows by ${Fmt.money(w.amount, { compact: true })}: interest is more than the payments.`,
-                };
+                return { select: node, text: `${name} grows by ${Fmt.money(w.amount, { compact: true })}: interest is more than the payments.` };
             case 'loop':
                 return {
-                    level: 'warn', select: { kind: 'node', id: w.nodeIds[0] },
+                    select: { kind: 'node', id: w.nodeIds[0] },
                     text: `Money circles between ${w.nodeIds.map((id) => nameOf(plan, id)).join(', ')}.`,
                 };
             case 'runaway':
-                return { level: 'warn', select: null, text: 'A loop passes all of its money around; some was parked in Unassigned.' };
+                return { select: null, text: 'A loop passes all of its money around; some was parked in Unassigned.' };
             default:
-                return { level: 'info', select: null, text: w.code };
+                return { select: null, text: w.code };
         }
     }
 
     window.Describe = {
-        CATEGORY_NAME, MONTH_NAMES, presetOf, roleOf, basisNoun, portLabel, flowKey, linkShort, linkSentence,
-        nodeBadge, nodeMeta, monthLabel, warning, compact,
+        CATEGORY_NAME, roleOf, portLabel, linkShort, linkSentence, nodeMeta, monthLabel, warning, warningLevel,
     };
 }());

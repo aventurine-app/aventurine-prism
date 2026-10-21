@@ -163,20 +163,17 @@ function createWorkspace({ filePath }) {
         return vault.seal(JSON.stringify(body), state.key, state.kdf);
     }
 
-    /** Write the whole file. `refreshBackup` replaces the .bak with the new
-     *  file: used when encryption changes, so no copy under the old (or no)
-     *  password is left lying beside it. */
-    function save({ refreshBackup = false } = {}) {
-        if (!state.backedUp && !refreshBackup && fs.existsSync(filePath)) {
-            fs.copyFileSync(filePath, `${filePath}.bak`);
-            try { fs.chmodSync(`${filePath}.bak`, 0o600); } catch { /* not supported */ }
-        }
+    /** Copy the file as it is now to `<file>.bak`, owner-only. */
+    function backup() {
+        fs.copyFileSync(filePath, `${filePath}.bak`);
+        try { fs.chmodSync(`${filePath}.bak`, 0o600); } catch { /* not supported */ }
+    }
+
+    /** Write the whole file, keeping a .bak of it first once per session. */
+    function save() {
+        if (!state.backedUp && fs.existsSync(filePath)) backup();
         state.backedUp = true;
         writeAtomic(filePath, serialize());
-        if (refreshBackup) {
-            fs.copyFileSync(filePath, `${filePath}.bak`);
-            try { fs.chmodSync(`${filePath}.bak`, 0o600); } catch { /* not supported */ }
-        }
     }
 
     // ── Locking and encryption ─────────────────────────────────────────────
@@ -196,21 +193,25 @@ function createWorkspace({ filePath }) {
         if (typeof password !== 'string' || !password) throw new ApiError('password required', 400);
         const env = state.envelope;
         const key = await vault.deriveKey(password, env.kdf);
-        let text;
-        try {
-            text = vault.open(env, key);
-        } catch {
+        // Another unlock may have finished while this key was being derived.
+        if (!state.locked) {
             key.fill(0);
-            await penalty();
-            throw new ApiError('wrong_password', 401);
+            return status();
         }
-        let parsed;
+        let doc;
         try {
-            parsed = JSON.parse(text);
-        } catch {
-            throw new ApiError('unreadable', 422);
+            doc = loadDoc(JSON.parse(vault.open(env, key)));
+        } catch (e) {
+            key.fill(0);
+            if (e instanceof vault.VaultError) {
+                await penalty();
+                throw new ApiError('wrong_password', 401);
+            }
+            // The password was right, but what it opens is not a plans file
+            // this build can read (malformed, or saved by a newer version).
+            throw new ApiError(e.code === 'too_new' ? 'too_new' : 'unreadable', 422);
         }
-        state.doc = loadDoc(parsed);
+        state.doc = doc;
         state.key = key;
         state.kdf = env.kdf;
         state.envelope = null;
@@ -249,33 +250,46 @@ function createWorkspace({ filePath }) {
         if (password.length > 1024) throw new ApiError('password_too_long', 400);
     }
 
+    /** A fresh salt and the key a new password derives with it. */
+    async function sealFor(password) {
+        checkNewPassword(password);
+        const kdf = vault.newKdf();
+        return { key: await vault.deriveKey(password, kdf), kdf };
+    }
+
     async function setEncryption({ action, current, password } = {}) {
+        let next;
         if (action === 'encrypt') {
             if (state.encrypted) throw new ApiError('already encrypted', 409);
-            checkNewPassword(password);
-            const kdf = vault.newKdf();
-            state.key = await vault.deriveKey(password, kdf);
-            state.kdf = kdf;
-            state.encrypted = true;
+            next = await sealFor(password);
         } else if (action === 'change') {
             if (!state.encrypted) throw new ApiError('not encrypted', 409);
             await verifyCurrent(current);
-            checkNewPassword(password);
-            const kdf = vault.newKdf();
-            const key = await vault.deriveKey(password, kdf);
-            zeroKey();
-            state.key = key;
-            state.kdf = kdf;
+            next = await sealFor(password);
         } else if (action === 'decrypt') {
             if (!state.encrypted) throw new ApiError('not encrypted', 409);
             await verifyCurrent(current);
-            zeroKey();
-            state.kdf = null;
-            state.encrypted = false;
+            next = { key: null, kdf: null };
         } else {
             throw new ApiError('unknown action', 400);
         }
-        save({ refreshBackup: true });
+        // Switch to the new recipe for the write only. A failed write puts the
+        // old one back, so the status never claims an encryption (or a
+        // password) that the file on disk does not have.
+        const prev = { key: state.key, kdf: state.kdf, encrypted: state.encrypted };
+        Object.assign(state, next, { encrypted: next.key !== null });
+        try {
+            writeAtomic(filePath, serialize());
+        } catch (e) {
+            if (next.key) next.key.fill(0);
+            Object.assign(state, prev);
+            throw e;
+        }
+        if (prev.key) prev.key.fill(0);
+        // Replace the .bak too, so no copy under the old (or no) password is
+        // left lying beside the file.
+        state.backedUp = true;
+        backup();
         return status();
     }
 
@@ -365,7 +379,14 @@ function createWorkspace({ filePath }) {
     /** Add a plan from an exported file. Ids are regenerated, so importing the
      *  same file twice gives two independent plans. */
     function importPlanFile(file) {
-        const st = fs.statSync(file);
+        let st;
+        try {
+            st = fs.statSync(file);
+        } catch {
+            throw new ApiError('file could not be read', 422);
+        }
+        // A FIFO or a device would block the main process on the read below.
+        if (!st.isFile()) throw new ApiError('not a plan file', 422);
         if (st.size > MAX_IMPORT_BYTES) throw new ApiError('file is too large to be a plan', 422);
         let parsed;
         try {

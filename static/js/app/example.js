@@ -1,9 +1,9 @@
 'use strict';
 
 // ─── example.js ─────────────────────────────────────────────────────────────
-// The starter plan: a salary split into spending, savings and investing, with
-// card rewards flowing back into savings. It is the
-// first plan on a fresh install and what "Load example" draws on an empty one.
+// The example plan: a salary split into spending, savings and investing, with
+// card rewards flowing back into savings. It is what "Load example" draws on
+// an empty plan's card.
 //
 // Laid out left to right in five columns so every link runs forward into the
 // savings account at the end.
@@ -13,11 +13,6 @@
 
     const COL = 280;
     const ROW = 150;
-
-    function build({ name = 'Five-year outlook', start = P.ymNow(), years = 5 } = {}) {
-        const plan = P.createPlan({ name, start, years });
-        return fill(plan);
-    }
 
     /** Add the example's modules and links to `plan` (which may be empty). */
     function fill(plan, origin = { x: 0, y: 0 }) {
@@ -54,5 +49,5 @@
         return plan;
     }
 
-    window.CitrineExample = { build, fill };
+    window.CitrineExample = { fill };
 }());

@@ -5,8 +5,8 @@
 //
 //   UI.menu(anchor, items)            dropdown of actions
 //   UI.picker(point, groups, opts)    searchable list (add or link a module)
+//   UI.iconPicker / UI.monthPicker    grids for a module's icon, a month
 //   UI.confirm({ title, message })    yes/no dialog → Promise<boolean>
-//   UI.prompt({ title, value })       one-line text dialog → Promise<string|null>
 //   UI.toast(message, opts)           transient notice, optional action
 //   UI.openModal(el) / closeModal(el) static dialogs: focus trap, Escape, backdrop
 //
@@ -23,11 +23,13 @@
         p.cleanup();
     }
 
-    /** Fixed-position `el` at (x, y), nudged to stay inside the window. */
-    function place(el, x, y) {
+    /** Fixed-position `el` at (x, y), nudged to stay inside the window. With
+     *  `alignRight`, x is where its right edge goes. */
+    function place(el, x, y, alignRight = false) {
         const pad = 8;
         const r = el.getBoundingClientRect();
-        const left = Math.max(pad, Math.min(x, window.innerWidth - r.width - pad));
+        const want = alignRight ? x - r.width : x;
+        const left = Math.max(pad, Math.min(want, window.innerWidth - r.width - pad));
         const top = y + r.height > window.innerHeight - pad
             ? Math.max(pad, y - r.height)
             : y;
@@ -42,7 +44,7 @@
     }
 
     /** Close the open pop on an outside press, Escape, resize or blur. */
-    function guard(el, anchorEl, onEscape) {
+    function guard(el, anchorEl) {
         const onDown = (e) => {
             if (el.contains(e.target) || (anchorEl && anchorEl.contains(e.target))) return;
             closePop();
@@ -51,7 +53,6 @@
             if (e.key === 'Escape') {
                 e.preventDefault();
                 e.stopPropagation();
-                if (onEscape) onEscape();
                 closePop();
                 if (anchorEl) anchorEl.focus();
             }
@@ -67,6 +68,21 @@
             document.removeEventListener('keydown', onKey, true);
             window.removeEventListener('resize', onBlur);
             window.removeEventListener('blur', onBlur);
+        };
+    }
+
+    /** Put `el` on the page as the one open pop, at `at` (from pointFor).
+     *  `onClose` runs when it closes, however that happens. */
+    function showPop(el, at, onClose = null) {
+        document.body.appendChild(el);
+        place(el, at.x, at.y, at.alignRight);
+        const unguard = guard(el, at.el);
+        openPop = {
+            cleanup() {
+                unguard();
+                el.remove();
+                if (onClose) onClose();
+            },
         };
     }
 
@@ -108,19 +124,8 @@
             const next = e.key === 'ArrowDown' ? (i + 1) % btns.length : (i - 1 + btns.length) % btns.length;
             btns[next].focus();
         });
-        document.body.appendChild(el);
-        const w = el.getBoundingClientRect().width;
-        place(el, at.alignRight ? at.x - w : at.x, at.y);
+        showPop(el, at, () => { if (at.el) at.el.setAttribute('aria-expanded', 'false'); });
         if (at.el) at.el.setAttribute('aria-expanded', 'true');
-        const unguard = guard(el, at.el);
-        openPop = {
-            el,
-            cleanup() {
-                unguard();
-                el.remove();
-                if (at.el) at.el.setAttribute('aria-expanded', 'false');
-            },
-        };
         const first = el.querySelector('.menu-item:not(:disabled)');
         if (first) first.focus({ preventScroll: true });
     }
@@ -139,7 +144,7 @@
                 <input type="text" spellcheck="false" autocomplete="off" aria-label="${escapeHtml(placeholder)}"
                        placeholder="${escapeHtml(placeholder)}">
             </label>
-            <div class="picker-list" role="listbox"></div>`;
+            <div class="picker-list scroll-y" role="listbox"></div>`;
         const input = el.querySelector('input');
         const list = el.querySelector('.picker-list');
         let visible = [];
@@ -155,7 +160,7 @@
                     || it.label.toLowerCase().includes(q)
                     || (it.keywords || '').toLowerCase().includes(q));
                 if (!items.length) continue;
-                if (g.label) html += `<div class="picker-group">${escapeHtml(g.label)}</div>`;
+                if (g.label) html += `<div class="picker-group eyebrow">${escapeHtml(g.label)}</div>`;
                 for (const it of items) {
                     const i = visible.push(it) - 1;
                     html += `<button type="button" class="picker-item" role="option" data-i="${i}">
@@ -200,18 +205,8 @@
             if (b && Number(b.dataset.i) !== active) { active = Number(b.dataset.i); mark(); }
         });
 
-        document.body.appendChild(el);
         render();
-        place(el, at.x, at.y);
-        const unguard = guard(el, at.el);
-        openPop = {
-            el,
-            cleanup() {
-                unguard();
-                el.remove();
-                if (!picked && onCancel) onCancel();
-            },
-        };
+        showPop(el, at, () => { if (!picked && onCancel) onCancel(); });
         input.focus();
     }
 
@@ -226,7 +221,7 @@
         closePop();
         const at = pointFor(anchor, 'left');
         const el = document.createElement('div');
-        el.className = 'icon-pop';
+        el.className = 'icon-pop scroll-y';
         el.setAttribute('role', 'dialog');
         el.setAttribute('aria-label', 'Choose an icon');
         el.innerHTML = `<div class="icon-pop-grid" data-role="${escapeHtml(role)}">${icons.map((name) =>
@@ -250,10 +245,7 @@
             if (next) next.focus();
         });
 
-        document.body.appendChild(el);
-        place(el, at.x, at.y);
-        const unguard = guard(el, at.el);
-        openPop = { el, cleanup() { unguard(); el.remove(); } };
+        showPop(el, at);
         (el.querySelector('[aria-pressed="true"]') || el.querySelector('[data-icon]')).focus();
     }
 
@@ -318,10 +310,7 @@
         });
 
         render();
-        document.body.appendChild(el);
-        place(el, at.x, at.y);
-        const unguard = guard(el, at.el);
-        openPop = { el, cleanup() { unguard(); el.remove(); } };
+        showPop(el, at);
         const seedMonth = Number(seed.slice(5, 7)) || 1;
         (el.querySelector('[aria-pressed="true"]') || el.querySelector(`[data-m="${seedMonth}"]`)).focus();
     }
@@ -433,24 +422,6 @@
         }).then((v) => v === true);
     }
 
-    function prompt({ title, value = '', confirmLabel = 'Save', maxLength = 60 }) {
-        const input = document.createElement('input');
-        input.className = 'field-input';
-        input.type = 'text';
-        input.value = value;
-        input.maxLength = maxLength;
-        input.spellcheck = false;
-        input.style.width = '100%';
-        return dialog({
-            title,
-            body: input,
-            actions: [
-                { label: 'Cancel', className: 'button-secondary', value: () => null },
-                { label: confirmLabel, className: 'button-primary', value: () => input.value.trim(), primary: true },
-            ],
-        });
-    }
-
     // ── Toast ──────────────────────────────────────────────────────────────
 
     let toastEl = null;
@@ -487,5 +458,5 @@
         if (toastEl) toastEl.classList.remove('is-visible');
     }
 
-    window.UI = { menu, picker, iconPicker, monthPicker, closePop, confirm, prompt, toast, openModal, closeModal };
+    window.UI = { menu, picker, iconPicker, monthPicker, closePop, confirm, toast, openModal, closeModal };
 }());

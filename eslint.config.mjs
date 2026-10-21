@@ -19,6 +19,7 @@ const globals = require('globals');
 const appGlobals = {
     // core/
     escapeHtml: 'readonly',     // escape.js
+    Prefs: 'readonly',          // prefs.js
     Fmt: 'readonly',            // format.js
     iconSvg: 'readonly',        // icons.js (data from the generated icon-data.js)
     api: 'readonly',            // api.js
@@ -33,7 +34,6 @@ const appGlobals = {
     Describe: 'readonly',
     CitrineExample: 'readonly',
     Store: 'readonly',
-    Tabs: 'readonly',
     Library: 'readonly',
     Canvas: 'readonly',
     Inspector: 'readonly',

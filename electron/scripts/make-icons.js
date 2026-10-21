@@ -105,8 +105,8 @@ function main() {
     fs.writeFileSync(path.join(BUILD_DIR, 'icon.ico'), buildIco(frames));
     console.log(`build/icon.ico    ${ICO_SIZES.join(', ')}`);
 
-    // Stamp which logo these were rendered from; check-package-files.js compares
-    // it against the current SVG and fails the dist build when they diverge.
+    // Stamp which logo these were rendered from; __tests__/build.test.js
+    // compares it against the current SVG and fails when they diverge.
     fs.writeFileSync(path.join(BUILD_DIR, STAMP_FILE), `${sourceHash()}\n`);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });

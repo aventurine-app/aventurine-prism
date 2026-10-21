@@ -241,5 +241,5 @@
         hit.addEventListener('pointerleave', hide);
     }
 
-    window.Chart = { draw, niceTicks };
+    window.Chart = { draw };
 }());

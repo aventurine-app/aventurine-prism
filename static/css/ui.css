@@ -3,16 +3,25 @@
    segmented controls, chips and empty states. Built by shell/ui.js.
    ============================================================================ */
 
-/* ─── Dropdown menu ───────────────────────────────────────────────────────── */
-.menu-pop {
+/* ─── Popovers ──────────────────────────────────────────────────────────────
+ * The one surface under every pop-up ui.js opens: the menu, the module
+ * picker, and the icon and month grids. Each adds only its own size below. */
+.menu-pop,
+.picker,
+.icon-pop,
+.month-pop {
     position: fixed;
     z-index: 900;
-    min-width: 180px;
-    padding: var(--space-4);
     background: var(--surface1);
     border: var(--border-width) solid var(--border);
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-menu);
+}
+
+/* ─── Dropdown menu ───────────────────────────────────────────────────────── */
+.menu-pop {
+    min-width: 180px;
+    padding: var(--space-4);
 }
 
 .menu-item {
@@ -23,7 +32,7 @@
     height: 32px;
     padding: 0 var(--space-12);
     border: 0;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: transparent;
     color: var(--text-secondary);
     font-size: var(--size-small);
@@ -44,16 +53,10 @@
 
 /* ─── Module picker (search + list), opened from the canvas ───────────────── */
 .picker {
-    position: fixed;
-    z-index: 900;
     width: 280px;
     max-height: 360px;
     display: flex;
     flex-direction: column;
-    background: var(--surface1);
-    border: var(--border-width) solid var(--border);
-    border-radius: var(--radius-card);
-    box-shadow: var(--shadow-menu);
     overflow: hidden;
 }
 .picker-search {
@@ -75,15 +78,9 @@
     font-size: var(--size-small);
     outline: none;
 }
-.picker-list { padding: var(--space-4); overflow-y: auto; scrollbar-width: thin; }
-.picker-group {
-    padding: var(--space-8) var(--space-8) var(--space-4);
-    color: var(--text-tertiary);
-    font-size: var(--size-micro);
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--track-widest);
-    text-transform: uppercase;
-}
+.picker-list { padding: var(--space-4); }
+/* Its type is the .eyebrow's (style.css). */
+.picker-group { padding: var(--space-8) var(--space-8) var(--space-4); }
 .picker-item {
     display: flex;
     align-items: center;
@@ -92,7 +89,7 @@
     height: 36px;
     padding: 0 var(--space-8);
     border: 0;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: transparent;
     color: var(--text-secondary);
     font-size: var(--size-small);
@@ -125,6 +122,8 @@
 .role-tile--button:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; }
 .role-tile--sm { width: 22px; height: 22px; border-radius: 6px; }
 .role-tile--sm .icon { width: 14px; height: 14px; }
+/* A tile for the app itself rather than a module (the plan, the lock screen). */
+.role-tile--accent { --tile: var(--accent-primary); }
 
 [data-role="source"]   { --tile: var(--role-source); }
 [data-role="account"]  { --tile: var(--role-account); }
@@ -135,7 +134,6 @@
 /* ─── Dialog (confirm / prompt) ───────────────────────────────────────────── */
 .dialog { width: 400px; }
 .dialog .modal-body p { margin: 0; color: var(--text-secondary); font-size: var(--size-small); line-height: var(--lh-relaxed); }
-.dialog .modal-body strong { color: var(--text-primary); }
 
 /* ─── Toast ───────────────────────────────────────────────────────────────── */
 .toast {
@@ -240,7 +238,7 @@
     gap: 4px;
     height: 20px;
     padding: 0 var(--space-8);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     background: var(--frost-2);
     color: var(--text-secondary);
     font-size: var(--size-micro);
@@ -250,8 +248,6 @@
 }
 .chip .icon { width: 12px; height: 12px; }
 .chip--warn { background: var(--warning-fill); color: var(--warning); }
-.chip--good { background: color-mix(in srgb, var(--accent-positive) 14%, transparent); color: var(--accent-positive); }
-.chip--accent { background: var(--accent-wash); color: var(--accent-ink); }
 
 /* ─── Empty state ─────────────────────────────────────────────────────────── */
 .empty-state {
@@ -284,17 +280,9 @@
 
 /* ─── Icon picker ─────────────────────────────────────────────────────────── */
 .icon-pop {
-    position: fixed;
-    z-index: 900;
     width: 260px;
     max-height: 320px;
     padding: var(--space-8);
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--surface4) transparent;
-    background: var(--surface1);
-    border: var(--border-width) solid var(--border);
-    border-radius: var(--radius-card);
 }
 .icon-pop-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--space-4); }
 .icon-pop-cell {
@@ -303,7 +291,7 @@
     justify-content: center;
     height: 36px;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--radius-control);
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
@@ -315,14 +303,8 @@
 
 /* ─── Month picker ────────────────────────────────────────────────────────── */
 .month-pop {
-    position: fixed;
-    z-index: 900;
     width: 232px;
     padding: var(--space-8);
-    background: var(--surface1);
-    border: var(--border-width) solid var(--border);
-    border-radius: var(--radius-card);
-    box-shadow: var(--shadow-menu);
 }
 .month-pop-head {
     display: flex;
@@ -338,7 +320,7 @@
 .month-pop-cell {
     height: 32px;
     border: 0;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: transparent;
     color: var(--text-secondary);
     font-size: var(--size-small);

@@ -16,11 +16,6 @@
     if (!overlay) return;
     const html = document.documentElement;
 
-    const store = {
-        get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
-        set(k, v) { try { localStorage.setItem(k, v); } catch { /* not persisted */ } },
-    };
-
     // ── Tabs ───────────────────────────────────────────────────────────────
 
     const tabs = [...overlay.querySelectorAll('.settings-tab')];
@@ -50,11 +45,11 @@
 
     // ── Appearance ─────────────────────────────────────────────────────────
 
-    const themeChoice = () => { const s = store.get('color-theme', null); return s === 'dark' || s === 'system' ? s : ''; };
+    const themeChoice = () => { const s = Prefs.get('color-theme'); return s === 'dark' || s === 'system' ? s : ''; };
     const dark = window.matchMedia('(prefers-color-scheme: dark)');
 
     function applyTheme(choice) {
-        store.set('color-theme', choice);
+        Prefs.set('color-theme', choice);
         const effective = choice === 'system' ? (dark.matches ? 'dark' : '') : choice;
         if (effective) html.dataset.theme = effective;
         else delete html.dataset.theme;
@@ -80,7 +75,7 @@
     overlay.querySelector('[data-pref="flow-motion"]').addEventListener('click', (e) => {
         const b = e.target.closest('.seg-switch-btn');
         if (!b) return;
-        store.set('flow-motion', b.dataset.value);
+        Prefs.set('flow-motion', b.dataset.value);
         if (b.dataset.value === 'off') html.dataset.motion = 'off';
         else delete html.dataset.motion;
         markSwitch('flow-motion', b.dataset.value);
@@ -89,7 +84,7 @@
     const zoomSelect = overlay.querySelector('[data-pref="ui-zoom"]');
 
     zoomSelect.addEventListener('change', () => {
-        store.set('ui-zoom', zoomSelect.value);
+        Prefs.set('ui-zoom', zoomSelect.value);
         if (window.electronWindow) window.electronWindow.setZoom(Number(zoomSelect.value));
     });
 
@@ -117,8 +112,8 @@
 
     function refreshAppearance() {
         markTheme();
-        markSwitch('flow-motion', store.get('flow-motion', 'on'));
-        zoomSelect.value = store.get('ui-zoom', '1');
+        markSwitch('flow-motion', Prefs.get('flow-motion', 'on'));
+        zoomSelect.value = Prefs.get('ui-zoom', '1');
         symbolInput.value = Fmt.prefs.symbol;
         markSwitch('symbol-position', Fmt.prefs.position);
         numberSelect.value = Fmt.prefs.numberFormat;
@@ -146,7 +141,9 @@
             return;
         }
         if (e.target.closest('[data-enc-lock]')) {
-            await Store.flush();
+            // Locking reloads the page, so edits that could not be saved would
+            // be lost; Store has already said why, with a Retry.
+            if (!(await Store.flush())) return;
             const r = await api('POST', '/api/file/lock');
             if (r.ok) location.reload();
         }

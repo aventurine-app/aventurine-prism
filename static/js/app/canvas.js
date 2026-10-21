@@ -73,8 +73,9 @@
             <div class="empty-state" role="dialog" aria-labelledby="empty-state-title">
                 <button class="modal-close empty-state-close" type="button" data-act="dismiss-empty" aria-label="Close">×</button>
                 <div class="empty-state-art" aria-hidden="true">
-                    ${['source', 'account', 'expense', 'debt', 'modifier', 'account'].map((r, i) =>
-                        `<span class="role-tile role-tile--lg" data-role="${r}">${iconSvg(['briefcase', 'piggy-bank', 'shopping-bag', 'cardholder', 'credit-card', 'chart-line-up'][i])}</span>`).join('')}
+                    ${[['source', 'briefcase'], ['account', 'piggy-bank'], ['expense', 'shopping-bag'],
+                        ['debt', 'cardholder'], ['modifier', 'credit-card'], ['account', 'chart-line-up']].map(([role, icon]) =>
+                        `<span class="role-tile role-tile--lg" data-role="${role}">${iconSvg(icon)}</span>`).join('')}
                 </div>
                 <h2 class="empty-state-title" id="empty-state-title">Empty plan</h2>
                 <div class="empty-state-actions">
@@ -85,7 +86,10 @@
         </div>`);
 
     const zoomLabel = stage.querySelector('.zoom-level');
+    const undoBtn = stage.querySelector('[data-act="undo"]');
+    const redoBtn = stage.querySelector('[data-act="redo"]');
     const timeIsland = stage.querySelector('.island--time');
+    const timeLabel = timeIsland.querySelector('span');
     const emptyEl = stage.querySelector('.canvas-empty');
     // Plans whose empty card was closed with the ×; it stays closed for the session.
     const dismissedEmpty = new Set();
@@ -117,6 +121,9 @@
         const k = z / cam.zoom;
         setCamera({ zoom: z, x: sx - (sx - cam.x) * k, y: sy - (sy - cam.y) * k });
     }
+
+    /** Zoom about the middle of the stage, as the buttons and keys do. */
+    const zoomCenter = (factor) => zoomAt(factor, stage.clientWidth / 2, stage.clientHeight / 2);
 
     function stagePoint(clientX, clientY) {
         const r = stage.getBoundingClientRect();
@@ -186,6 +193,7 @@
     }
 
     const avg = (arr) => (arr ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
+    const NONE = [];
 
     /** What a source pays per period, from its settings (for the resting card). */
     function sourcePeriod(node) {
@@ -193,8 +201,7 @@
         const net = p.amount * (1 - (p.tax || 0) / 100);
         if (p.per === 'once') return { value: net, unit: p.start ? P.ymLabel(p.start) : 'once' };
         if (p.per === 'year') return p.payMonth ? { value: net, unit: '/yr' } : { value: net / 12, unit: '/mo' };
-        const perMonth = { week: 52 / 12, biweek: 26 / 12, month: 1 }[p.per] || 1;
-        return { value: net * perMonth, unit: '/mo' };
+        return { value: net * (C.PER_MONTH[p.per] || 1), unit: '/mo' };
     }
 
     function figure(node, role, nr, vp) {
@@ -246,7 +253,8 @@
     }
 
     /** Segments for the bar under a card's figure. */
-    function barSegments(node, role, nr, plan, res, vp) {
+    function barSegments(node, role, nr, frame) {
+        const { res, vp } = frame;
         if (!nr || !vp) return [];
         const upto = vp.all ? res.months : Math.max(1, vp.k);
         const sumTo = (arr) => { let s = 0; for (let i = 0; i < upto && i < arr.length; i++) s += arr[i]; return s; };
@@ -267,9 +275,8 @@
             const spent = sumTo(nr.consumed);
             if (spent > 0) segs.push({ role, w: spent, label: role === 'expense' ? 'Spent' : 'Used' });
         }
-        for (const l of plan.links) {
-            if (l.from !== node.id) continue;
-            const target = Store.node(l.to);
+        for (const l of frame.outs.get(node.id) || NONE) {
+            const target = frame.byId.get(l.to);
             const lr = res.links[l.id];
             if (!target || !lr) continue;
             const w = sumTo(lr.flow);
@@ -282,13 +289,27 @@
         return segs;
     }
 
-    /** Warnings that belong to a node: its own, and its outgoing links'. */
-    function nodeWarnings(nodeId, plan, res) {
-        if (!res) return [];
-        return res.warnings.filter((w) => {
-            if (w.nodeId === nodeId || (w.nodeIds && w.nodeIds.includes(nodeId))) return w.code !== 'unassigned';
-            return false;
-        });
+    /** What one render reads for every card and link: the state, plus lookups
+     *  built once per render so that drawing stays linear in the size of the
+     *  plan (a lookup per card or link would make it quadratic). */
+    function frameFor(plan, res, sel) {
+        const byId = new Map(plan.nodes.map((n) => [n.id, n]));
+        const outs = new Map();
+        for (const l of plan.links) {
+            const list = outs.get(l.from);
+            if (list) list.push(l); else outs.set(l.from, [l]);
+        }
+        // A card flags its own warnings and its links'. Money left in
+        // Unassigned shows on its bar instead.
+        const warns = new Map();
+        for (const w of res ? res.warnings : NONE) {
+            if (w.code === 'unassigned') continue;
+            for (const id of w.nodeIds || (w.nodeId ? [w.nodeId] : NONE)) {
+                const list = warns.get(id);
+                if (list) list.push(w); else warns.set(id, [w]);
+            }
+        }
+        return { plan, res, sel, vp: viewPoint(), byId, outs, warns };
     }
 
     // ── Cards ──────────────────────────────────────────────────────────────
@@ -332,7 +353,8 @@
         write(value);
     }
 
-    function renderNode(node, view, plan, res, vp, sel) {
+    function renderNode(node, view, frame) {
+        const { plan, res, vp, sel } = frame;
         const p = C.preset(node.type);
         const role = p.role;
         put(view, 'pos', `${node.x},${node.y}`, () => {
@@ -346,7 +368,7 @@
         const sends = P.basesFor(node).length > 0;
         put(view, 'ports', `${role}|${sends}`, () => {
             view.outs.innerHTML = sends
-                ? `<span class="node-port node-port--out" style="top:${NODE_H / 2}px" title="Drag to link" aria-hidden="true"></span>`
+                ? '<span class="node-port node-port--out" title="Drag to link" aria-hidden="true"></span>'
                 : '';
         });
         put(view, 'icon', P.iconOf(node), (icon) => { view.tile.innerHTML = iconSvg(icon); });
@@ -363,23 +385,21 @@
             view.delta.className = `node-delta${f.deltaDir ? ` is-${f.deltaDir}` : ''}`;
         });
 
-        const segs = barSegments(node, role, nr, plan, res, vp);
+        const segs = barSegments(node, role, nr, frame);
         const total = segs.reduce((a, s) => a + s.w, 0);
         const barSig = segs.map((s) => `${s.role}:${(s.w / (total || 1)).toFixed(3)}`).join('|');
         put(view, 'bar', barSig, () => {
             view.bar.innerHTML = segs.filter((s) => s.w > 0).map((s) => {
-                const style = s.role === 'growth' ? 'background: var(--accent-positive);'
-                    : s.role === 'track' ? 'background: transparent;' : '';
                 const title = `${s.label}: ${Fmt.money(s.w, { compact: true })}`;
-                return `<span data-role="${s.role}" style="flex: ${s.w} 1 0; ${style}" title="${escapeHtml(title)}"></span>`;
+                return `<span data-role="${s.role}" style="flex: ${s.w} 1 0" title="${escapeHtml(title)}"></span>`;
             }).join('');
         });
 
-        const warns = nodeWarnings(node.id, plan, res);
+        const warns = frame.warns.get(node.id) || NONE;
         const done = f.done;
         // A module whose only issues are notices (a card's high utilization) wears
         // a yellow info flag; any real warning makes it the orange warning flag.
-        const notice = warns.length > 0 && warns.every((w) => D.warning(w, plan).level === 'notice');
+        const notice = warns.length > 0 && warns.every((w) => D.warningLevel(w) === 'notice');
         const flagSig = warns.length ? `${notice ? 'n' : 'w'}:${warns.map((w) => w.code).join(',')}` : done ? 'done' : '';
         put(view, 'flag', flagSig, () => {
             if (view.flag) { view.flag.remove(); view.flag = null; }
@@ -406,7 +426,6 @@
     function buildLink(link) {
         const g = document.createElementNS(SVG_NS, 'g');
         g.classList.add('link');
-        g.dataset.id = link.id;
         const path = document.createElementNS(SVG_NS, 'path');
         path.classList.add('link-path');
         const flow = document.createElementNS(SVG_NS, 'path');
@@ -419,7 +438,7 @@
         flowLayer.appendChild(flow);
         const label = document.createElement('button');
         label.type = 'button';
-        label.className = 'link-label link';
+        label.className = 'link-label';
         label.dataset.link = link.id;
         labelLayer.appendChild(label);
         return { g, path, flow, hit, label, sig: {} };
@@ -440,24 +459,22 @@
         return lifts;
     }
 
-    function renderLink(link, view, lift, res, vp, sel) {
-        const from = Store.node(link.from);
-        const to = Store.node(link.to);
+    function renderLink(link, view, lift, frame) {
+        const { res, vp, sel } = frame;
+        const from = frame.byId.get(link.from);
+        const to = frame.byId.get(link.to);
         if (!from || !to) return;
-        const flow = D.flowKey(from, link.basis);
+        // The curve is worked out again only when one of its ends moves.
         const a = outPort(from);
         const b = inPort(to);
-        const c = curve({ x: a.x, y: a.y + lift }, { x: b.x, y: b.y + lift });
-        put(view, 'd', c.d, (d) => {
-            view.path.setAttribute('d', d);
-            view.flow.setAttribute('d', d);
-            view.hit.setAttribute('d', d);
-        });
-        put(view, 'mid', `${c.mid.x},${c.mid.y}`, () => {
+        put(view, 'ends', `${a.x},${a.y},${b.x},${b.y},${lift}`, () => {
+            const c = curve({ x: a.x, y: a.y + lift }, { x: b.x, y: b.y + lift });
+            view.path.setAttribute('d', c.d);
+            view.flow.setAttribute('d', c.d);
+            view.hit.setAttribute('d', c.d);
             view.label.style.left = `${c.mid.x}px`;
             view.label.style.top = `${c.mid.y}px`;
         });
-        put(view, 'flow', flow, (f) => { view.g.dataset.flow = f; view.label.dataset.flow = f; });
 
         const lr = res && res.links[link.id];
         const amount = !lr || !vp ? 0 : vp.all ? lr.avg : lr.flow[vp.month];
@@ -492,9 +509,9 @@
     function render() {
         const { plan, results: res, selection: sel } = Store.state;
         if (!plan) return;
-        const vp = viewPoint();
+        const frame = frameFor(plan, res, sel);
 
-        for (const id of group) if (!Store.node(id)) group.delete(id);
+        for (const id of group) if (!frame.byId.has(id)) group.delete(id);
         const seenNodes = new Set();
         for (const node of plan.nodes) {
             seenNodes.add(node.id);
@@ -503,7 +520,7 @@
                 view = buildNode(node);
                 nodeViews.set(node.id, view);
             }
-            renderNode(node, view, plan, res, vp, sel);
+            renderNode(node, view, frame);
         }
         for (const [id, view] of nodeViews) {
             if (!seenNodes.has(id)) {
@@ -521,7 +538,7 @@
                 view = buildLink(link);
                 linkViews.set(link.id, view);
             }
-            renderLink(link, view, lifts.get(link.id) || 0, res, vp, sel);
+            renderLink(link, view, lifts.get(link.id) || 0, frame);
         }
         for (const [id, view] of linkViews) {
             if (!seenLinks.has(id)) {
@@ -534,13 +551,13 @@
 
         stage.classList.toggle('flow-limited', plan.links.length > FLOW_LIMIT);
         emptyEl.hidden = plan.nodes.length > 0 || dismissedEmpty.has(plan.id);
-        const tools = stage.querySelector('.island--tools');
-        tools.querySelector('[data-act="undo"]').disabled = !Store.canUndo();
-        tools.querySelector('[data-act="redo"]').disabled = !Store.canRedo();
+        undoBtn.disabled = !Store.canUndo();
+        redoBtn.disabled = !Store.canRedo();
 
+        const vp = frame.vp;
         if (vp && !vp.all) {
             timeIsland.hidden = false;
-            timeIsland.querySelector('span').textContent = D.monthLabel(plan, vp.k);
+            timeLabel.textContent = D.monthLabel(plan, vp.k);
         } else {
             timeIsland.hidden = true;
         }
@@ -836,19 +853,21 @@
 
     const PLURAL = { account: 'accounts', expense: 'spending', debt: 'debts', modifier: 'modifiers' };
 
+    /** Roles as a list in words: 'debts', 'accounts and debts', 'a, b and c'. */
+    function rolesInWords(roles) {
+        const words = roles.map((r) => PLURAL[r]);
+        return words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}` : words[0];
+    }
+
     /** Why a link was refused, as what IS allowed. */
     function linkRuleText(fromRole, toRole) {
         if (toRole === 'source') return 'Income has no input.';
-        const allowed = C.LINK_TARGETS[fromRole].map((r) => PLURAL[r]);
-        const list = allowed.length > 1 ? `${allowed.slice(0, -1).join(', ')} and ${allowed[allowed.length - 1]}` : allowed[0];
-        return `${C.ROLES[fromRole].label} links only to ${list}.`;
+        return `${C.ROLES[fromRole].label} links only to ${rolesInWords(C.LINK_TARGETS[fromRole])}.`;
     }
 
     /** Why a module refused a link, as what it can reach. */
     function targetRuleText(from) {
-        const allowed = P.targetRoles(from).map((r) => PLURAL[r]);
-        const list = allowed.length > 1 ? `${allowed.slice(0, -1).join(', ')} and ${allowed[allowed.length - 1]}` : allowed[0];
-        return `${from.name} sends only to ${list}.`;
+        return `${from.name} sends only to ${rolesInWords(P.targetRoles(from))}.`;
     }
 
     function moveGhost(e) {
@@ -964,13 +983,10 @@
     }
 
     function removeGroup() {
-        const ids = new Set(group);
+        const ids = [...group];
         group.clear();
-        Store.edit((plan) => {
-            plan.nodes = plan.nodes.filter((n) => !ids.has(n.id));
-            plan.links = plan.links.filter((l) => !ids.has(l.from) && !ids.has(l.to));
-        });
-        UI.toast(`Deleted ${ids.size} modules.`, { action: { label: 'Undo', onClick: () => Store.undo() } });
+        Store.removeNodes(ids);
+        UI.toast(`Deleted ${ids.length} modules.`, { action: { label: 'Undo', onClick: () => Store.undo() } });
         stage.focus({ preventScroll: true });
     }
 
@@ -993,11 +1009,11 @@
     }
 
     function copySelection() {
-        const snap = Store.copyNodes(selectedNodeIds());
-        if (!snap) return false;
-        clipboard = snap;
+        const copied = Store.copyNodes(selectedNodeIds());
+        if (!copied) return false;
+        clipboard = copied;
         pasteCount = 0;
-        UI.toast(snap.nodes.length === 1 ? `Copied ${snap.nodes[0].name}.` : `Copied ${snap.nodes.length} modules.`);
+        UI.toast(copied.nodes.length === 1 ? `Copied ${copied.nodes[0].name}.` : `Copied ${copied.nodes.length} modules.`);
         return true;
     }
 
@@ -1060,9 +1076,9 @@
             e.preventDefault();
             Store.duplicateNode(s.id);
         } else if (e.key === '+' || e.key === '=') {
-            zoomAt(1.2, stage.clientWidth / 2, stage.clientHeight / 2);
+            zoomCenter(1.2);
         } else if (e.key === '-') {
-            zoomAt(1 / 1.2, stage.clientWidth / 2, stage.clientHeight / 2);
+            zoomCenter(1 / 1.2);
         }
     });
     stage.addEventListener('keyup', (e) => {
@@ -1086,9 +1102,9 @@
             case 'undo': Store.undo(); break;
             case 'redo': Store.redo(); break;
             case 'fit': fit(); break;
-            case 'zoom-in': zoomAt(1.2, stage.clientWidth / 2, stage.clientHeight / 2); break;
-            case 'zoom-out': zoomAt(1 / 1.2, stage.clientWidth / 2, stage.clientHeight / 2); break;
-            case 'zoom-reset': zoomAt(1 / cam.zoom, stage.clientWidth / 2, stage.clientHeight / 2); break;
+            case 'zoom-in': zoomCenter(1.2); break;
+            case 'zoom-out': zoomCenter(1 / 1.2); break;
+            case 'zoom-reset': zoomCenter(1 / cam.zoom); break;
             case 'add': openAddPicker(r.left + r.width / 2 - 140, r.top + 80); break;
             case 'inspector': Inspector.toggle(); btn.setAttribute('aria-pressed', String(Inspector.isOpen())); break;
             case 'example': loadExample(); break;
@@ -1125,5 +1141,5 @@
         }
     });
 
-    window.Canvas = { addAtCenter, fit, render, focus: () => stage.focus(), deleteSelection, NODE_W, NODE_H };
+    window.Canvas = { addAtCenter, fit, render };
 }());

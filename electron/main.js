@@ -195,18 +195,27 @@ function fromAppOrigin(e) {
 }
 
 // ─── Window controls ────────────────────────────────────────────────────────
+// Like every channel, these answer only the app's own page, and each acts on
+// the window that page is in rather than on whichever window has focus.
 
-ipcMain.on('window-min', () => BrowserWindow.getFocusedWindow()?.minimize());
-ipcMain.on('window-max', () => {
-    const w = BrowserWindow.getFocusedWindow();
+function senderWindow(e) {
+    return fromAppOrigin(e) ? BrowserWindow.fromWebContents(e.sender) : null;
+}
+
+ipcMain.on('window-min', (e) => senderWindow(e)?.minimize());
+ipcMain.on('window-max', (e) => {
+    const w = senderWindow(e);
     if (!w) return;
     if (w.isMaximized()) w.unmaximize();
     else w.maximize();
 });
-ipcMain.on('window-close', () => BrowserWindow.getFocusedWindow()?.close());
+ipcMain.on('window-close', (e) => senderWindow(e)?.close());
 
 // The installed version, for the About tab.
-ipcMain.handle('app:version', () => app.getVersion());
+ipcMain.handle('app:version', (e) => {
+    if (!fromAppOrigin(e)) throw new Error('app:version: not called from the app page');
+    return app.getVersion();
+});
 
 // ─── app:// protocol ────────────────────────────────────────────────────────
 

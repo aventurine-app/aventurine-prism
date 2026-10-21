@@ -10,6 +10,7 @@ const os = require('os');
 const path = require('path');
 
 const Plan = require('../../static/js/sim/plan.js');
+const vault = require('../backend/vault');
 const { createWorkspace, WorkspaceError } = require('../backend/workspace');
 const { dispatch } = require('../backend/routes');
 
@@ -187,6 +188,65 @@ test('encryption: a tampered header is refused before any key is derived', async
     await assert.rejects(open(file).unlock('a fine password'), (e) => e.status === 401);
 });
 
+/** Run `fn` with every rename failing, as a full disk would make the final
+ *  step of an atomic write fail. */
+async function withFailingRename(fn) {
+    const rename = fs.renameSync;
+    fs.renameSync = () => { throw Object.assign(new Error('disk full'), { code: 'ENOSPC' }); };
+    try {
+        return await fn();
+    } finally {
+        fs.renameSync = rename;
+    }
+}
+
+test('encryption: turning it on when the write fails leaves the file and the status in the clear', async () => {
+    const file = tmpFile();
+    const ws = open(file);
+    const p = ws.addPlan(samplePlan('Plain'));
+    await withFailingRename(() => assert.rejects(
+        ws.setEncryption({ action: 'encrypt', password: 'correct horse' }), /disk full/));
+    assert.equal(ws.status().encrypted, false);
+    ws.putPlan(p.id, ws.getPlan(p.id));
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).format, 'citrine-workspace');
+    await ws.setEncryption({ action: 'encrypt', password: 'correct horse' });
+    assert.equal(open(file).isLocked(), true);
+});
+
+test('encryption: a password change whose write fails keeps the old password', async () => {
+    const file = tmpFile();
+    const ws = open(file);
+    const p = ws.addPlan(samplePlan('P'));
+    await ws.setEncryption({ action: 'encrypt', password: 'first password' });
+    await withFailingRename(() => assert.rejects(
+        ws.setEncryption({ action: 'change', current: 'first password', password: 'second password' }), /disk full/));
+    // A later save still seals the file under the password the user kept.
+    ws.putPlan(p.id, ws.getPlan(p.id));
+    const again = open(file);
+    await assert.rejects(again.unlock('second password'), (e) => e.status === 401);
+    await again.unlock('first password');
+});
+
+test('encryption: a file this build cannot read answers 422 once unlocked, not an internal error', async () => {
+    const file = tmpFile();
+    const kdf = vault.newKdf();
+    const key = await vault.deriveKey('a fine password', kdf);
+    fs.writeFileSync(file, vault.seal(JSON.stringify({ format: 'citrine-workspace', version: 99, plans: [] }), key, kdf));
+    const ctx = ctxFor(open(file));
+    const r = await dispatch(ctx, 'POST', '/api/file/unlock', { password: 'a fine password' });
+    assert.deepEqual([r.status, r.body.error], [422, 'too_new']);
+    assert.equal((await dispatch(ctx, 'GET', '/api/plans', null)).status, 423);
+});
+
+test('vault: a truncated tag does not open the file, even with the right key', async () => {
+    const kdf = vault.newKdf();
+    const key = await vault.deriveKey('a fine password', kdf);
+    const env = JSON.parse(vault.seal('secret', key, kdf));
+    assert.equal(vault.open(env, key), 'secret');
+    const short = { ...env, tag: Buffer.from(env.tag, 'base64').subarray(0, 12).toString('base64') };
+    assert.throws(() => vault.open(short, key), (e) => e instanceof vault.VaultError);
+});
+
 test('locking drops the plans until the password is given again', async () => {
     const file = tmpFile();
     const ws = open(file);
@@ -220,6 +280,15 @@ test('router: export and import go through the injected dialogs', async () => {
 
     const cancel = await dispatch(ctxFor(ws, { chooseImportPath: async () => null }), 'POST', '/api/plans/import', null);
     assert.deepEqual(cancel.body, { canceled: true });
+});
+
+test('router: import refuses a folder or a missing file with 422', async () => {
+    const file = tmpFile();
+    const ws = open(file);
+    const importFrom = (target) => dispatch(ctxFor(ws, { chooseImportPath: async () => target }), 'POST', '/api/plans/import', null);
+    assert.equal((await importFrom(path.dirname(file))).status, 422);
+    assert.equal((await importFrom(path.join(path.dirname(file), 'gone.json'))).status, 422);
+    assert.equal(ws.listPlans().plans.length, 0);
 });
 
 test('router: unknown routes 404, bad bodies 400, missing plans 404', async () => {

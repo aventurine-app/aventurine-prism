@@ -80,7 +80,7 @@
                     <div class="settings-card">
                         <div class="settings-row">
                             <div class="settings-row-name">Currency Symbol</div>
-                            <input class="field-input" type="text" maxlength="3" autocomplete="off" spellcheck="false" data-pref="currency-symbol" aria-label="Currency symbol" style="width: 72px; text-align: center;">
+                            <input class="field-input field-input--symbol" type="text" maxlength="3" autocomplete="off" spellcheck="false" data-pref="currency-symbol" aria-label="Currency symbol">
                         </div>
                         <div class="settings-row">
                             <div class="settings-row-name">Symbol Position</div>
@@ -102,7 +102,7 @@
 
                 <div class="settings-panel" role="tabpanel" data-panel="security" hidden>
                     <div class="settings-section">
-                        <div class="settings-section-header">Plans File</div>
+                        <div class="settings-section-header eyebrow">Plans File</div>
                         <div class="settings-card">
                             <div class="settings-row settings-row--stack">
                                 <div class="settings-row-name">Location</div>
@@ -111,7 +111,7 @@
                         </div>
                     </div>
                     <div class="settings-section">
-                        <div class="settings-section-header">Encryption</div>
+                        <div class="settings-section-header eyebrow">Encryption</div>
                         <div class="settings-card">
                             <div class="settings-row">
                                 <div class="settings-row-name">Status</div>
@@ -139,7 +139,7 @@
 
                 <div class="settings-panel" role="tabpanel" data-panel="about" hidden>
                     <div class="settings-section">
-                        <div class="settings-section-header">Aventurine Prism</div>
+                        <div class="settings-section-header eyebrow">Aventurine Prism</div>
                         <div class="settings-card">
                             <div class="settings-row">
                                 <div class="settings-row-name">Version</div>
@@ -157,7 +157,7 @@
                          with what this install can do (updatePolicy.js,
                          resolveUpdateMode). -->
                     <div class="settings-section" data-updates-section hidden>
-                        <div class="settings-section-header">Updates</div>
+                        <div class="settings-section-header eyebrow">Updates</div>
                         <div class="settings-card">
                             <div class="settings-row">
                                 <div class="settings-row-label">
@@ -198,7 +198,7 @@
          fields that action needs. The password is never stored: losing it
          loses the file's contents. -->
     <div class="modal-overlay" id="pw-modal" hidden>
-        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pw-title" style="width: 420px;">
+        <div class="modal pw-dialog" role="dialog" aria-modal="true" aria-labelledby="pw-title">
             <div class="modal-header">
                 <h2 class="modal-title" id="pw-title">Encryption</h2>
                 <button class="modal-close" type="button" data-close aria-label="Close">×</button>

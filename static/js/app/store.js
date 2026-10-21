@@ -254,7 +254,9 @@
     async function flush() {
         clearTimeout(saveTimer);
         saveTimer = null;
-        if (flushing) await flushing;
+        // A loop, not an if: another caller waiting on the same save may have
+        // started the next one by the time this one wakes.
+        while (flushing) await flushing;
         if (!dirty.size) return true;
         flushing = (async () => {
             setSave('saving');
@@ -463,20 +465,15 @@
         return created;
     }
 
+    /** A copy of one module beside it, named as a copy, and selected. */
     function duplicateNode(id) {
-        const src = node(id);
-        if (!src) return null;
-        let copy = null;
-        edit((plan) => {
-            copy = JSON.parse(JSON.stringify(src));
-            copy.id = P.newId('n');
-            copy.x += 32;
-            copy.y += 32;
-            copy.name = `${src.name} copy`.slice(0, P.LIMITS.name);
-            plan.nodes.push(copy);
-        });
-        select({ kind: 'node', id: copy.id });
-        return copy;
+        const snap = copyNodes([id]);
+        if (!snap) return null;
+        snap.nodes[0].name = `${snap.nodes[0].name} copy`.slice(0, P.LIMITS.name);
+        const [made] = pasteNodes(snap, 32);
+        if (!made) return null;
+        select({ kind: 'node', id: made });
+        return node(made);
     }
 
     /** Copies of `ids` and the links among them, ready for pasteNodes. */
@@ -497,8 +494,12 @@
         const ids = new Map();
         const made = [];
         edit((plan) => {
-            if (plan.nodes.length + snap.nodes.length > P.LIMITS.nodes || plan.links.length + snap.links.length > P.LIMITS.links) {
+            if (plan.nodes.length + snap.nodes.length > P.LIMITS.nodes) {
                 UI.toast(`A plan holds at most ${P.LIMITS.nodes} modules.`, { type: 'error' });
+                return false;
+            }
+            if (plan.links.length + snap.links.length > P.LIMITS.links) {
+                UI.toast(`A plan holds at most ${P.LIMITS.links} links.`, { type: 'error' });
                 return false;
             }
             for (const src of snap.nodes) {
@@ -526,14 +527,18 @@
         return made;
     }
 
-    function removeNode(id) {
+    /** Remove modules and every link touching them, as one undo step. */
+    function removeNodes(ids) {
+        const gone = new Set(ids);
         edit((plan) => {
-            plan.nodes = plan.nodes.filter((n) => n.id !== id);
-            plan.links = plan.links.filter((l) => l.from !== id && l.to !== id);
-            // A card that paid its cash back into the removed account credits itself again.
-            for (const n of plan.nodes) if (n.params && n.params.cashBackTo === id) n.params.cashBackTo = null;
+            plan.nodes = plan.nodes.filter((n) => !gone.has(n.id));
+            plan.links = plan.links.filter((l) => !gone.has(l.from) && !gone.has(l.to));
+            // A card that paid its cash back into a removed account credits itself again.
+            for (const n of plan.nodes) if (n.params && gone.has(n.params.cashBackTo)) n.params.cashBackTo = null;
         });
     }
+
+    const removeNode = (id) => removeNodes([id]);
 
     /** Link two modules on `basis`, or on the usual (else next free) one. */
     function connect(fromId, toId, basis = null) {
@@ -558,6 +563,7 @@
         state, on, edit, beginGesture, gestureMove, endGesture, undo, redo, canUndo, canRedo,
         select, setScrub, setView, flush, boot, openPlan, newPlan, addPlan, duplicatePlan,
         renamePlan, deletePlan, reorderTabs, importPlan, exportPlan, planName, getPlan,
-        node, link, previewPreset, setPreviewIcon, addNode, duplicateNode, copyNodes, pasteNodes, removeNode, connect, removeLink, simulateNow,
+        node, link, previewPreset, setPreviewIcon, addNode, duplicateNode, copyNodes, pasteNodes, removeNode, removeNodes,
+        connect, removeLink,
     };
 }());

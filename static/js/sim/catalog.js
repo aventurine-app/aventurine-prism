@@ -37,14 +37,15 @@
 }(typeof self !== 'undefined' ? self : this, function () {
 
     // ── Roles ──────────────────────────────────────────────────────────────
-    // hasIn / hasOut decide which ports a module draws. `holds` marks the two
-    // roles that carry a balance from month to month.
+    // hasIn decides whether a module draws an input port (whether it draws an
+    // output port depends on its bases: plan.js, basesFor). `holds` marks the
+    // two roles that carry a balance from month to month.
     const ROLES = {
-        source:   { id: 'source',   label: 'Income',   hasIn: false, hasOut: true, holds: false },
-        account:  { id: 'account',  label: 'Account',  hasIn: true,  hasOut: true, holds: true },
-        expense:  { id: 'expense',  label: 'Spending', hasIn: true,  hasOut: true, holds: false },
-        debt:     { id: 'debt',     label: 'Debt',     hasIn: true,  hasOut: true, holds: true },
-        modifier: { id: 'modifier', label: 'Modifier', hasIn: true,  hasOut: true, holds: false },
+        source:   { id: 'source',   label: 'Income',   hasIn: false, holds: false },
+        account:  { id: 'account',  label: 'Account',  hasIn: true,  holds: true },
+        expense:  { id: 'expense',  label: 'Spending', hasIn: true,  holds: false },
+        debt:     { id: 'debt',     label: 'Debt',     hasIn: true,  holds: true },
+        modifier: { id: 'modifier', label: 'Modifier', hasIn: true,  holds: false },
     };
     const ROLE_ORDER = ['source', 'account', 'expense', 'debt', 'modifier'];
 
@@ -92,6 +93,10 @@
         limit:      { type: 'money',     label: 'Credit limit',     min: 0,    max: 1e10, optional: true },
     };
 
+    // How many of each `per` period fall in a month. A yearly amount and a
+    // one-off are paid on their own schedule, so they are not listed.
+    const PER_MONTH = { week: 52 / 12, biweek: 26 / 12, month: 1 };
+
     const ROLE_FIELDS = {
         source:   ['amount', 'per', 'payMonth', 'growth', 'tax', 'start', 'end'],
         account:  ['balance', 'rate', 'lockUntil', 'capYearly'],
@@ -120,7 +125,7 @@
           icons: ['briefcase', 'money', 'arrow-u-up-left', 'laptop', 'coins', 'hand-coins', 'storefront',
                   'receipt', 'handshake', 'chalkboard-teacher', 'hammer', 'paint-brush', 'camera', 'pen-nib',
                   'microphone', 'music-notes', 'truck', 'stethoscope', 'wrench', 'code', 'shopping-bag',
-                  'house-line', 'gift', 'hand-heart', 'trophy', 'calendar-check', 'currency-dollar', 'chart-line-up'] },
+                  'house-line', 'gift', 'scroll', 'hand-heart', 'trophy', 'calendar-check', 'currency-dollar', 'chart-line-up'] },
         { id: 'accounts',   name: 'Accounts',   icon: 'bank',
           icons: ['wallet', 'piggy-bank', 'vault', 'coin-vertical', 'lifebuoy', 'certificate', 'money-wavy', 'bank',
                   'coins', 'currency-dollar', 'lock-key', 'shield-check', 'umbrella', 'house-line', 'car',
@@ -133,9 +138,9 @@
                   'chart-line', 'chart-donut', 'scales', 'globe', 'rocket', 'lightning', 'cpu', 'flask', 'crown',
                   'medal', 'coin'] },
         { id: 'spending',   name: 'Spending',   icon: 'shopping-cart',
-          icons: ['folder', 'house', 'basket', 'fork-knife', 'lightning', 'bus', 'shield-check', 'first-aid',
-                  'repeat', 'popcorn', 'handbag', 'airplane-tilt', 'baby', 'book-open', 'paw-print', 'gift',
-                  'hand-heart', 'receipt', 'hammer', 'shopping-cart', 'shopping-bag', 'coffee', 'pizza',
+          icons: ['folder', 'house', 'basket', 'fork-knife', 'lightning', 'bus', 'shield-check', 'first-aid', 'siren',
+                  'repeat', 'popcorn', 'handbag', 'airplane-tilt', 'island', 'baby', 'book-open', 'paw-print', 'gift',
+                  'hand-heart', 'receipt', 'hammer', 'shopping-cart', 'shopping-bag', 'package', 'coffee', 'pizza',
                   'hamburger', 'beer-bottle', 'wine', 't-shirt', 'sneaker', 'scissors', 'television',
                   'game-controller', 'music-notes', 'headphones', 'phone', 'wifi-high', 'drop', 'flame',
                   'gas-pump', 'car', 'train', 'bicycle', 'tooth', 'pill', 'heart', 'dog', 'cat',
@@ -301,7 +306,7 @@
     }
 
     return {
-        ROLES, ROLE_ORDER, LINK_TARGETS, FIELDS, ROLE_FIELDS, ROLE_DEFAULTS,
+        ROLES, ROLE_ORDER, LINK_TARGETS, FIELDS, PER_MONTH, ROLE_FIELDS,
         CATEGORIES, PRESETS, preset, iconChoices, fieldsFor, fieldLabel, defaultParams,
     };
 }));

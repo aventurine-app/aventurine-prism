@@ -25,6 +25,10 @@ const FORMAT = 'citrine-encrypted';
 const VERSION = 1;
 const CIPHER = 'aes-256-gcm';
 const KDF = { name: 'scrypt', N: 1 << 16, r: 8, p: 1, keyLength: 32 };
+const IV_BYTES = 12;
+// Pinned on both sides: without it, GCM accepts a truncated tag, which is
+// easier to forge than the full 16 bytes.
+const TAG_BYTES = 16;
 
 // Bounds on what a file may ask for. The KDF parameters come from the file,
 // and a crafted file asking for N = 2^30 would make scrypt allocate 128 GiB.
@@ -66,8 +70,8 @@ function seal(plaintext, key, kdf) {
         format: FORMAT, version: VERSION, cipher: CIPHER,
         kdf: { name: kdf.name, N: kdf.N, r: kdf.r, p: kdf.p, keyLength: kdf.keyLength, salt: kdf.salt },
     };
-    const iv = crypto.randomBytes(12);
-    const c = crypto.createCipheriv(CIPHER, key, iv);
+    const iv = crypto.randomBytes(IV_BYTES);
+    const c = crypto.createCipheriv(CIPHER, key, iv, { authTagLength: TAG_BYTES });
     c.setAAD(aad(header));
     const data = Buffer.concat([c.update(plaintext, 'utf8'), c.final()]);
     return JSON.stringify({
@@ -81,10 +85,10 @@ function seal(plaintext, key, kdf) {
 /** Decrypt an envelope to its plaintext string. A wrong key and a tampered
  *  file fail the same way: GCM cannot tell them apart, and neither can we. */
 function open(envelope, key) {
-    const d = crypto.createDecipheriv(CIPHER, key, Buffer.from(envelope.iv, 'base64'));
-    d.setAAD(aad(envelope));
-    d.setAuthTag(Buffer.from(envelope.tag, 'base64'));
     try {
+        const d = crypto.createDecipheriv(CIPHER, key, Buffer.from(envelope.iv, 'base64'), { authTagLength: TAG_BYTES });
+        d.setAAD(aad(envelope));
+        d.setAuthTag(Buffer.from(envelope.tag, 'base64'));
         return Buffer.concat([d.update(Buffer.from(envelope.data, 'base64')), d.final()]).toString('utf8');
     } catch {
         throw new VaultError('wrong_password');
@@ -108,8 +112,8 @@ function checkEnvelope(env) {
         && Number.isInteger(k.N) && k.N >= N_MIN && k.N <= N_MAX && (k.N & (k.N - 1)) === 0
         && k.r === 8 && k.p === 1 && k.keyLength === 32
         && b64Len(k.salt) >= 16
-        && b64Len(env.iv) === 12
-        && b64Len(env.tag) === 16
+        && b64Len(env.iv) === IV_BYTES
+        && b64Len(env.tag) === TAG_BYTES
         && b64Len(env.data) >= 0;
     if (!ok) throw new VaultError(env.version > VERSION ? 'too_new' : 'unreadable');
 }

@@ -36,6 +36,22 @@ extraResources:
 asar: true
 npmRebuild: false
 
+# Electron fuses, flipped in the packaged binary only (npm start, smoke and
+# verify run the dev Electron and are unaffected). They stop the installed app
+# from being used as a general-purpose Node runtime under its own name, or
+# being made to load code beside the user's unlocked plans:
+#   runAsNode                             ELECTRON_RUN_AS_NODE is ignored
+#   enableNodeOptionsEnvironmentVariable  NODE_OPTIONS (--require ...) is ignored
+#   enableNodeCliInspectArguments         --inspect and friends are ignored
+#   onlyLoadAppFromAsar                   the app runs only from app.asar
+# Asar integrity validation is left off: it needs the macOS and Windows builds
+# to be signed, which they are not yet (see win: and mac: below).
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  onlyLoadAppFromAsar: true
+
 # Update feed for the in-app updater (../updater.js). electron-builder bakes
 # this into each build as resources/app-update.yml and writes the release
 # metadata electron-updater reads: latest.yml (Windows) and latest-linux.yml

@@ -61,20 +61,11 @@
 }
 
 /* ── Links ──────────────────────────────────────────────────────────────── */
-/* Every link is the same light blue; the output port it leaves from still
-   wears the colour of what it sends (--flow). */
-.link { --link: var(--link-line); }
-[data-flow="pay"]       { --flow: var(--flow-pay); }
-[data-flow="spending"]  { --flow: var(--flow-spending); }
-[data-flow="passes"]    { --flow: var(--flow-passes); }
-[data-flow="overflow"]  { --flow: var(--flow-overflow); }
-[data-flow="proceeds"]  { --flow: var(--flow-proceeds); }
-[data-flow="balance"]   { --flow: var(--flow-balance); }
-[data-flow="charges"]   { --flow: var(--flow-charges); }
-
+/* Every link is the same light blue, whatever it carries; the port it leaves
+   from wears its module's role colour. */
 .link-path {
     fill: none;
-    stroke: var(--link);
+    stroke: var(--link-line);
     stroke-width: 3px;
     stroke-linecap: round;
     stroke-opacity: 0.75;
@@ -104,8 +95,7 @@
 .link-flow.is-idle,
 .link-flow.is-dim { display: none; }
 .link.is-idle .link-path { stroke-dasharray: 4 6; stroke-opacity: 0.5; }
-.link:hover .link-path,
-.link.is-hover .link-path { stroke-opacity: 1; }
+.link:hover .link-path { stroke-opacity: 1; }
 /* A link being inspected (selected, or touching the selected module) is thicker. */
 .link.is-active .link-path { stroke-width: 6px; stroke-opacity: 1; }
 .link-flow.is-active { stroke-width: 2.5px; }
@@ -132,7 +122,7 @@
     height: 22px;
     padding: 0 var(--space-8);
     border: var(--border-width) solid var(--border);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     background: var(--surface1);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
     color: var(--text-secondary);
@@ -149,7 +139,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--link);
+    background: var(--link-line);
 }
 .link-label:hover { border-color: var(--stroke-strong); color: var(--text-primary); }
 .link-label.is-selected { border-color: var(--accent-gray); color: var(--text-primary); }
@@ -282,31 +272,15 @@
     background: var(--frost-2);
     overflow: hidden;
 }
-.node-bar > span { min-width: 2px; height: 100%; border-radius: 2px; background: var(--seg, var(--role-none)); }
-.node-bar > span[data-role="source"]   { --seg: var(--role-source); }
-.node-bar > span[data-role="account"]  { --seg: var(--role-account); }
-.node-bar > span[data-role="expense"]  { --seg: var(--role-expense); }
-.node-bar > span[data-role="debt"]     { --seg: var(--role-debt); }
-.node-bar > span[data-role="modifier"] { --seg: var(--role-modifier); }
-.node-bar > span[data-role="none"]     { --seg: var(--role-none); opacity: 0.45; }
+/* A segment for a module takes its role colour from [data-role] (ui.css);
+   the other three are not roles. */
+.node-bar > span { min-width: 2px; height: 100%; border-radius: 2px; background: var(--tile); }
+.node-bar > span[data-role="none"]   { --tile: var(--role-none); opacity: 0.45; }
+.node-bar > span[data-role="growth"] { --tile: var(--accent-positive); }
+.node-bar > span[data-role="track"]  { --tile: transparent; }
 
-.node-flag {
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: var(--flag);
-    box-shadow: 0 0 0 2px var(--canvas-bg);
-    color: var(--flag-ink);
-}
-.node-flag--notice { background: var(--notice); color: var(--notice-ink); }
-.node-flag .icon { width: 12px; height: 12px; }
-
+/* The badge on a card's corner: a warning flag, or a check once a debt is paid off. */
+.node-flag,
 .node-check {
     position: absolute;
     top: -8px;
@@ -317,11 +291,13 @@
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: var(--accent-positive);
     box-shadow: 0 0 0 2px var(--canvas-bg);
-    color: #fff;
 }
+.node-flag .icon,
 .node-check .icon { width: 12px; height: 12px; }
+.node-flag { background: var(--flag); color: var(--flag-ink); }
+.node-flag--notice { background: var(--notice); color: var(--notice-ink); }
+.node-check { background: var(--accent-positive); color: #fff; }
 
 /* ── Ports ──────────────────────────────────────────────────────────────── */
 /* Both ports sit on the vertical centre: money comes in on the left and leaves
@@ -402,7 +378,7 @@
     font-variant-numeric: tabular-nums;
     text-align: center;
     cursor: pointer;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     height: 30px;
 }
 .zoom-level:hover { background: var(--frost-3); color: var(--text-primary); }

@@ -203,6 +203,4 @@
             if (el && Store.state.plan && el.textContent !== Store.state.plan.name) render();
         } else if (c.type === 'save') renderSave();
     });
-
-    window.Tabs = { render, startRename };
 }());

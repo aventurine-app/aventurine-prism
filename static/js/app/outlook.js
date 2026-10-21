@@ -22,12 +22,10 @@
     if (!root) return;
 
     const PREFS = { view: 'outlook-view', height: 'outlook-height', collapsed: 'outlook-collapsed', real: 'outlook-real' };
-    const read = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
-    const write = (k, v) => { try { localStorage.setItem(k, v); } catch { /* not persisted */ } };
 
-    let view = read(PREFS.view, 'worth');
-    let real = read(PREFS.real, '0') === '1';
-    let collapsed = read(PREFS.collapsed, '0') === '1';
+    let view = Prefs.get(PREFS.view, 'worth');
+    let real = Prefs.get(PREFS.real) === '1';
+    let collapsed = Prefs.get(PREFS.collapsed) === '1';
     // The plan whose net worth is drawn beside this one, per active plan.
     const compareWith = new Map();
     const compareCache = new Map();   // plan id → { updatedAt, results }
@@ -40,13 +38,12 @@
 
     root.innerHTML = `
         <div class="outlook-grip" aria-hidden="true"></div>
-        <div class="kpis" aria-live="polite"></div>
+        <div class="kpis scroll-y" aria-live="polite"></div>
         <div class="outlook-main">
             <div class="outlook-head">
                 <div class="segctl segctl--rules" role="tablist" aria-label="Outlook view">
-                    <button class="segctl-btn" type="button" role="tab" data-view="worth">${iconSvg('chart-line')}<span>Net worth</span></button>
-                    <button class="segctl-btn" type="button" role="tab" data-view="flow">${iconSvg('chart-bar')}<span>Cash flow</span></button>
-                    <button class="segctl-btn" type="button" role="tab" data-view="table">${iconSvg('table')}<span>Table</span></button>
+                    ${[['worth', 'chart-line', 'Net worth'], ['flow', 'chart-bar', 'Cash flow'], ['table', 'table', 'Table']].map(([v, icon, name]) =>
+                        `<button class="segctl-btn" type="button" role="tab" data-view="${v}" aria-label="${name}" title="${name}">${iconSvg(icon)}<span>${name}</span></button>`).join('')}
                 </div>
                 <span class="outlook-spacer"></span>
                 <span class="outlook-label">Over</span>
@@ -64,7 +61,7 @@
                     </div>
                     <div class="chart-box"></div>
                 </div>
-                <div class="outlook-table-wrap" hidden></div>
+                <div class="outlook-table-wrap scroll-y" hidden></div>
             </div>
         </div>`;
 
@@ -74,6 +71,9 @@
     const box = root.querySelector('.chart-box');
     const tableWrap = root.querySelector('.outlook-table-wrap');
     const realBtn = root.querySelector('[data-act="real"]');
+    const compareBtn = root.querySelector('[data-act="compare"]');
+    const collapseBtn = root.querySelector('[data-act="collapse"]');
+    let collapseDrawn = null;   // the `collapsed` the collapse button shows
 
     // ── Values ─────────────────────────────────────────────────────────────
 
@@ -349,16 +349,18 @@
         root.querySelectorAll('[data-view]').forEach((b) => { b.setAttribute('aria-selected', String(!collapsed && b.dataset.view === view)); b.disabled = collapsed; });
         root.querySelectorAll('[data-years]').forEach((b) => b.setAttribute('aria-pressed', String(!!plan && Number(b.dataset.years) === plan.settings.years)));
         realBtn.setAttribute('aria-pressed', String(real));
-        const cmp = root.querySelector('[data-act="compare"]');
         const others = plan ? Store.state.tabs.filter((id) => id !== plan.id) : [];
-        cmp.hidden = view !== 'worth' || !others.length;
+        compareBtn.hidden = view !== 'worth' || !others.length;
         const on = !!(plan && compareWith.get(plan.id) && Store.getPlan(compareWith.get(plan.id)));
-        cmp.setAttribute('aria-pressed', String(on));
-        cmp.querySelector('span').textContent = on ? `vs ${Store.planName(compareWith.get(plan.id))}` : 'Compare';
+        compareBtn.setAttribute('aria-pressed', String(on));
+        compareBtn.querySelector('span').textContent = on ? `vs ${Store.planName(compareWith.get(plan.id))}` : 'Compare';
         root.classList.toggle('is-collapsed', collapsed);
-        const c = root.querySelector('[data-act="collapse"]');
-        c.innerHTML = iconSvg(collapsed ? 'caret-up' : 'caret-down');
-        c.setAttribute('aria-label', collapsed ? 'Expand outlook' : 'Collapse outlook');
+        // This runs on every plan edit, drags included; the icon changes only on a toggle.
+        if (collapseDrawn !== collapsed) {
+            collapseDrawn = collapsed;
+            collapseBtn.innerHTML = iconSvg(collapsed ? 'caret-up' : 'caret-down');
+            collapseBtn.setAttribute('aria-label', collapsed ? 'Expand outlook' : 'Collapse outlook');
+        }
     }
 
     function render() {
@@ -390,7 +392,7 @@
         const v = e.target.closest('[data-view]');
         if (v) {
             view = v.dataset.view;
-            write(PREFS.view, view);
+            Prefs.set(PREFS.view, view);
             Store.setScrub(null);
             render();
             return;
@@ -417,11 +419,11 @@
         }
         if (act.dataset.act === 'real') {
             real = !real;
-            write(PREFS.real, real ? '1' : '0');
+            Prefs.set(PREFS.real, real ? '1' : '0');
             render();
         } else if (act.dataset.act === 'collapse') {
             collapsed = !collapsed;
-            write(PREFS.collapsed, collapsed ? '1' : '0');
+            Prefs.set(PREFS.collapsed, collapsed ? '1' : '0');
             Store.setScrub(null);
             render();
         }
@@ -429,7 +431,7 @@
 
     // Drag the top edge to resize.
     const grip = root.querySelector('.outlook-grip');
-    const savedH = Number(read(PREFS.height, '0'));
+    const savedH = Number(Prefs.get(PREFS.height, '0'));
     if (savedH) root.style.setProperty('--outlook-h', `${savedH}px`);
     grip.addEventListener('pointerdown', (e) => {
         if (e.button !== 0) return;
@@ -443,14 +445,17 @@
             const h = Math.min(max, Math.max(200, h0 - (ev.clientY - y0)));
             root.style.setProperty('--outlook-h', `${Math.round(h)}px`);
         };
-        const up = () => {
+        // A cancelled pointer (the window losing it mid-drag) ends the drag too.
+        const end = () => {
             grip.removeEventListener('pointermove', move);
-            grip.removeEventListener('pointerup', up);
+            grip.removeEventListener('pointerup', end);
+            grip.removeEventListener('pointercancel', end);
             root.classList.remove('is-resizing');
-            write(PREFS.height, String(Math.round(root.getBoundingClientRect().height)));
+            Prefs.set(PREFS.height, String(Math.round(root.getBoundingClientRect().height)));
         };
         grip.addEventListener('pointermove', move);
-        grip.addEventListener('pointerup', up);
+        grip.addEventListener('pointerup', end);
+        grip.addEventListener('pointercancel', end);
     });
 
     // Redraw when the chart's box changes size (window resize, panel drag,

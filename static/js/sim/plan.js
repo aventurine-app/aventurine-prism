@@ -98,12 +98,12 @@
             'dream-trip': 'island', 'emergency': 'siren' }),
     };
 
-    // Bounds. A plan larger than these is not a plan anyone draws by hand; the
-    // limits exist so a corrupt or hostile document cannot make the backend
-    // write, or the engine walk, something unbounded.
     // Card geometry shared with canvas.js and canvas.css (change all together).
     const GEOM = { NODE_W: 208, NODE_H: 112 };
 
+    // Bounds. A plan larger than these is not a plan anyone draws by hand; the
+    // limits exist so a corrupt or hostile document cannot make the backend
+    // write, or the engine walk, something unbounded.
     const LIMITS = {
         nodes:    400,
         links:    1200,
@@ -306,14 +306,14 @@
         const from = plan.nodes.find((n) => n.id === fromId);
         const to = plan.nodes.find((n) => n.id === toId);
         if (!from || !to) return { ok: false, reason: 'missing' };
-        const fr = roleOf(from);
         const tr = roleOf(to);
-        if (!Catalog.LINK_TARGETS[fr].includes(tr) || !basesFor(from).length) return { ok: false, reason: 'role' };
-        const reaches = basesFor(from).filter((b) => portTargets(from, b).includes(tr));
+        const bases = basesFor(from);
+        if (!Catalog.LINK_TARGETS[roleOf(from)].includes(tr) || !bases.length) return { ok: false, reason: 'role' };
+        const reaches = bases.filter((b) => portTargets(from, b).includes(tr));
         if (basis ? !reaches.includes(basis) : !reaches.length) return { ok: false, reason: 'basis' };
-        if (!(basis ? [basis] : reaches).some((b) => basesBetween(plan, from, to).includes(b))) {
-            return { ok: false, reason: 'duplicate' };
-        }
+        // The bases this pair has free are always among the ones that reach.
+        const free = basesBetween(plan, from, to);
+        if (basis ? !free.includes(basis) : !free.length) return { ok: false, reason: 'duplicate' };
         return { ok: true };
     }
 
@@ -404,11 +404,7 @@
 
         // A card pays for spending: a purchase, at that spending's usual price.
         if (fp.kind === 'card') {
-            const buy = tp.inLink || { when: 'monthly', value: 100 };
-            Object.assign(rule, { basis: 'charges', mode: 'fixed', value: buy.value, when: buy.when });
-            if (buy.month) rule.month = buy.month;
-            if (buy.relDate != null) rule.date = ymAdd(plan.settings.start, buy.relDate);
-            return rule;
+            return Object.assign(rule, { basis: 'charges' }, priceRule(plan, tp.inLink || { when: 'monthly', value: 100 }));
         }
 
         if (tp.inLink) {
@@ -776,7 +772,7 @@
         PLAN_VERSION, LIMITS, GEOM, MONTHS, RULES, PlanError, REMOVED_TYPES,
         ymParse, ymFormat, ymNow, ymAdd, ymDiff, ymLabel,
         newId, roleOf, basesFor, modesFor, timingsFor, portTargets, targetRoles, basesBetween, changeBasis, loanPayment, isPretax,
-        createPlan, createNode, iconOf, RETIRED_TYPES, canConnect, createLink, defaultRule, fitRule,
+        createPlan, createNode, iconOf, RETIRED_TYPES, canConnect, createLink, fitRule,
         validatePlan, cloneWithNewIds,
     };
 }));

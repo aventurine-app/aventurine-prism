@@ -20,24 +20,15 @@
 
     const prefs = { symbol: '$', position: 'prefix', numberFormat: 'us' };
 
-    function read(key, fallback) {
-        try {
-            const v = localStorage.getItem(key);
-            return v === null ? fallback : v;
-        } catch {
-            return fallback;
-        }
-    }
-
     function loadPrefs() {
-        prefs.symbol = read('currency-symbol', '$').slice(0, 3);
-        prefs.position = read('symbol-position', 'prefix') === 'suffix' ? 'suffix' : 'prefix';
-        const nf = read('number-format', 'us');
+        prefs.symbol = Prefs.get('currency-symbol', '$').slice(0, 3);
+        prefs.position = Prefs.get('symbol-position', 'prefix') === 'suffix' ? 'suffix' : 'prefix';
+        const nf = Prefs.get('number-format', 'us');
         prefs.numberFormat = Object.prototype.hasOwnProperty.call(SEPARATORS, nf) ? nf : 'us';
     }
 
     function setPref(key, value) {
-        try { localStorage.setItem(key, value); } catch { /* not persisted */ }
+        Prefs.set(key, value);
         loadPrefs();
     }
 
@@ -117,5 +108,5 @@
 
     loadPrefs();
 
-    window.Fmt = { money, pct, number, parseNumber, inputValue, symbolParts, setPref, loadPrefs, prefs };
+    window.Fmt = { money, pct, number, parseNumber, inputValue, symbolParts, setPref, prefs };
 }());

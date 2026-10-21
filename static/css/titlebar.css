@@ -12,7 +12,7 @@ html[data-theme="dark"] { --titlebar-frost: rgba(255, 255, 255, 0.10); }
     z-index: 20;
     display: flex;
     align-items: stretch;
-    height: 40px;
+    height: var(--titlebar-height);
     flex-shrink: 0;
     background: var(--surface3);
     color: var(--text-tertiary);

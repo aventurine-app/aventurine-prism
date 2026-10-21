@@ -24,7 +24,7 @@
 }
 .outlook.is-collapsed .kpis > :not(.kpi-hero),
 .outlook.is-collapsed .kpi-hero > :not(.kpi-hero-value) { display: none; }
-.outlook.is-collapsed .kpi-hero-value { font-size: var(--size-body, 1rem); }
+.outlook.is-collapsed .kpi-hero-value { font-size: var(--size-body); }
 
 /* The headline column runs the panel's full height; the view tabs sit above
    the chart, in the column beside it. */
@@ -94,8 +94,6 @@
     gap: var(--space-16);
     padding: var(--space-16) var(--space-20);
     border-right: var(--border-width) solid var(--stroke-divider);
-    overflow-y: auto;
-    scrollbar-width: thin;
 }
 .kpi-hero { display: flex; flex-direction: column; gap: var(--space-4); }
 .kpi-hero-value {
@@ -174,7 +172,7 @@
     height: 24px;
     padding: 0 var(--space-4);
     border: 0;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: transparent;
     color: var(--text-secondary);
     font-size: var(--size-micro);
@@ -189,7 +187,7 @@
     position: relative;
     width: 28px;
     height: 16px;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     background: var(--surface4);
     transition: background-color 0.15s ease;
 }
@@ -273,7 +271,6 @@
     flex: 1;
     min-width: 0;
     overflow: auto;
-    scrollbar-width: thin;
 }
 .outlook-table {
     width: 100%;
@@ -306,23 +303,21 @@
 .outlook-table .cell-name { display: inline-flex; align-items: center; gap: var(--space-8); }
 .outlook-table .is-negative { color: var(--accent-negative); }
 
-.outlook-empty {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-tertiary);
-    font-size: var(--size-small);
-}
-
-/* Narrow windows: the header drops words before it drops controls, and the
-   headline column narrows. */
-@container (max-width: 860px) {
+/* Narrow panels: the header row gives things up, least useful first, so it
+   always fits beside the headline column instead of running into the
+   inspector. Each step leaves ~15px spare over what was measured: the full
+   row needs 692px beside a 272px column, 654px without "Over", and 451px
+   with icon-only view tabs (a 1440px window with the inspector open gives
+   the panel 916px). */
+@container (max-width: 980px) {
     .outlook-label { display: none; }
-    .outlook-head .segctl-btn .icon { display: none; }
     .kpis { width: 232px; padding-inline: var(--space-16); }
 }
-@container (max-width: 640px) {
+@container (max-width: 900px) {
+    /* Each view tab keeps its name as its aria-label and title. */
+    .outlook-head .segctl--rules .segctl-btn span { display: none; }
+}
+@container (max-width: 700px) {
     .kpis { display: none; }
 }
 

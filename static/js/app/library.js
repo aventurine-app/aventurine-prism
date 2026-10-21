@@ -21,10 +21,10 @@
     const COLLAPSED_KEY = 'library-collapsed';
     // Every category starts collapsed until the user opens one.
     let collapsed = new Set(C.CATEGORIES.map((cat) => cat.id));
-    try {
-        const saved = localStorage.getItem(COLLAPSED_KEY);
-        if (saved !== null) collapsed = new Set(JSON.parse(saved));
-    } catch { /* defaults */ }
+    const savedCollapsed = Prefs.get(COLLAPSED_KEY);
+    if (savedCollapsed !== null) {
+        try { collapsed = new Set(JSON.parse(savedCollapsed)); } catch { /* malformed: defaults */ }
+    }
 
     root.innerHTML = `
         <div class="library-head">
@@ -35,7 +35,7 @@
                 </label>
             </div>
         </div>
-        <div class="library-scroll" role="list"></div>
+        <div class="library-scroll scroll-y" role="list"></div>
         <nav class="library-rail" aria-label="Module categories">
             ${C.CATEGORIES.map((cat) => {
         const n = C.PRESETS.filter((p) => p.cat === cat.id).length;
@@ -100,7 +100,7 @@
         if (head) {
             const id = head.dataset.cat;
             if (collapsed.has(id)) collapsed.delete(id); else collapsed.add(id);
-            try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed])); } catch { /* not persisted */ }
+            Prefs.set(COLLAPSED_KEY, JSON.stringify([...collapsed]));
             render();
             scroll.querySelector(`.lib-section-head[data-cat="${id}"]`)?.focus();
             return;
@@ -136,8 +136,7 @@
 
     const toggle = root.querySelector('[data-act="rail"]');
     const rail = root.querySelector('.library-rail');
-    let railOn = false;
-    try { railOn = localStorage.getItem(RAIL_KEY) === '1'; } catch { /* default open */ }
+    let railOn = Prefs.get(RAIL_KEY) === '1';
 
     function setRail(on) {
         railOn = on;
@@ -148,7 +147,7 @@
         const label = on ? 'Expand modules' : 'Collapse modules';
         toggle.setAttribute('aria-label', label);
         toggle.title = `${label} (Ctrl+B)`;
-        try { localStorage.setItem(RAIL_KEY, on ? '1' : '0'); } catch { /* not persisted */ }
+        Prefs.set(RAIL_KEY, on ? '1' : '0');
     }
 
     toggle.addEventListener('click', () => setRail(!railOn));
@@ -181,7 +180,7 @@
         el.setAttribute('aria-label', `${cat.name} modules`);
         el.innerHTML = `
             <div class="lib-flyout-head">${iconSvg(cat.icon)}<span>${escapeHtml(cat.name)}</span><span class="lib-count">${items.length}</span></div>
-            <div class="lib-flyout-list">${items.map((p) => `
+            <div class="lib-flyout-list scroll-y">${items.map((p) => `
                 <button class="lib-flyout-item" type="button" draggable="true" data-preset="${p.id}" aria-pressed="${p.id === Store.state.preview}">
                     <span class="role-tile" data-role="${p.role}">${iconSvg(p.icon)}</span>
                     <span class="lib-flyout-name">${escapeHtml(p.name)}</span>
@@ -257,5 +256,5 @@
     render();
     if (railOn) setRail(true);
 
-    window.Library = { focusSearch: () => { if (railOn) setRail(false); search.focus(); }, toggleRail: () => setRail(!railOn), isRail: () => railOn };
+    window.Library = { focusSearch: () => { if (railOn) setRail(false); search.focus(); }, toggleRail: () => setRail(!railOn) };
 }());

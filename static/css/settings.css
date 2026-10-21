@@ -51,14 +51,8 @@
 .settings-panel { display: flex; flex-direction: column; gap: var(--space-16); }
 
 .settings-section { display: flex; flex-direction: column; gap: var(--space-8); }
-.settings-section-header {
-    padding-left: 2px;
-    color: var(--text-tertiary);
-    font-size: var(--size-micro);
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--track-widest);
-    text-transform: uppercase;
-}
+/* Its type is the .eyebrow's (style.css). */
+.settings-section-header { padding-left: 2px; }
 
 .settings-card {
     background: var(--surface1);
@@ -157,7 +151,7 @@
     display: inline-flex;
     height: var(--control-height);
     border: var(--border-width) solid var(--accent-primary);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
     background: var(--surface1);
     flex-shrink: 0;
@@ -181,7 +175,11 @@
 .seg-switch-btn[aria-pressed="true"] { background: var(--accent-primary); color: var(--button-text); }
 .seg-switch-btn:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -3px; }
 
+/* The currency symbol: three characters at most, centred. */
+.field-input--symbol { width: 72px; text-align: center; }
+
 /* Password form fields. */
+.pw-dialog { width: 420px; }
 .pw-field { display: flex; flex-direction: column; gap: 6px; }
 .pw-field + .pw-field { margin-top: var(--space-12); }
 .pw-label { color: var(--text-secondary); font-size: var(--size-small); font-weight: var(--weight-medium); }
@@ -237,7 +235,7 @@
 /* ── Lock screen ────────────────────────────────────────────────────────── */
 .lockscreen {
     position: fixed;
-    inset: 40px 0 0 0;
+    inset: var(--titlebar-height) 0 0 0;
     z-index: 800;
     display: flex;
     align-items: center;
@@ -255,7 +253,6 @@
     border-radius: var(--radius-panel);
     box-shadow: var(--shadow-card);
 }
-.lock-card .role-tile { --tile: var(--accent-primary); }
 .lock-title { margin: 0; font-size: var(--size-h2); font-weight: var(--weight-semibold); letter-spacing: var(--track-tight); }
 .lock-path { color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--size-micro); word-break: break-all; }
 .lock-form { display: flex; flex-direction: column; gap: var(--space-12); }

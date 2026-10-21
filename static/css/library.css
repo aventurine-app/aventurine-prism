@@ -73,9 +73,6 @@
     min-height: 0;
     padding: 0 var(--space-12) var(--space-16);
     overflow-x: hidden;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--surface4) transparent;
 }
 
 .lib-section + .lib-section { margin-top: var(--space-4); }
@@ -262,12 +259,7 @@
 }
 .lib-flyout-head .icon { width: 16px; height: 16px; }
 .lib-flyout-head .lib-count { margin-left: auto; }
-.lib-flyout-list {
-    padding: var(--space-8);
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--surface4) transparent;
-}
+.lib-flyout-list { padding: var(--space-8); }
 .lib-flyout-item {
     display: flex;
     align-items: center;

@@ -77,8 +77,6 @@
     // (1% to 10% is the ideal range; only the red flag is reported.)
     const UTILIZATION_FLAG = 30;
 
-    const PER_MONTH = { week: 52 / 12, biweek: 26 / 12, month: 1 };
-
     function simulate(plan) {
         const start = plan.settings.start;
         const months = Math.max(1, Math.round(plan.settings.years * 12));
@@ -608,7 +606,7 @@
             if (p.payMonth) return cal === p.payMonth ? p.amount * g : 0;
             return (p.amount / 12) * g;
         }
-        return p.amount * (PER_MONTH[p.per] || 1) * g;
+        return p.amount * (Catalog.PER_MONTH[p.per] || 1) * g;
     }
 
     /** Upstream-first order of the modules, so a transfer is seen downstream
@@ -776,5 +774,5 @@
         };
     }
 
-    return { simulate, EPS };
+    return { simulate };
 }));

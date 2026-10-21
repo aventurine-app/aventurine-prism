@@ -17,7 +17,7 @@
         if (tabs) tabs.hidden = true;
         root.innerHTML = `
             <form class="lock-card" autocomplete="off">
-                <span class="role-tile role-tile--lg">${iconSvg('lock-key')}</span>
+                <span class="role-tile role-tile--lg role-tile--accent">${iconSvg('lock-key')}</span>
                 <h1 class="lock-title">Plans file locked</h1>
                 <div class="lock-path"></div>
                 <div class="lock-form">
