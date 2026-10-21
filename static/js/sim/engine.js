@@ -371,7 +371,6 @@
                 }
                 transfer(L, amount);
             }
-            s.owedBeforePay = s.bal;
             // Utilization is read at the month's peak, once purchases are on and
             // before payments land, which is when a statement would close.
             if (limit != null) {
@@ -469,7 +468,6 @@
                     s.interest[t] = interest;
                     totals.interest[t] += interest;
                 }
-                s.owedBeforePay = s.bal;
             }
             for (const s of cards) chargeCard(s);
             drain();
@@ -498,14 +496,6 @@
             }
 
             settleFixedShortfalls();
-            // Underpaid: a debt paid less than the minimum payment the user set
-            // on it. With none set there is nothing to fall short of.
-            for (const s of debts) {
-                const required = Math.min(s.owedBeforePay, s.params.minPayment || 0);
-                if (required > EPS && s.underpaidFirst < 0 && s.paid[t] + EPS < required) {
-                    s.underpaidFirst = t;
-                }
-            }
 
             // 5. Record.
             recordBalances(t + 1);
@@ -574,8 +564,6 @@
             // it (or undated) is already owed on day one.
             s.originates = s.startIdx != null && s.startIdx >= 0;
             s.paidOffAt = -1;
-            s.underpaidFirst = -1;
-            s.owedBeforePay = 0;
             s.scheduled = preset.kind === 'card' ? 0 : Plan.loanPayment(params);
             s.pending = 0;          // payments queued but not yet arrived
             if (s.kind === 'card') {
@@ -728,9 +716,6 @@
             }
             if (s.role === 'debt') {
                 if (s.paidOffAt >= 0) milestones.push({ code: 'paid-off', nodeId: s.id, month: s.paidOffAt });
-                if (s.underpaidFirst >= 0) {
-                    warnings.push({ code: 'underpaid', nodeId: s.id, month: s.underpaidFirst });
-                }
                 const first = s.originates ? s.params.balance || 0 : s.balance[0];
                 if (s.balance[months] > first + 0.005) {
                     warnings.push({ code: 'debt-growing', nodeId: s.id, amount: s.balance[months] - first });

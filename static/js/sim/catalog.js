@@ -85,7 +85,6 @@
         rate:       { type: 'percent',   label: 'Interest',         min: -100, max: 1000, suffix: '/yr' },
         lockUntil:  { type: 'yearmonth', label: 'Locked until',     optional: true },
         capYearly:  { type: 'money',     label: 'Yearly limit',     min: 0,    max: 1e10, optional: true },
-        minPayment: { type: 'money',     label: 'Minimum payment',  min: 0,    max: 1e10, optional: true },
         term:       { type: 'number',    label: 'Years left',       min: 0.1,  max: 50,   optional: true, suffix: 'yrs' },
         cashBack:   { type: 'percent',   label: 'Cash back',        min: 0,    max: 100 },
         cashBackTo: { type: 'account',   label: 'Cash back to',     optional: true },
@@ -101,7 +100,7 @@
         source:   ['amount', 'per', 'payMonth', 'growth', 'tax', 'start', 'end'],
         account:  ['balance', 'rate', 'lockUntil', 'capYearly'],
         expense:  [],
-        debt:     ['balance', 'rate', 'term', 'minPayment', 'start', 'cashBack', 'cashBackTo', 'annualFee', 'limit'],
+        debt:     ['balance', 'rate', 'term', 'start', 'cashBack', 'cashBackTo', 'annualFee', 'limit'],
         modifier: ['rate', 'capYearly'],
     };
 
@@ -109,7 +108,7 @@
         source:   { amount: 0, per: 'month', payMonth: 0, growth: 0, tax: 0, start: null, end: null },
         account:  { balance: 0, rate: 0, lockUntil: null, capYearly: null },
         expense:  {},
-        debt:     { balance: 0, rate: 0, term: null, minPayment: null, start: null, cashBack: 0, cashBackTo: null, annualFee: null, limit: null },
+        debt:     { balance: 0, rate: 0, term: null, start: null, cashBack: 0, cashBackTo: null, annualFee: null, limit: null },
         modifier: { rate: 0, capYearly: null },
     };
 
@@ -146,7 +145,7 @@
                   'gas-pump', 'car', 'train', 'bicycle', 'tooth', 'pill', 'heart', 'dog', 'cat',
                   'graduation-cap', 'barbell', 'ticket', 'camera', 'paint-brush', 'wrench', 'plant',
                   'flower', 'toolbox', 'lamp', 'bed', 'cake', 'balloon'] },
-        { id: 'debt',       name: 'Debt',       icon: 'cardholder',
+        { id: 'debt',       name: 'Debt',       icon: 'credit-card',
           icons: ['credit-card', 'student', 'car-profile', 'house-simple', 'key', 'handshake', 'first-aid-kit',
                   'shopping-cart-simple', 'bank', 'receipt', 'scales', 'warning', 'clock', 'hourglass', 'link',
                   'anchor', 'lock', 'notebook', 'file-text', 'percent', 'money', 'coins', 'hand-coins', 'wallet',
@@ -172,10 +171,8 @@
     // inLink      the rule a new link INTO this module starts with
     // keywords    extra search terms
     // Installment loans are repaid over a term, so their payment is worked out
-    // from it (plan.js, loanPayment) rather than typed in. A minimum payment is
-    // optional on any debt: it is only ever what the user sets, and the plan
-    // warns when a debt is paid less than it.
-    const DEBT_FIELDS = ['balance', 'rate', 'term', 'minPayment', 'start'];
+    // from it (plan.js, loanPayment) rather than typed in.
+    const DEBT_FIELDS = ['balance', 'rate', 'term', 'start'];
     const P = (cat, role, id, name, icon, extra = {}) => ({ cat, role, id, name, icon, ...extra });
 
     // A new link into a spending module starts at 0 with this timing.
@@ -183,16 +180,22 @@
 
     const PRESETS = [
         // Income
+        // Only a one-time income takes a date; the rest run for the whole plan.
         P('income', 'source', 'salary', 'Salary', 'briefcase', {
             defaults: { per: 'year' },
+            fixed: { payMonth: 0 },          // a yearly salary is paid out monthly
+            fields: ['amount', 'per', 'growth', 'tax'],
+            labels: { tax: 'Income tax' },
             keywords: 'job wage pay employment freelance contract consulting side hustle' }),
         P('income', 'source', 'paycheck', 'Paycheck', 'money', {
             defaults: { per: 'biweek' },
+            fixed: { tax: 0 },               // take-home pay is already after tax
+            fields: ['amount', 'per', 'payMonth', 'growth'],
             labels: { amount: 'Take-home' },
             keywords: 'net pay biweekly job gig allowance support royalties other income' }),
         P('income', 'source', 'tax-refund', 'Tax refund', 'arrow-u-up-left', {
             defaults: { per: 'year', payMonth: 4 },
-            fields: ['amount', 'per', 'payMonth', 'start', 'end'],
+            fields: ['amount', 'per', 'payMonth'],
             keywords: 'irs return' }),
         P('income', 'source', 'one-time-income', 'One-time income', 'sparkle', {
             fixed: { per: 'once' },
@@ -203,7 +206,7 @@
         // Accounts. Banking first: cash, checking, savings and a money market
         // are one thing at different rates; only a lock date makes a deposit
         // its own module.
-        P('accounts', 'account', 'bank-account', 'Bank account', 'wallet', {
+        P('accounts', 'account', 'bank-account', 'Bank account', 'bank', {
             fields: ['balance', 'rate'],
             labels: { rate: 'APY' },
             keywords: 'checking savings hysa high-yield money market emergency fund cash bank debit everyday save interest' }),
@@ -238,7 +241,6 @@
         // other debt is a balance owed at a rate, repaid over a term.
         P('debt', 'debt', 'credit-card', 'Credit card', 'credit-card', {
             kind: 'card',
-            fixed: { minPayment: null },
             fields: ['balance', 'rate', 'limit', 'cashBack', 'cashBackTo', 'annualFee'],
             labels: { balance: 'Balance owed', rate: 'APR' },
             keywords: 'cash back rewards points miles travel revolving debt' }),

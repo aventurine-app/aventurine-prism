@@ -210,7 +210,9 @@
         if (role === 'account') {
             const v = nr.balance[vp.k];
             out.value = Fmt.money(v, { compact: v >= 1e6 });
-            const d = v - nr.balance[0];
+            // Only what the account has earned, not what flowed in or out of it.
+            let d = 0;
+            for (let i = 0; i < vp.k && i < nr.earnings.length; i++) d += nr.earnings[i];
             if (Math.abs(d) >= 0.5) {
                 out.delta = Fmt.money(d, { sign: true, compact: Math.abs(d) >= 1e4 });
                 out.deltaDir = d > 0 ? 'up' : 'down';
@@ -255,7 +257,8 @@
     /** Segments for the bar under a card's figure. */
     function barSegments(node, role, nr, frame) {
         const { res, vp } = frame;
-        if (!nr || !vp) return [];
+        // Spending and income carry no balance, so they get no bar (see .node-bar in canvas.css).
+        if (!nr || !vp || role === 'expense' || role === 'source') return [];
         const upto = vp.all ? res.months : Math.max(1, vp.k);
         const sumTo = (arr) => { let s = 0; for (let i = 0; i < upto && i < arr.length; i++) s += arr[i]; return s; };
         if (role === 'account') {
@@ -268,12 +271,12 @@
             const peak = Math.max(...nr.balance);
             if (peak <= 0) return [];
             const paid = Math.max(0, peak - nr.balance[vp.k]);
-            return [{ role: 'debt', w: paid, label: 'Paid' }, { role: 'track', w: peak - paid, label: 'Owed' }];
+            return [{ role: 'growth', w: paid, label: 'Paid off' }, { role: 'owed', w: peak - paid, label: 'Owed' }];
         }
         const segs = [];
-        if (nr.consumed && (role === 'expense' || C.preset(node.type).kind !== 'match')) {
+        if (nr.consumed && C.preset(node.type).kind !== 'match') {
             const spent = sumTo(nr.consumed);
-            if (spent > 0) segs.push({ role, w: spent, label: role === 'expense' ? 'Spent' : 'Used' });
+            if (spent > 0) segs.push({ role, w: spent, label: 'Used' });
         }
         for (const l of frame.outs.get(node.id) || NONE) {
             const target = frame.byId.get(l.to);

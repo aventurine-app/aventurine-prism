@@ -73,7 +73,7 @@ test('an account rate is an APY: 4% grows exactly 4% in twelve months', () => {
 
 test('a debt APR is charged monthly at APR/12, and an unpaid debt is flagged', () => {
     const plan = mkPlan('2026-01', 1);
-    const debt = node(plan, 'credit-card', { balance: 1000, rate: 12, minPayment: null, cashBack: 0 });
+    const debt = node(plan, 'credit-card', { balance: 1000, rate: 12, cashBack: 0 });
     const r = run(plan);
     close(r.nodes[debt.id].balance[1], 1010);
     close(last(r.nodes[debt.id].balance), 1000 * Math.pow(1.01, 12));
@@ -288,7 +288,7 @@ test('a paid-off debt passes later payments on: the snowball', () => {
     const plan = mkPlan('2026-01', 1);
     const pay = node(plan, 'paycheck', { amount: 500, per: 'month' });
     const small = node(plan, 'loan', { balance: 1000, rate: 0 });
-    const big = node(plan, 'loan', { balance: 5000, rate: 0, minPayment: null });
+    const big = node(plan, 'loan', { balance: 5000, rate: 0 });
     link(plan, pay, small, { mode: 'fixed', value: 500 });
     link(plan, small, big, { mode: 'rest' });
     const r = run(plan);
@@ -311,7 +311,6 @@ test('a loan with a term is paid its scheduled payment and clears on time', () =
     close(r.links.l_0.flow[0], due);
     close(r.nodes[loan.id].payment, due);
     assert.ok(Math.abs(last(r.nodes[loan.id].balance)) < 1e-4);
-    assert.ok(!codes(r).includes('underpaid'));
     assert.ok(!codes(r).includes('short'));
 });
 
@@ -354,31 +353,10 @@ test('a card paid its purchases each month is never charged interest', () => {
     close(last(r.nodes[savings.id].balance), 12 * 2200);
 });
 
-test('payments under the minimum are flagged', () => {
-    const plan = mkPlan('2026-01', 1);
-    const pay = node(plan, 'paycheck', { amount: 1000, per: 'month' });
-    const loan = node(plan, 'loan', { balance: 10000, rate: 6, minPayment: 400 });
-    link(plan, pay, loan, { mode: 'fixed', value: 200 });
-    link(plan, pay, node(plan, 'expense'));
-    const r = run(plan);
-    const w = r.warnings.find((x) => x.code === 'underpaid');
-    assert.equal(w.nodeId, loan.id);
-    assert.equal(w.month, 0);
-});
-
-test('a debt with no minimum payment set is never flagged as underpaid', () => {
-    const plan = mkPlan('2026-01', 1);
-    const pay = node(plan, 'paycheck', { amount: 1000, per: 'month' });
-    const loan = node(plan, 'loan', { balance: 10000, rate: 6, term: 5, minPayment: null });
-    link(plan, pay, loan, { mode: 'fixed', value: 50 });
-    link(plan, pay, node(plan, 'expense'));
-    assert.ok(!codes(run(plan)).includes('underpaid'));
-});
-
 test('a loan dated inside the plan pays out its proceeds: borrowing leaves net worth unchanged', () => {
     const plan = mkPlan('2026-01', 1);
     const checking = node(plan, 'bank-account', { balance: 0, rate: 0 });
-    const loan = node(plan, 'loan', { balance: 240000, rate: 0, minPayment: null, start: '2026-03' });
+    const loan = node(plan, 'loan', { balance: 240000, rate: 0, start: '2026-03' });
     link(plan, loan, checking, { basis: 'proceeds', mode: 'rest', when: 'once' });
     const r = run(plan);
     close(r.nodes[checking.id].balance[3], 240000);

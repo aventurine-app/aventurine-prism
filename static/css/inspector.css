@@ -35,6 +35,10 @@
     background: color-mix(in srgb, var(--tile, var(--role-none)) 16%, transparent);
     overflow: hidden;
 }
+/* A link's card wears the link line's colour, and its sections run together. */
+.insp-card--link { --tile: var(--link-line); }
+.insp-card--link > .insp-section { border-top: 0; }
+.insp-card--link > .insp-section + .insp-section { padding-top: 0; }
 .insp-card > .insp-header { padding: var(--space-16) var(--space-16) var(--space-12); }
 .insp-card > .insp-sub {
     flex-wrap: wrap;

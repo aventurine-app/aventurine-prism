@@ -263,7 +263,7 @@
 
 /* Where the module's money goes: one segment per link in its target's colour,
    grey for what lands in Unassigned. Accounts and debts show progress
-   instead. */
+   instead. Spending and income have none: they carry no balance to fill. */
 .node-bar {
     display: flex;
     gap: 2px;
@@ -274,10 +274,13 @@
 }
 /* A segment for a module takes its role colour from [data-role] (ui.css);
    the other three are not roles. */
+.node[data-role="expense"] .node-bar,
+.node[data-role="source"] .node-bar { display: none; }
 .node-bar > span { min-width: 2px; height: 100%; border-radius: 2px; background: var(--tile); }
 .node-bar > span[data-role="none"]   { --tile: var(--role-none); opacity: 0.45; }
 .node-bar > span[data-role="growth"] { --tile: var(--accent-positive); }
-.node-bar > span[data-role="track"]  { --tile: transparent; }
+/* A debt's bar: what is still owed in red, what has been paid off in green. */
+.node-bar > span[data-role="owed"]   { --tile: var(--accent-negative); }
 
 /* The badge on a card's corner: a warning flag, or a check once a debt is paid off. */
 .node-flag,

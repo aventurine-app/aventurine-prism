@@ -229,12 +229,12 @@
     }
 
     /** A loan's monthly payment: the level payment that clears `balance` over
-     *  its years left at its APR. Without a term it is the minimum payment the
-     *  user set, or nothing. A card has no schedule. */
+     *  its years left at its APR. Without a term there is no schedule, so
+     *  nothing. A card has no schedule either. */
     function loanPayment(params) {
         const principal = params.balance || 0;
         const n = params.term ? Math.max(1, Math.round(params.term * 12)) : 0;
-        if (!n) return params.minPayment || 0;
+        if (!n) return 0;
         const r = (params.rate || 0) / 1200;
         return r > 0 ? principal * r / (1 - Math.pow(1 + r, -n)) : principal / n;
     }
@@ -389,7 +389,7 @@
     }
 
     /** Paying a debt starts at what it asks each month: a loan's scheduled
-     *  payment, else its minimum payment, else a round figure to edit. */
+     *  payment, else a round figure to edit. */
     function paymentRule(debt) {
         const ask = Math.ceil(loanPayment(debt.params) * 100) / 100;
         return { mode: 'fixed', value: ask > 0 ? ask : 500, when: 'monthly' };

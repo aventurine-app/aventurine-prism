@@ -102,11 +102,29 @@
         return Number.isFinite(v) ? number(v, decimals) : '';
     }
 
+    /** Tidy an amount as it is typed: only digits, one decimal separator and
+     *  (when allowed) a leading minus survive, and the whole part is grouped.
+     *  Typed group separators are dropped, since grouping is automatic. */
+    function formatTyping(text, { negative = false, decimals = true } = {}) {
+        const d = SEPARATORS[prefs.numberFormat].decimal;
+        const s = String(text ?? '');
+        let whole = '';
+        let frac = '';
+        let hasDecimal = false;
+        for (const ch of s) {
+            if (ch >= '0' && ch <= '9') { if (hasDecimal) frac += ch; else whole += ch; }
+            else if (ch === d && decimals && !hasDecimal) hasDecimal = true;
+        }
+        whole = whole.replace(/^0+(?=\d)/, '');
+        const minus = negative && /^\s*[-\u2212]/.test(s) ? '-' : '';
+        return minus + group(whole) + (hasDecimal ? d + frac : '');
+    }
+
     function symbolParts() {
         return { symbol: prefs.symbol, suffix: prefs.position === 'suffix' };
     }
 
     loadPrefs();
 
-    window.Fmt = { money, pct, number, parseNumber, inputValue, symbolParts, setPref, prefs };
+    window.Fmt = { money, pct, number, parseNumber, inputValue, formatTyping, symbolParts, setPref, prefs };
 }());

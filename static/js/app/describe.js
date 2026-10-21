@@ -210,8 +210,6 @@
                 return { select: node, text: `${name} charges a share of its limit or the credit left, but has no credit limit set.` };
             case 'utilization':
                 return { select: node, text: `${name} uses up to ${Fmt.number(w.amount, 0)}% of its limit. Reducing usage below 30% turns this off.` };
-            case 'underpaid':
-                return { select: node, text: `${name} is paid less than its minimum from ${m(w.month)}.` };
             case 'debt-growing':
                 return { select: node, text: `${name} grows by ${Fmt.money(w.amount, { compact: true })}: interest is more than the payments.` };
             case 'loop':

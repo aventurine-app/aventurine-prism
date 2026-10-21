@@ -163,7 +163,6 @@ test('pre-tax links: income into a 401(k), HSA or Traditional IRA, or a match th
 test('a loan payment levels out over its years left', () => {
     close(Plan.loanPayment({ balance: 300000, rate: 6, term: 30 }), 1798.65, 1e-5);
     close(Plan.loanPayment({ balance: 12000, rate: 0, term: 1 }), 1000);
-    close(Plan.loanPayment({ balance: 5000, rate: 9, minPayment: 150 }), 150);
     close(Plan.loanPayment({ balance: 5000, rate: 9 }), 0);
 });
 
@@ -512,13 +511,3 @@ test('a card has a credit limit setting, and its purchases can be a share of it 
     assert.equal(roundTrip(plan).nodes[0].params.limit, null);
 });
 
-test('a credit card has no minimum payment, and a saved one is cleared', () => {
-    const { plan, nodes: [card, loan] } = planWith('credit-card', 'loan');
-    assert.ok(!Catalog.fieldsFor(Catalog.preset('credit-card')).includes('minPayment'));
-    assert.ok(Catalog.fieldsFor(Catalog.preset('loan')).includes('minPayment'));
-    card.params.minPayment = 200;
-    loan.params.minPayment = 200;
-    const v = roundTrip(plan);
-    assert.equal(v.nodes[0].params.minPayment, null);
-    assert.equal(v.nodes[1].params.minPayment, 200);
-});

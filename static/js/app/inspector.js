@@ -245,11 +245,6 @@
                 get: () => plan().settings.start,
                 set: (pl, v) => { pl.settings.start = v; },
             })}
-            ${field('Years', 'plan.years', {
-                type: 'number', min: 1, max: P.LIMITS.years,
-                get: () => plan().settings.years,
-                set: (pl, v) => { pl.settings.years = v; },
-            })}
             ${field('Inflation', 'plan.inflation', {
                 type: 'percent', min: -20, max: 50, suffix: '/yr',
                 get: () => plan().settings.inflation,
@@ -299,7 +294,6 @@
     // What a blank date field means, shown in the field itself.
     const EMPTY_MONTH = {
         start: (p) => (p.role === 'debt' ? 'Already owed' : 'Plan start'),
-        end: () => 'No end',
         lockUntil: () => 'Not locked',
     };
 
@@ -344,7 +338,6 @@
         const per = node.params.per;
         return C.fieldsFor(p).filter((k) => {
             if (k === 'payMonth') return per === 'year';
-            if (k === 'end') return per !== 'once';
             if (k === 'cashBackTo') return node.params.cashBack > 0;
             return true;
         });
@@ -589,17 +582,8 @@
             }
         }
 
-        let windowRows = field('Starts', 'link.start', {
-            type: 'yearmonth', optional: true, empty: 'Plan start',
-            get: () => L().start,
-            set: setL((l, v) => { l.start = v; }),
-        }) + field('Ends', 'link.end', {
-            type: 'yearmonth', optional: true, empty: 'Plan end',
-            get: () => L().end,
-            set: setL((l, v) => { l.end = v; }),
-        });
         if (link.mode === 'fixed') {
-            windowRows += field('Grows', 'link.growth', {
+            rule += field('Grows', 'link.growth', {
                 type: 'percent', min: -100, max: 100, suffix: '/yr',
                 get: () => L().growth,
                 set: setL((l, v) => { l.growth = v; }),
@@ -607,6 +591,7 @@
         }
 
         return `
+            <div class="insp-card insp-card--link">
             <div class="insp-header">
                 <div class="insp-titles">
                     <div class="link-ends">
@@ -621,11 +606,12 @@
             </div>
             <section class="insp-section"><p class="sentence" data-sentence>${D.linkSentence(link, from, to)}</p></section>
             ${section('Rule', `<div class="insp-fields">${rule}</div>`)}
-            ${section('Window', `<div class="insp-fields">${windowRows}</div>`)}
+            </div>
+            <div data-issues></div>
             <div data-stats></div>`;
     }
 
-    function linkStats(link) {
+    function linkIssues(link) {
         const r = results();
         return r ? issuesHtml(r.warnings.filter((w) => w.linkId === link.id)) : '';
     }
@@ -647,9 +633,11 @@
         if (key === 'plan') html = planStats();
         else if (key.startsWith('preset:')) html = '';
         else if (key.startsWith('node:')) html = nodeStats(Store.node(key.slice(5)));
-        else if (key.startsWith('link:')) html = linkStats(Store.link(key.slice(5)));
         statsEl.innerHTML = html;
-        if (issuesEl) issuesEl.innerHTML = key.startsWith('node:') ? nodeIssues(Store.node(key.slice(5))) : '';
+        if (issuesEl) {
+            issuesEl.innerHTML = key.startsWith('node:') ? nodeIssues(Store.node(key.slice(5)))
+                : key.startsWith('link:') ? linkIssues(Store.link(key.slice(5))) : '';
+        }
         for (const el of root.querySelectorAll('[data-flow]')) el.textContent = flowText(el.dataset.flow);
     }
 
@@ -683,10 +671,30 @@
 
     // ── Events ─────────────────────────────────────────────────────────────
 
+    /** Group an amount field's digits as they are typed, keeping the caret
+     *  after the same digit it was after. */
+    function groupWhileTyping(el, spec) {
+        const raw = el.value;
+        const caret = el.selectionStart ?? raw.length;
+        const next = Fmt.formatTyping(raw, {
+            negative: (spec.min ?? -Infinity) < 0,
+            decimals: spec.type !== 'number' || !!spec.decimals,
+        });
+        if (next === raw) return;
+        const dec = Fmt.prefs.numberFormat === 'us' ? '.' : ',';
+        const significant = (t) => { let n = 0; let seen = false; for (const ch of t) { if (/\d|-|\u2212/.test(ch)) n++; else if (ch === dec && !seen) { seen = true; n++; } } return n; };
+        let keep = significant(raw.slice(0, caret));
+        el.value = next;
+        let pos = 0;
+        while (pos < next.length && keep > 0) { if (/[\d-]/.test(next[pos]) || next[pos] === dec) keep--; pos++; }
+        el.setSelectionRange(pos, pos);
+    }
+
     root.addEventListener('input', (e) => {
         const el = e.target.closest('[data-bind]');
         if (!el) return;
         const spec = binds.get(el.dataset.bind);
+        if (spec && (spec.type === 'money' || spec.type === 'percent' || spec.type === 'number')) groupWhileTyping(el, spec);
         if (spec && (spec.type === 'money' || spec.type === 'percent' || spec.type === 'number' || spec.type === 'text')) commit(el, false);
     });
 
