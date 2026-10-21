@@ -8,8 +8,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { assemblePage, STATIC_DIR } = require('../assemble');
-const { build } = require('../build');
+const { assemblePage, STATIC_DIR } = require('../scripts/assemble');
+const { build } = require('../scripts/build');
 
 const page = assemblePage({ version: '9.9.9' });
 

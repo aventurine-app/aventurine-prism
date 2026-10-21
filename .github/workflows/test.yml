@@ -1,7 +1,7 @@
 name: test
 
-# Lint and the backend suite on every push and pull request. Neither needs
-# Electron to run, only host Node.
+# Lint and the test suite on every push and pull request. Neither needs a
+# browser: the real-browser check (`npm run verify`) is run by hand.
 on:
   push:
     branches: [main]
@@ -20,16 +20,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: electron/package-lock.json
 
       - name: Install dependencies
-        working-directory: electron
         run: npm ci
+        env:
+          # Electron is only the browser for `npm run verify`; CI does not run it.
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
       - name: Lint
-        working-directory: electron
         run: npm run lint
 
       - name: Test
-        working-directory: electron
         run: npm test

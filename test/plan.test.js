@@ -10,8 +10,8 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const Catalog = require('../../static/js/sim/catalog.js');
-const Plan = require('../../static/js/sim/plan.js');
+const Catalog = require('../static/js/sim/catalog.js');
+const Plan = require('../static/js/sim/plan.js');
 
 // Choice fields have no empty value, so a module may pick how often it pays.
 const FIELD_CADENCE = new Set(['per', 'payMonth']);
@@ -42,7 +42,7 @@ test('the catalog: every preset has a known role, category and icon name', () =>
 });
 
 test('the catalog: the generated icon data holds every icon a module can wear', () => {
-    const file = path.join(__dirname, '..', '..', 'static', 'js', 'core', 'icon-data.js');
+    const file = path.join(__dirname, '..', 'static', 'js', 'core', 'icon-data.js');
     const sandbox = { window: {} };
     vm.runInNewContext(fs.readFileSync(file, 'utf8'), sandbox);
     const drawn = new Set(Object.keys(sandbox.window.CITRINE_ICON_DATA.regular));

@@ -1,26 +1,16 @@
-# Local data — never commit plans files or their backups.
+# Local data: never commit exported plans.
 *.prism
-*.prism.bak
-*.prism.tmp-*
-*.prism.unreadable-*
-*.citrine
-*.citrine.bak
-*.citrine.tmp-*
-*.citrine.unreadable-*
 *.citrine-plan
 
-# Dependencies and build outputs
+# Dependencies and build output
 node_modules/
-electron/dist/
-electron/out/
-web/dist/
+dist/
 
 # Claude Code local config and notes
 .claude/
 CLAUDE.md
 
-# Throwaway working files (temp scripts, screenshots, logs). Lives in the repo
-# so host node via flatpak-spawn can see it; the session scratchpad cannot.
+# Throwaway working files (temp scripts, screenshots, logs)
 .scratch/
 
 # Editor / OS

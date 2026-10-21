@@ -5,7 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { claimEditor } = require('../../static/js/web/session.js');
+const { claimEditor } = require('../static/js/web/session.js');
 
 /** Just enough of LockManager: one lock name, ifAvailable, and a queue. */
 function fakeLocks() {

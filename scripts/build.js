@@ -1,19 +1,19 @@
 'use strict';
 
 // ─── build.js ───────────────────────────────────────────────────────────────
-// Writes the deployable web app to web/dist/:
+// Writes the deployable app to dist/:
 //
 //   index.html   the assembled page (assemble.js)
 //   static/      the app's CSS, JS, fonts and icons, as they are
 //
 // There is no bundling or minifying: the app is plain scripts served as
-// written. Run it with `node web/build.js`.
+// written. Run it with `npm run build`.
 
 const fs = require('fs');
 const path = require('path');
-const { assemblePage, readVersion, STATIC_DIR } = require('./assemble');
+const { assemblePage, readVersion, APP_ROOT, STATIC_DIR } = require('./assemble');
 
-const DIST_DIR = path.join(__dirname, 'dist');
+const DIST_DIR = path.join(APP_ROOT, 'dist');
 
 // Not referenced by the app (icons are inlined from core/icon-data.js).
 const SKIPPED = new Set([path.join('icons', 'Phosphor')]);

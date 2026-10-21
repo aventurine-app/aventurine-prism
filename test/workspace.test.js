@@ -6,8 +6,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const Plan = require('../../static/js/sim/plan.js');
-const { createWorkspace, MAX_PLANS } = require('../../static/js/web/workspace.js');
+const Plan = require('../static/js/sim/plan.js');
+const { createWorkspace, MAX_PLANS } = require('../static/js/web/workspace.js');
 const { createMemoryStorage } = require('./memory-storage');
 
 const silent = { warn() {}, error() {} };

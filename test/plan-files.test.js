@@ -5,7 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { PlanFiles } = require('../../static/js/web/plan-files.js');
+const { PlanFiles } = require('../static/js/web/plan-files.js');
 
 test('a plan file is readable JSON that names its format and keeps the plan whole', () => {
     const plan = { id: 'p_1', name: 'Home', nodes: [], links: [] };

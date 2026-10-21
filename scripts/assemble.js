@@ -3,8 +3,7 @@
 // ─── assemble.js ────────────────────────────────────────────────────────────
 // Builds the app's one HTML page: pages/index.html with each
 // <!-- @include name --> marker replaced by pages/partials/name.html. The
-// desktop shell does the same in electron/main.js on every request; the web
-// app needs the result as a file (build.js) or a response (dev-server.js).
+// result is written to a file by build.js or sent by dev-server.js.
 //
 // The app version is written into the page as <meta name="prism-version"> so
 // Preferences → About can show it.
@@ -19,9 +18,9 @@ const STATIC_DIR = path.join(APP_ROOT, 'static');
 
 const INCLUDE_RE = /<!--\s*@include\s+([\w-]+)\s*-->/g;
 
-/** The app version. Lives in the desktop package.json until that shell is retired. */
+/** The app version, from package.json. */
 function readVersion() {
-    const pkg = JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'electron', 'package.json'), 'utf8'));
+    const pkg = JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'package.json'), 'utf8'));
     return String(pkg.version);
 }
 

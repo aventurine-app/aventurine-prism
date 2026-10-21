@@ -7,9 +7,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const Catalog = require('../../static/js/sim/catalog.js');
-const Plan = require('../../static/js/sim/plan.js');
-const { simulate } = require('../../static/js/sim/engine.js');
+const Catalog = require('../static/js/sim/catalog.js');
+const Plan = require('../static/js/sim/plan.js');
+const { simulate } = require('../static/js/sim/engine.js');
 
 // ── Builders ─────────────────────────────────────────────────────────────────
 

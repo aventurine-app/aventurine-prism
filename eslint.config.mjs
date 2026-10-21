@@ -1,20 +1,16 @@
 // ─── ESLint flat config ──────────────────────────────────────────────────────
 // Dev-only static analysis; nothing here affects what ships (the app has no
-// build step). Run with `npm run lint` from electron/. ESLint lives in
-// electron/node_modules; this file sits at the repo root so one config covers
-// both worlds:
+// bundler). Run with `npm run lint`. One config covers both worlds:
 //
 //   static/js/**   Classic browser <script>s sharing one global scope. Every
 //                  cross-file name is listed in `appGlobals` below, so the list
 //                  documents the real cross-file API and anything unlisted
 //                  stays an error.
-//   electron/**    CommonJS under Node (main process, backend, scripts, tests).
-//   web/**         CommonJS under Node (the web app's build, dev server, tests).
+//   scripts/**, test/**
+//                  CommonJS under Node (build, dev server, tests).
 
-import { createRequire } from 'node:module';
-const require = createRequire(new URL('./electron/', import.meta.url));
-const js = require('@eslint/js');
-const globals = require('globals');
+import js from '@eslint/js';
+import globals from 'globals';
 
 // Each is defined in exactly one file, attached with `window.X = X`.
 const appGlobals = {
@@ -43,18 +39,14 @@ const appGlobals = {
     Lock: 'readonly',
     // web/ (the browser backend; each file adds its parts to this one object)
     PrismWeb: 'readonly',
-    // electron/preload.js bridge (absent outside Electron; feature-detect)
-    electronWindow: 'readonly',
-    electronApp: 'readonly',
-    electronUpdater: 'readonly',
+    // the data bridge installed by static/js/web/boot.js
     citrineApi: 'readonly',
 };
 
 export default [
     {
         ignores: [
-            'electron/dist/**',
-            'web/dist/**',
+            'dist/**',
             '**/node_modules/**',
             '.scratch/**',
             'static/js/core/icon-data.js',
@@ -90,7 +82,7 @@ export default [
     },
 
     {
-        files: ['electron/**/*.js', 'web/**/*.js'],
+        files: ['scripts/**/*.js', 'test/**/*.js'],
         languageOptions: {
             ecmaVersion: 2024,
             sourceType: 'commonjs',
