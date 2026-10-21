@@ -8,6 +8,8 @@
 //                  stays an error.
 //   scripts/**, test/**
 //                  CommonJS under Node (build, dev server, tests).
+//   worker/**      ES modules on Cloudflare Workers (sign-in, Paddle, access control).
+//   test/worker/** ES modules under Node (the worker's tests).
 
 import js from '@eslint/js';
 import globals from 'globals';
@@ -27,6 +29,8 @@ const appGlobals = {
     // shell/
     UI: 'readonly',             // ui.js
     Settings: 'readonly',       // settings.js
+    Account: 'readonly',        // account.js
+    authPost: 'readonly',       // auth/common.js (the public sign-in pages)
     // app/
     Describe: 'readonly',
     CitrineExample: 'readonly',
@@ -47,6 +51,8 @@ export default [
     {
         ignores: [
             'dist/**',
+            // Leftover local build output from the retired desktop app (untracked).
+            'electron/**',
             '**/node_modules/**',
             '.scratch/**',
             'static/js/core/icon-data.js',
@@ -79,6 +85,21 @@ export default [
     {
         files: ['static/js/sim/*.js', 'static/js/web/*.js'],
         languageOptions: { globals: { module: 'readonly', require: 'readonly' } },
+    },
+
+    {
+        files: ['worker/**/*.js'],
+        languageOptions: {
+            ecmaVersion: 2024,
+            sourceType: 'module',
+            // Workers run on web-standard APIs (fetch, crypto, Response), not Node's.
+            globals: { ...globals.serviceworker, console: 'readonly' },
+        },
+    },
+
+    {
+        files: ['test/worker/**/*.mjs', 'scripts/**/*.mjs'],
+        languageOptions: { ecmaVersion: 2024, sourceType: 'module', globals: globals.node },
     },
 
     {

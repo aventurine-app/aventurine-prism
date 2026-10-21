@@ -1,0 +1,6 @@
+{
+  "name": "aventurine-prism-worker",
+  "private": true,
+  "type": "module",
+  "description": "Sign-in, Paddle webhooks and access control for Aventurine Prism. Runs on Cloudflare Workers."
+}

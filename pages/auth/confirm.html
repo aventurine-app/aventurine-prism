@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Sign in · Aventurine Prism</title>
+    <!-- @include head -->
+    <link rel="stylesheet" href="/static/css/auth.css">
+</head>
+<body>
+    <main class="auth-page">
+        <section class="auth-card" aria-labelledby="auth-title">
+            <img class="auth-logo" src="/static/icons/logo/logo.svg" alt="" width="40" height="40">
+            <h1 class="auth-title" id="auth-title">Open Prism</h1>
+            <!-- The sign-in token is in the address after the #. It is used only when
+                 this button is pressed, so a mail scanner that merely opens the link
+                 cannot spend it. -->
+            <p class="auth-note" id="confirm-note">You are one click from signing in on this device.</p>
+            <p class="auth-error" id="confirm-error" role="alert" hidden></p>
+            <button class="button-primary" type="button" id="confirm-button">Sign in</button>
+            <p class="auth-foot" id="confirm-retry" hidden><a href="/auth/login">Send a new sign-in link</a></p>
+        </section>
+    </main>
+    <script src="/static/js/auth/common.js"></script>
+    <script src="/static/js/auth/confirm.js"></script>
+</body>
+</html>

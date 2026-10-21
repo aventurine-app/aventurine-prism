@@ -25,6 +25,7 @@ npm start          # http://127.0.0.1:5174, no build step; reload to see edits
 npm test           # simulator, plan rules, browser backend, build (node --test)
 npm run lint
 npm run build      # writes the deployable app to dist/
+npm run worker:smoke   # the sign-in, billing and access worker, in Cloudflare's local runtime
 npm run verify     # drives a real Chromium through the whole app
 ```
 
@@ -74,10 +75,19 @@ under Node, which is how they are tested without a browser. `storage`,
   `citrineApi`, from before the product was named Prism. Plan files exported
   from the earlier desktop app still import.
 
+## Accounts and billing
+
+Access is a paid subscription, handled by one Cloudflare Worker (`worker/`):
+sign in by emailed link, Paddle webhooks say who has paid, and the app's page
+and scripts are only sent to an active subscriber. Plans still never reach the
+server. See [`worker/README.md`](worker/README.md) for how it works, how to run
+it locally (`npm run worker:dev`, `npm run worker:smoke`) and how to set up
+Cloudflare, Resend and Paddle.
+
 ## Not built yet
 
-Accounts and billing (a paid subscription), hosting (security headers,
-caching), and a reminder to export plans.
+A reminder to export plans, and the website's pricing buttons (Paddle.js
+checkout) that lead people here.
 
 ## License
 

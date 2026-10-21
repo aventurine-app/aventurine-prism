@@ -2,7 +2,7 @@
 
 // ─── icons.js ───────────────────────────────────────────────────────────────
 // Inline SVG for a Phosphor icon by name. The markup comes from the generated
-// core/icon-data.js (electron/scripts/make-ui-icons.js), never from user input,
+// core/icon-data.js (scripts/make-ui-icons.js), never from user input,
 // so it can go straight into innerHTML.
 //
 //   iconSvg('piggy-bank')

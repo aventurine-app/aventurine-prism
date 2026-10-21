@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Subscription · Aventurine Prism</title>
+    <!-- @include head -->
+    <link rel="stylesheet" href="/static/css/auth.css">
+</head>
+<body>
+    <main class="auth-page">
+        <section class="auth-card" aria-labelledby="auth-title">
+            <img class="auth-logo" src="/static/icons/logo/logo.svg" alt="" width="40" height="40">
+            <h1 class="auth-title" id="auth-title">Checking your subscription</h1>
+            <p class="auth-note" id="inactive-note" role="status">One moment.</p>
+            <p class="auth-error" id="inactive-error" role="alert" hidden></p>
+            <div class="auth-actions">
+                <a class="button-primary" id="inactive-pricing" href="https://aventurine-app.com/prism.html#pricing" hidden>See pricing</a>
+                <button class="button-secondary" type="button" id="inactive-billing" hidden>Manage billing</button>
+                <button class="button-secondary" type="button" id="inactive-signout" hidden>Sign out</button>
+            </div>
+        </section>
+    </main>
+    <script src="/static/js/auth/common.js"></script>
+    <script src="/static/js/auth/inactive.js"></script>
+</body>
+</html>

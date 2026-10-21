@@ -200,3 +200,6 @@
 }
 .lock-title { margin: 0; font-size: var(--size-h2); font-weight: var(--weight-semibold); letter-spacing: var(--track-tight); }
 .lock-note { margin: 0; color: var(--text-secondary); font-size: var(--size-small); line-height: var(--lh-normal); }
+
+/* Account: a line of explanation under the card's last row. */
+.settings-card > .settings-row-desc { padding: 0 var(--space-20) var(--space-16); }

@@ -1,0 +1,91 @@
+// ─── auth.js ────────────────────────────────────────────────────────────────
+// Signing in without a password. The person types their email; if it belongs to
+// a Prism customer we email a one-time link; opening it starts a session.
+//
+// Choices that matter:
+//   • The answer to "send me a link" is the same whether or not the email is a
+//     customer, so the form cannot be used to find out who subscribes. It also
+//     only emails real customers, so it cannot be used to spam strangers.
+//   • The link carries its token after a #, which a browser never sends to a
+//     server and which mail scanners that only fetch the URL never see. The page
+//     it opens asks for one click before using the token, so a scanner that
+//     runs scripts still cannot spend it.
+//   • The emailed link is built from APP_ORIGIN, never from the Host header of
+//     the request, so a forged Host cannot make us email a link to another site.
+//   • Only a SHA-256 of each token is stored. A stolen copy of the database
+//     cannot sign anyone in.
+//   • The session cookie is a random 256-bit value, HttpOnly, SameSite=Lax and
+//     (over https) Secure with the __Host- prefix.
+
+import { randomToken, sha256Hex } from './crypto.js';
+import { normalizeEmail } from './email-address.js';
+import { HttpError, readCookie } from './http.js';
+import {
+    consumeLoginToken, countLoginTokens, createLoginToken, createSession, deleteSession, findSession, hasCustomer,
+} from './store.js';
+
+const MINUTE = 60 * 1000;
+const DAY = 24 * 60 * MINUTE;
+
+export const LINK_TTL_MS = 15 * MINUTE;
+export const SESSION_TTL_MS = 30 * DAY;
+const MAX_LINKS_PER_WINDOW = 3;
+
+// 32 random bytes as unpadded URL-safe base64 is 43 characters.
+const TOKEN_SHAPE = /^[A-Za-z0-9_-]{43}$/;
+
+/**
+ * Handle "send me a link". `deps` is { db, config, now, defer, rateLimit, sendEmail }.
+ * Resolves with nothing the caller may use to tell customers from strangers.
+ */
+export async function requestLogin(deps, rawEmail, ip) {
+    const email = normalizeEmail(rawEmail);
+    if (!email) throw new HttpError(400, 'invalid_email');
+    if (!(await deps.rateLimit(`login:${ip}`))) throw new HttpError(429, 'rate_limited');
+
+    const now = deps.now();
+    const known = deps.config.complimentary.has(email) || await hasCustomer(deps.db, email);
+    if (!known) return;
+    // A fourth request inside the window gets no email and no error, so an
+    // attacker cannot fill someone's inbox and cannot see that they were stopped.
+    if (await countLoginTokens(deps.db, { email, since: now - LINK_TTL_MS }) >= MAX_LINKS_PER_WINDOW) return;
+
+    const token = randomToken();
+    await createLoginToken(deps.db, { tokenHash: await sha256Hex(token), email, now, ttlMs: LINK_TTL_MS });
+    const link = `${deps.config.appOrigin}/auth/confirm#t=${token}`;
+    // Sent after the reply, so a customer's request is not measurably slower
+    // than a stranger's.
+    deps.defer(
+        deps.sendEmail({ to: email, link, minutes: LINK_TTL_MS / MINUTE })
+            .catch((e) => console.error('[auth] sign-in email failed:', e.message)),
+    );
+}
+
+/** Spend a link and start a session. Returns { sessionToken } or null if the link is no good. */
+export async function verifyLogin(deps, token, ip) {
+    if (!(await deps.rateLimit(`verify:${ip}`))) throw new HttpError(429, 'rate_limited');
+    if (typeof token !== 'string' || !TOKEN_SHAPE.test(token)) return null;
+    const now = deps.now();
+    const email = await consumeLoginToken(deps.db, { tokenHash: await sha256Hex(token), now });
+    if (!email) return null;
+    const sessionToken = randomToken();
+    await createSession(deps.db, { tokenHash: await sha256Hex(sessionToken), email, now, ttlMs: SESSION_TTL_MS });
+    return { sessionToken };
+}
+
+/**
+ * Who is this request? Returns { email, tokenHash, subscriptions } for a live
+ * session, or null for none (no cookie, malformed, unknown or expired).
+ */
+export async function currentSession(deps, request) {
+    const value = readCookie(request, deps.config.cookieName);
+    if (!value || !TOKEN_SHAPE.test(value)) return null;
+    const tokenHash = await sha256Hex(value);
+    const session = await findSession(deps.db, { tokenHash, now: deps.now() });
+    return session ? { ...session, tokenHash } : null;
+}
+
+export async function endSession(deps, request) {
+    const session = await currentSession(deps, request);
+    if (session) await deleteSession(deps.db, session.tokenHash);
+}

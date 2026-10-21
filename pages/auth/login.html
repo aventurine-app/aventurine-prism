@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Sign in · Aventurine Prism</title>
+    <!-- @include head -->
+    <link rel="stylesheet" href="/static/css/auth.css">
+</head>
+<body>
+    <main class="auth-page">
+        <section class="auth-card" aria-labelledby="auth-title">
+            <img class="auth-logo" src="/static/icons/logo/logo.svg" alt="" width="40" height="40">
+            <h1 class="auth-title" id="auth-title">Sign in to Prism</h1>
+            <p class="auth-note">Enter the email you subscribed with and we will send you a link to sign in. There is no password.</p>
+
+            <form class="auth-form" id="login-form" novalidate>
+                <label class="auth-label" for="email">Email</label>
+                <input class="field-input" id="email" name="email" type="email" autocomplete="email" required autofocus>
+                <p class="auth-error" id="login-error" role="alert" hidden></p>
+                <button class="button-primary" type="submit">Send sign-in link</button>
+            </form>
+
+            <p class="auth-note auth-sent" id="login-sent" role="status" hidden>If that email has a Prism subscription, a sign-in link is on its way. It works once and expires in 15 minutes. If nothing arrives, check your spam folder or try again in a few minutes.</p>
+
+            <p class="auth-foot">Not subscribed yet? <a href="https://aventurine-app.com/prism.html#pricing">See pricing</a></p>
+        </section>
+    </main>
+    <script src="/static/js/auth/common.js"></script>
+    <script src="/static/js/auth/login.js"></script>
+</body>
+</html>

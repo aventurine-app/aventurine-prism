@@ -3,7 +3,8 @@
 // ─── build.js ───────────────────────────────────────────────────────────────
 // Writes the deployable app to dist/:
 //
-//   index.html   the assembled page (assemble.js)
+//   index.html   the app's page (assemble.js)
+//   auth/        the sign-in pages: login.html, confirm.html, inactive.html
 //   static/      the app's CSS, JS, fonts and icons, as they are
 //
 // There is no bundling or minifying: the app is plain scripts served as
@@ -11,7 +12,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { assemblePage, readVersion, APP_ROOT, STATIC_DIR } = require('./assemble');
+const { assemblePage, authPageNames, readVersion, APP_ROOT, STATIC_DIR } = require('./assemble');
 
 const DIST_DIR = path.join(APP_ROOT, 'dist');
 
@@ -22,6 +23,10 @@ function build({ outDir = DIST_DIR } = {}) {
     fs.rmSync(outDir, { recursive: true, force: true });
     fs.mkdirSync(outDir, { recursive: true });
     fs.writeFileSync(path.join(outDir, 'index.html'), assemblePage());
+    fs.mkdirSync(path.join(outDir, 'auth'));
+    for (const name of authPageNames()) {
+        fs.writeFileSync(path.join(outDir, 'auth', `${name}.html`), assemblePage({ page: `auth/${name}.html` }));
+    }
     fs.cpSync(STATIC_DIR, path.join(outDir, 'static'), {
         recursive: true,
         filter: (src) => !SKIPPED.has(path.relative(STATIC_DIR, src)),

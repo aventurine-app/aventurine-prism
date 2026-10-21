@@ -1,0 +1,61 @@
+# Aventurine Prism: sign-in, Paddle webhooks and access control.
+#
+# One Worker serves the whole app. `dist/` (from `npm run build`) is bound as
+# ASSETS, and run_worker_first makes the Worker see every request, so nothing
+# in dist/ is reachable without passing through src/index.js.
+
+name = "aventurine-prism"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+
+# Once aventurine-app.com's DNS is on Cloudflare, serve the app from its own
+# subdomain (see README.md, "Domain"). Until then the worker runs on its
+# workers.dev address, and APP_ORIGIN below must match whichever one is in use.
+#
+# routes = [
+#   { pattern = "app.aventurine-app.com", custom_domain = true }
+# ]
+
+[assets]
+directory = "../dist"
+binding = "ASSETS"
+run_worker_first = true
+# Serve files exactly as named. The Worker maps /auth/login to login.html itself.
+html_handling = "none"
+not_found_handling = "none"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "aventurine-prism"
+# From `wrangler d1 create aventurine-prism`. An identifier, not a secret.
+database_id = "f77bc192-7a79-48b6-a364-02647df8a642"
+migrations_dir = "migrations"
+
+# Per-IP throttle on sign-in requests, so the form cannot be used to flood an
+# inbox or to probe for customers.
+[[unsafe.bindings]]
+name = "RATE_LIMIT"
+type = "ratelimit"
+namespace_id = "2001"
+simple = { limit = 10, period = 60 }
+
+# Drop expired sign-in links and sessions once a day.
+[triggers]
+crons = ["17 4 * * *"]
+
+[vars]
+# Where the app is served. Sign-in links, cookies and the same-origin check all
+# use this exact origin. For `wrangler dev` use http://127.0.0.1:8787 and open
+# that exact address in the browser. This is the worker's workers.dev address;
+# switch to https://app.aventurine-app.com once that domain is set up (README).
+APP_ORIGIN = "https://aventurine-prism.aventurine-app.workers.dev"
+# The verified sending domain in Resend (DNS records at the registrar).
+EMAIL_FROM = "Aventurine Prism <signin@aventurine-app.com>"
+# https://sandbox-api.paddle.com only while testing against a Paddle sandbox account.
+PADDLE_API_BASE = "https://api.paddle.com"
+
+# Secrets (set with `wrangler secret put NAME`, never in this file):
+#   PADDLE_WEBHOOK_SECRET   the notification destination's secret (pdl_ntfset_...)
+#   PADDLE_API_KEY          a Paddle API key with only customer_portal_session.write
+#   RESEND_API_KEY          sends the sign-in email
+#   COMPLIMENTARY_EMAILS    optional: emails with free access, comma separated

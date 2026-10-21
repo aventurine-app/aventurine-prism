@@ -3,7 +3,7 @@
 // ─── settings.js ────────────────────────────────────────────────────────────
 // Preferences: Appearance (surface theme, flow animation), Format (currency
 // symbol, its position, digit separators), Storage (whether the browser has
-// promised to keep the plans), About.
+// promised to keep the plans), Account (shell/account.js), About.
 //
 // Appearance and Format live in localStorage (per browser, read pre-paint by
 // theme-init.js and by core/format.js). A Format change fires 'citrine:format'
@@ -26,6 +26,7 @@
         }
         overlay.querySelectorAll('.settings-panel').forEach((p) => { p.hidden = p.dataset.panel !== name; });
         if (name === 'storage') refreshStorage();
+        if (name === 'account') Account.refresh();
         if (name === 'about') refreshAbout();
     }
 

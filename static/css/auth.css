@@ -1,0 +1,73 @@
+/* ============================================================================
+   auth.css — the sign-in pages (pages/auth/): one centred card, as the app's
+   own lock screen is. Public, like the rest of /static/css/.
+   ============================================================================ */
+
+.auth-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-16);
+    background: var(--background);
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    padding: var(--space-32);
+    background: var(--surface1);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-card);
+}
+
+.auth-logo { width: 40px; height: 40px; }
+
+.auth-title {
+    margin: 0;
+    font-size: var(--size-h2);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--track-tight);
+}
+
+.auth-note {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: var(--size-small);
+    line-height: var(--lh-normal);
+}
+.auth-note:focus { outline: none; }
+
+.auth-form { display: flex; flex-direction: column; gap: var(--space-8); }
+.auth-form .field-input { height: 40px; font-size: var(--size-body); }
+.auth-form .button-primary,
+.auth-card > .button-primary { height: 40px; margin-top: var(--space-8); }
+
+.auth-label {
+    color: var(--text-secondary);
+    font-size: var(--size-small);
+    font-weight: var(--weight-medium);
+}
+
+.auth-error {
+    margin: 0;
+    color: var(--accent-negative);
+    font-size: var(--size-small);
+    line-height: var(--lh-normal);
+}
+
+.auth-actions { display: flex; flex-direction: column; gap: var(--space-8); }
+.auth-actions .button-primary,
+.auth-actions .button-secondary { height: 40px; text-decoration: none; }
+
+.auth-foot {
+    margin: 0;
+    color: var(--text-tertiary);
+    font-size: var(--size-small);
+}
+.auth-foot a { color: var(--accent-primary); }
+.auth-foot a:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; border-radius: 2px; }

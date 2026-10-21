@@ -20,6 +20,7 @@
                 <button class="settings-tab" type="button" role="tab" data-tab="appearance" aria-selected="true">Appearance</button>
                 <button class="settings-tab" type="button" role="tab" data-tab="format" aria-selected="false" tabindex="-1">Format</button>
                 <button class="settings-tab" type="button" role="tab" data-tab="storage" aria-selected="false" tabindex="-1">Storage</button>
+                <button class="settings-tab" type="button" role="tab" data-tab="account" aria-selected="false" tabindex="-1">Account</button>
                 <button class="settings-tab" type="button" role="tab" data-tab="about" aria-selected="false" tabindex="-1">About</button>
             </div>
             <div class="modal-body">
@@ -94,6 +95,32 @@
                                     <button class="button-secondary" type="button" data-persist-request hidden>Keep My Plans</button>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-panel" role="tabpanel" data-panel="account" hidden>
+                    <div class="settings-section">
+                        <div class="settings-section-header eyebrow">Your Account</div>
+                        <div class="settings-card">
+                            <div class="settings-row">
+                                <div class="settings-row-name">Email</div>
+                                <div class="settings-value" data-account-email>—</div>
+                            </div>
+                            <div class="settings-row">
+                                <div class="settings-row-label">
+                                    <div class="settings-row-name">Subscription</div>
+                                    <div class="settings-row-desc" data-account-status role="status" aria-live="polite">Checking…</div>
+                                </div>
+                                <div class="settings-actions">
+                                    <button class="button-secondary" type="button" data-account-billing hidden>Manage Billing</button>
+                                </div>
+                            </div>
+                            <div class="settings-row" data-account-signout-row hidden>
+                                <div class="settings-row-name">Sign Out</div>
+                                <button class="button-secondary" type="button" data-account-signout>Sign Out</button>
+                            </div>
+                            <p class="settings-row-desc" data-account-error role="alert" hidden></p>
                         </div>
                     </div>
                 </div>

@@ -1,16 +1,20 @@
 'use strict';
 
 // ─── dev-server.js ──────────────────────────────────────────────────────────
-// Serves the web app from source for development: the assembled page at /,
+// Serves the web app from source for development: the assembled page at /, the
+// sign-in pages at /auth/<name> (to see them; there is no sign-in here), and
 // everything under static/ at /static/. Nothing is cached, so an edit shows on
 // reload with no build. Listens on 127.0.0.1 only.
+//
+// There is no server behind it: no sign-in, no subscription check, no /api.
+// To run those too, see worker/README.md.
 //
 //   node web/dev-server.js        (PORT=5174 by default)
 
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
-const { assemblePage, STATIC_DIR } = require('./assemble');
+const { assemblePage, authPageNames, STATIC_DIR } = require('./assemble');
 
 const TYPES = {
     '.html': 'text/html; charset=utf-8',
@@ -61,6 +65,12 @@ function createServer() {
                 console.error('[dev-server] page could not be assembled:', e);
                 send(res, 500, TYPES['.html'], 'page could not be assembled');
             }
+            return;
+        }
+
+        const authPage = /^\/auth\/([a-z]+)$/.exec(pathname);
+        if (authPage && authPageNames().includes(authPage[1])) {
+            send(res, 200, TYPES['.html'], assemblePage({ page: `auth/${authPage[1]}.html` }));
             return;
         }
 
