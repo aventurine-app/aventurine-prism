@@ -40,12 +40,6 @@
 .insp-card--link > .insp-section { border-top: 0; }
 .insp-card--link > .insp-section + .insp-section { padding-top: 0; }
 .insp-card > .insp-header { padding: var(--space-16) var(--space-16) var(--space-12); }
-.insp-card > .insp-sub {
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    padding: 0 var(--space-16) var(--space-16);
-}
-.insp-card .chip { border-radius: var(--radius-sm); }
 .insp-card > .insp-section { padding: var(--space-16); }
 /* Issues sit right under the settings card, lined up with its edges. */
 [data-issues] > .insp-section { padding: 0 var(--space-16) var(--space-16); border-top: 0; }
@@ -76,12 +70,12 @@
     font-weight: var(--weight-semibold);
     letter-spacing: var(--track-tight);
     outline: none;
-    transition: border-color 0.15s ease, background-color 0.15s ease;
+    transition: box-shadow 0.15s ease, background-color 0.15s ease;
 }
-.insp-name:hover { border-color: var(--border); }
-.insp-name:focus { border-color: var(--accent-ring); background: var(--surface2); }
-
-.insp-sub { display: flex; align-items: center; gap: var(--space-8); }
+/* Hover and focus wear the same thick coloured ring as the icon button beside
+   it (.role-tile--button), in the module's colour. */
+.insp-name:hover { box-shadow: 0 0 0 2px color-mix(in srgb, var(--tile, var(--role-none)) 40%, transparent); }
+.insp-name:focus { background: var(--surface2); box-shadow: 0 0 0 2px var(--tile, var(--role-none)); }
 
 .insp-section {
     padding: var(--space-16) var(--space-20);
@@ -117,12 +111,15 @@
 .insp-control--wide .segctl-btn { flex: 1; justify-content: center; padding: 0 var(--space-4); }
 
 /* ── The rule sentence (links) ──────────────────────────────────────────── */
+/* A callout: the field colour, which stands apart from the tinted card around
+   it, with a thick side border in the card's colour. */
 .sentence {
     margin: 0;
     padding: var(--space-16);
+    border-left: 4px solid var(--tile, var(--role-none));
     border-radius: var(--radius-card);
-    background: var(--surface3);
-    color: var(--text-secondary);
+    background: var(--surface1);
+    color: var(--text-primary);
     font-size: var(--size-body);
     line-height: var(--lh-relaxed);
 }
@@ -229,6 +226,7 @@
     background: var(--flag);
     color: var(--flag-ink);
     font-size: var(--size-small);
+    font-weight: var(--weight-bold);
     line-height: var(--lh-snug);
 }
 .issue .icon { width: 16px; height: 16px; margin-top: 1px; color: var(--flag-ink); }

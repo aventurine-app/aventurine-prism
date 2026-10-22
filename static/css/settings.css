@@ -14,7 +14,6 @@
     --accent-ink:           var(--text-primary);
     --accent-ring:          var(--text-secondary);
     --accent-wash:          var(--surface3);
-    --button-text:          #fff;
 }
 
 .settings-tabs {

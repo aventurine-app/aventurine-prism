@@ -1,10 +1,17 @@
 /* ============================================================================
-   titlebar.css — the bar across the top of the app: the logo, the plan tabs and
-   the save state. Same bar as Aventurine (surface3, 40px).
+   titlebar.css — the bar across the top of the app: the logo, the plan tabs, the
+   import / export buttons and the signed-in user. Pure black in both themes, 40px.
    ============================================================================ */
 
-:root { --titlebar-frost: rgba(255, 255, 255, 0.60); }
-html[data-theme="dark"] { --titlebar-frost: rgba(255, 255, 255, 0.10); }
+/* The bar is black in both themes, so what sits on it uses light inks of its
+   own rather than the theme's text colours. (The selected tab is the canvas's
+   colour and keeps the theme's.) */
+:root {
+    --titlebar-bg: #000;
+    --titlebar-ink: var(--color-base-300);
+    --titlebar-ink-strong: var(--color-base-100);
+    --titlebar-frost: rgba(255, 255, 255, 0.10);
+}
 
 .titlebar {
     position: relative;
@@ -13,8 +20,8 @@ html[data-theme="dark"] { --titlebar-frost: rgba(255, 255, 255, 0.10); }
     align-items: stretch;
     height: var(--titlebar-height);
     flex-shrink: 0;
-    background: var(--surface3);
-    color: var(--text-tertiary);
+    background: var(--titlebar-bg);
+    color: var(--titlebar-ink);
     user-select: none;
 }
 /* The gray rule along the bar's bottom edge. The tabs sit above it, so the
@@ -84,21 +91,20 @@ html[data-theme="dark"] { --titlebar-frost: rgba(255, 255, 255, 0.10); }
     display: flex;
     align-items: center;
     gap: var(--space-8);
-    height: 32px;
-    flex-shrink: 0;
-    max-width: 220px;
-    min-width: 96px;
+    width: 176px;
+    height: 36px;
+    flex: none;
     padding: 0 var(--space-8) 0 var(--space-12);
     border: 0;
     border-radius: var(--radius-control) var(--radius-control) 0 0;
     background: transparent;
-    color: var(--text-secondary);
+    color: var(--titlebar-ink);
     font-size: var(--size-small);
     font-weight: var(--weight-semibold);
     cursor: pointer;
     transition: background-color 0.15s ease, color 0.15s ease;
 }
-.tab:hover { background: var(--titlebar-frost); color: var(--text-primary); }
+.tab:hover { background: var(--titlebar-frost); color: var(--titlebar-ink-strong); }
 .tab[aria-selected="true"] {
     background: var(--background);
     color: var(--text-primary);
@@ -152,6 +158,8 @@ html[data-theme="dark"] { --titlebar-frost: rgba(255, 255, 255, 0.10); }
 .tab-menu:focus-visible,
 .tab-menu[aria-expanded="true"] { opacity: 1; }
 .tab-menu:hover { background: var(--frost-3); color: var(--text-primary); }
+.tab:not([aria-selected="true"]) .tab-menu { color: var(--titlebar-ink); }
+.tab:not([aria-selected="true"]) .tab-menu:hover { background: var(--titlebar-frost); color: var(--titlebar-ink-strong); }
 
 /* Dragging a tab to reorder it. */
 .tab.is-dragging { opacity: 0.5; }
@@ -170,37 +178,66 @@ html[data-theme="dark"] { --titlebar-frost: rgba(255, 255, 255, 0.10); }
     border: 0;
     border-radius: var(--radius-control);
     background: transparent;
-    color: var(--text-secondary);
+    color: var(--titlebar-ink);
     cursor: pointer;
     transition: background-color 0.15s ease, color 0.15s ease;
 }
 .tab-new .icon { width: 16px; height: 16px; }
-.tab-new:hover { background: var(--titlebar-frost); color: var(--text-primary); }
+.tab-new:hover { background: var(--titlebar-frost); color: var(--titlebar-ink-strong); }
 .tab-new:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
 
-/* Save state, right of the tabs: a dot and a word. */
-.save-state {
+/* Import and export, right of the tabs. */
+.titlebar-actions {
     display: flex;
     align-items: center;
+    gap: var(--space-4);
+    padding: 0 var(--space-4) 0 var(--space-12);
+}
+.titlebar-btn {
+    display: inline-flex;
+    align-items: center;
     gap: 6px;
-    padding: 0 var(--space-12);
-    color: var(--text-tertiary);
-    font-size: var(--size-micro);
+    height: 28px;
+    padding: 0 var(--space-8);
+    border: 0;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--titlebar-ink);
+    font-size: var(--size-small);
     font-weight: var(--weight-semibold);
-    letter-spacing: var(--track-wide);
     white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
-.save-state::before {
-    content: '';
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--accent-positive);
+.titlebar-btn .icon { width: 16px; height: 16px; }
+.titlebar-btn:hover:not(:disabled) { background: var(--titlebar-frost); color: var(--titlebar-ink-strong); }
+.titlebar-btn:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
+.titlebar-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* The signed-in user, at the bar's right edge: a profile icon and the email. */
+.titlebar-user {
+    display: inline-flex;
+    align-items: center;
+    align-self: center;
+    gap: 6px;
+    height: 28px;
+    max-width: 240px;
+    margin-right: var(--space-12);
+    padding: 0 var(--space-8);
+    border: 0;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--titlebar-ink);
+    font-size: var(--size-small);
+    font-weight: var(--weight-semibold);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
-.save-state[data-state="saving"]::before { background: var(--warning); }
-.save-state[data-state="error"] { color: var(--accent-negative); }
-.save-state[data-state="error"]::before { background: var(--accent-negative); }
+.titlebar-user .icon { width: 20px; height: 20px; flex: none; }
+.titlebar-user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.titlebar-user:hover { background: var(--titlebar-frost); color: var(--titlebar-ink-strong); }
+.titlebar-user:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
 
 @media (prefers-reduced-motion: reduce) {
-    .tab, .tab-menu, .tab-new { transition: none; }
+    .tab, .tab-menu, .tab-new, .titlebar-btn, .titlebar-user { transition: none; }
 }

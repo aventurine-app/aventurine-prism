@@ -90,16 +90,16 @@
     --surface4:   var(--color-base-300);
     --border:     var(--color-base-300);
 
-    /* The accent. White text on the teal fill only reaches about 3:1, so text on
-       a filled accent is the ramp's deep end in both themes. Accent used AS text
-       or a focus ring on a light surface takes the darker --accent-ink, since
-       the fill step itself is too light against the page. */
+    /* The accent. Accent used AS text or a focus ring on a light surface takes
+       the darker --accent-ink, since the fill step itself is too light against
+       the page. The primary button is charcoal (the neutral fill) with white
+       text, not accent-filled. */
     --accent-primary:       var(--color-accent-500);
     --accent-primary-hover: var(--color-accent-400);
     --accent-ink:           var(--color-accent-700);
     --accent-ring:          var(--color-accent-600);
     --accent-wash:          color-mix(in srgb, var(--accent-primary) 14%, var(--surface1));
-    --button-text:          var(--color-accent-950);
+    --button-text:          #fff;
 
     --accent-neutral:        var(--color-base-800);
     --accent-neutral-fill:   var(--color-base-800);
@@ -114,6 +114,9 @@
     --icon-button-fill:      var(--surface1);
     --icon-button-ink:       var(--text-primary);
     --danger-text:           #fff;
+
+    /* The ring around the active (selected or focused) module: black on light. */
+    --node-active-ring: #000;
 
     --accent-positive: #22a64a;
     --accent-negative: #c44448;

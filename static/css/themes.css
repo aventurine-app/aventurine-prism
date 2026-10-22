@@ -36,6 +36,8 @@ html[data-theme="dark"],
     --accent-gray-hover:     var(--color-base-500);
     --toggle-on:             var(--color-base-400);
 
+    --node-active-ring: #fff;
+
     --warning: #f5a524;
     --info:    #4177ff;
 
@@ -64,6 +66,23 @@ html[data-theme="dark"],
 
     --chart-growth:   #6991dc;
     --chart-interest: #bc4a41;
-    --chart-networth:   var(--color-accent-300);
+    --chart-networth:   #34c3a8;
+
+    /* Net worth bands: the module roles above, pushed further in saturation
+       so the stacked bands hold up on the dark canvas (the modules keep their
+       own colours). Same shade ladder as style.css. */
+    --chart-account-1: #3d8bf2;
+    --chart-account-2: color-mix(in srgb, #3d8bf2 78%, white);
+    --chart-account-3: color-mix(in srgb, #3d8bf2 85%, black);
+    --chart-account-4: color-mix(in srgb, #3d8bf2 58%, white);
+    --chart-account-5: color-mix(in srgb, #3d8bf2 70%, black);
+    --chart-account-6: color-mix(in srgb, #3d8bf2 40%, white);
+
+    --chart-debt-1: #f0525e;
+    --chart-debt-2: color-mix(in srgb, #f0525e 78%, white);
+    --chart-debt-3: color-mix(in srgb, #f0525e 85%, black);
+    --chart-debt-4: color-mix(in srgb, #f0525e 58%, white);
+    --chart-debt-5: color-mix(in srgb, #f0525e 70%, black);
+    --chart-debt-6: color-mix(in srgb, #f0525e 40%, white);
     --chart-worth-line: #fff;
 }

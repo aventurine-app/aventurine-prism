@@ -367,16 +367,7 @@
         return section('Settings', `<div class="insp-fields">${fields}</div>`);
     }
 
-    /** The chips under a module's name: its role, and its category when that
-     *  is named differently. */
-    function roleChips(p) {
-        const role = C.ROLES[p.role].label;
-        const cat = D.CATEGORY_NAME[p.cat];
-        return `<div class="insp-sub"><span class="chip" data-role="${p.role}">${esc(role)}</span>
-            ${cat !== role ? `<span class="chip">${esc(cat)}</span>` : ''}</div>`;
-    }
-
-    /** One row in Outgoing / Incoming Rules: the module at the other end, the
+    /** One row in Outgoing / Incoming Flows: the module at the other end, the
      *  money moving along the link, and the link's rule. */
     function linkRow(l, other) {
         const r = results() && results().links[l.id];
@@ -405,11 +396,11 @@
 
         const outs = plan().links.filter((l) => l.from === id);
         const ins = plan().links.filter((l) => l.to === id);
-        const sends = P.basesFor(node).length ? section('Outgoing Rules',
+        const sends = P.basesFor(node).length ? section('Outgoing Flows',
             outs.length
                 ? `<ul class="insp-links">${outs.map((l) => linkRow(l, Store.node(l.to))).join('')}</ul>`
                 : '<p class="insp-none">No links yet</p>') : '';
-        const receives = C.ROLES[role].hasIn ? section('Incoming Rules',
+        const receives = C.ROLES[role].hasIn ? section('Incoming Flows',
             ins.length
                 ? `<ul class="insp-links">${ins.map((l) => linkRow(l, Store.node(l.from))).join('')}</ul>`
                 : '<p class="insp-none">Nothing links here yet</p>') : '';
@@ -421,7 +412,6 @@
                     data-icon="${esc(P.iconOf(node))}" aria-haspopup="dialog" aria-label="Change icon" title="Change icon">${iconSvg(P.iconOf(node))}</button>
                 <div class="insp-titles">${nameB.html}</div>
             </div>
-            ${roleChips(p)}
             ${settingsSection(node)}
             </div>
             <div data-issues></div>
@@ -442,7 +432,6 @@
                     aria-haspopup="dialog" aria-label="Change icon" title="Change icon">${iconSvg(icon)}</button>
                 <div class="insp-titles"><div class="insp-name">${esc(p.name)}</div></div>
             </div>
-            ${roleChips(p)}
             ${settingsSection(node)}
             </div>`;
     }
@@ -602,10 +591,10 @@
                             <span class="role-tile" data-role="${D.roleOf(to)}">${iconSvg(P.iconOf(to))}</span><span>${esc(to.name)}</span></button>
                     </div>
                 </div>
-                <button class="button-icon" type="button" data-act="link-delete" aria-label="Delete link" title="Delete link">${iconSvg('trash')}</button>
+                <button class="button-icon" type="button" data-act="link-delete" aria-label="Delete flow" title="Delete flow">${iconSvg('trash')}</button>
             </div>
+            ${section('Flow', `<div class="insp-fields">${rule}</div>`)}
             <section class="insp-section"><p class="sentence" data-sentence>${D.linkSentence(link, from, to)}</p></section>
-            ${section('Rule', `<div class="insp-fields">${rule}</div>`)}
             </div>
             <div data-issues></div>
             <div data-stats></div>`;

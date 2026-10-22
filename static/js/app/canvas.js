@@ -298,9 +298,11 @@
     function frameFor(plan, res, sel) {
         const byId = new Map(plan.nodes.map((n) => [n.id, n]));
         const outs = new Map();
+        const ins = new Set();
         for (const l of plan.links) {
             const list = outs.get(l.from);
             if (list) list.push(l); else outs.set(l.from, [l]);
+            ins.add(l.to);
         }
         // A card flags its own warnings and its links'. Money left in
         // Unassigned shows on its bar instead.
@@ -312,7 +314,7 @@
                 if (list) list.push(w); else warns.set(id, [w]);
             }
         }
-        return { plan, res, sel, vp: viewPoint(), byId, outs, warns };
+        return { plan, res, sel, vp: viewPoint(), byId, outs, ins, warns };
     }
 
     // ── Cards ──────────────────────────────────────────────────────────────
@@ -324,16 +326,17 @@
         el.dataset.id = node.id;
         el.innerHTML = `
             <span class="node-port node-port--in" aria-hidden="true"></span>
-            <div class="node-head">
-                <span class="role-tile"></span>
-                <div class="node-titles"><span class="node-name"></span><span class="node-meta"></span></div>
-            </div>
+            <div class="node-wm" aria-hidden="true"></div>
+            <div class="node-cat"><span class="node-glyph"></span><span class="node-cat-name"></span></div>
+            <div class="node-titles"><span class="node-name"></span><span class="node-meta"></span></div>
             <div class="node-figure"><span class="node-value"></span><span class="node-unit"></span><span class="node-delta"></span></div>
             <div class="node-bar" aria-hidden="true"></div>
             <span class="node-outs"></span>`;
         const view = {
             el,
-            tile: el.querySelector('.role-tile'),
+            tile: el.querySelector('.node-glyph'),
+            wm: el.querySelector('.node-wm'),
+            cat: el.querySelector('.node-cat-name'),
             name: el.querySelector('.node-name'),
             meta: el.querySelector('.node-meta'),
             value: el.querySelector('.node-value'),
@@ -374,7 +377,18 @@
                 ? '<span class="node-port node-port--out" title="Drag to link" aria-hidden="true"></span>'
                 : '';
         });
-        put(view, 'icon', P.iconOf(node), (icon) => { view.tile.innerHTML = iconSvg(icon); });
+        // A port is filled once a link is attached to it.
+        const linkedIn = frame.ins.has(node.id);
+        const linkedOut = frame.outs.has(node.id);
+        put(view, 'linked', `${linkedIn}|${linkedOut}`, () => {
+            view.el.classList.toggle('has-in-link', linkedIn);
+            view.el.classList.toggle('has-out-link', linkedOut);
+        });
+        put(view, 'icon', P.iconOf(node), (icon) => {
+            view.tile.innerHTML = iconSvg(icon);
+            view.wm.innerHTML = iconSvg(icon);
+        });
+        put(view, 'cat', D.CATEGORY_NAME[p.cat] || C.ROLES[role].label, (t) => { view.cat.textContent = t; });
         put(view, 'name', node.name, (t) => { view.name.textContent = t; });
         put(view, 'meta', D.nodeMeta(node), (t) => { view.meta.textContent = t; });
 
@@ -943,7 +957,7 @@
         } else if (linkEl) {
             const id = linkEl.dataset.link;
             Store.select({ kind: 'link', id });
-            UI.menu(at, [{ label: 'Delete link', icon: 'trash', danger: true, onSelect: () => Store.removeLink(id) }]);
+            UI.menu(at, [{ label: 'Delete flow', icon: 'trash', danger: true, onSelect: () => Store.removeLink(id) }]);
         } else if (!e.target.closest('.island')) {
             UI.menu(at, [
                 { label: 'Add module here…', icon: 'plus', onSelect: () => openAddPicker(e.clientX, e.clientY) },

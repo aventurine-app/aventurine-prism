@@ -99,7 +99,7 @@
     };
 
     // Card geometry shared with canvas.js and canvas.css (change all together).
-    const GEOM = { NODE_W: 208, NODE_H: 112 };
+    const GEOM = { NODE_W: 220, NODE_H: 140 };
 
     // Bounds. A plan larger than these is not a plan anyone draws by hand; the
     // limits exist so a corrupt or hostile document cannot make the backend

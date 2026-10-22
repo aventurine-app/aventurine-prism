@@ -26,9 +26,9 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
-     inkscape:zoom="16.534231"
-     inkscape:cx="18.50706"
-     inkscape:cy="13.547652"
+     inkscape:zoom="33.068462"
+     inkscape:cx="4.3697224"
+     inkscape:cy="10.100258"
      inkscape:window-width="2560"
      inkscape:window-height="1371"
      inkscape:window-x="0"
@@ -42,7 +42,7 @@
      inkscape:groupmode="layer"
      id="layer1">
     <rect
-       style="fill:#497e74;fill-opacity:1;stroke:none;stroke-width:1.21512;stroke-dasharray:none"
+       style="fill:#000000;fill-opacity:1;stroke:none;stroke-width:1.21512;stroke-dasharray:none"
        id="rect1"
        width="4.2333331"
        height="4.2333331"
@@ -65,7 +65,7 @@
        inkscape:rounded="0.18"
        inkscape:randomized="0"
        d="m 2.6466347,3.4263179 c -0.1739381,0.3012696 -1.75870722,0.3012696 -1.93264529,0 C 0.54005134,3.1250483 1.3324359,1.752598 1.680312,1.752598 c 0.3478762,0 1.1402607,1.3724504 0.9663227,1.6737199 z"
-       inkscape:transform-center-y="-0.41451119"
-       transform="matrix(1.4859515,0,0,1.4859515,-0.38019554,-1.8277617)" />
+       transform="matrix(0,1.4859515,-1.4859515,0,6.1323526,-0.38019552)"
+       inkscape:transform-center-x="-0.41451117" />
   </g>
 </svg>

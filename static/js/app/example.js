@@ -12,7 +12,7 @@
     const P = window.CitrinePlan;
 
     const COL = 280;
-    const ROW = 150;
+    const ROW = 170;
 
     /** Add the example's modules and links to `plan` (which may be empty). */
     function fill(plan, origin = { x: 0, y: 0 }) {

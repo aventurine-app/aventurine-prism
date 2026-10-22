@@ -24,7 +24,7 @@ const UI_ICONS = [
     'gear-six', 'folder', 'export', 'download-simple', 'lock-key', 'warning', 'warning-circle',
     'info', 'check', 'check-circle', 'dots-three', 'pencil-simple', 'arrow-right', 'chart-line',
     'chart-bar', 'table', 'sidebar-simple', 'flow-arrow', 'file-plus', 'calendar-blank',
-    'sparkle', 'chart-line-up', 'squares-four', 'clock-counter-clockwise', 'shield-check',
+    'sparkle', 'chart-line-up', 'squares-four', 'clock-counter-clockwise', 'shield-check', 'user-circle',
 ];
 
 // Each asset is one <svg> of <path d="…"/> elements. Anything

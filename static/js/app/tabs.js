@@ -3,11 +3,13 @@
 // ─── tabs.js ────────────────────────────────────────────────────────────────
 // The plan tabs in the title bar. Each plan is a tab: click to open, double-
 // click to rename, drag to reorder, and a menu for rename, duplicate, export
-// and delete. The + button starts a blank plan.
+// and delete. The + button starts a blank plan. Import and export sit at the
+// bar's right edge, then the signed-in user.
 
 (function () {
     const nav = document.getElementById('tabs');
-    const saveEl = document.getElementById('save-state');
+    const actions = document.getElementById('titlebar-actions');
+    const userEl = document.getElementById('titlebar-user');
     if (!nav) return;
 
     nav.innerHTML = `
@@ -179,14 +181,40 @@
         }
     });
 
-    // ── Save state ─────────────────────────────────────────────────────────
-    const SAVE_TEXT = { saved: 'Saved', saving: 'Saving…', error: 'Not saved' };
+    // ── Import / export ────────────────────────────────────────────────────
+    if (actions) {
+        actions.innerHTML = `
+            <button class="titlebar-btn" type="button" data-act="import" aria-label="Import plan" title="Import plan…">${iconSvg('download-simple')}<span>Import</span></button>
+            <button class="titlebar-btn" type="button" data-act="export" aria-label="Export plan" title="Export plan…">${iconSvg('export')}<span>Export</span></button>`;
+        actions.querySelector('[data-act="import"]').addEventListener('click', () => Store.importPlan());
+        actions.querySelector('[data-act="export"]').addEventListener('click', () => {
+            if (Store.state.activeId) Store.exportPlan(Store.state.activeId);
+        });
+    }
 
-    function renderSave() {
-        if (!saveEl) return;
-        saveEl.hidden = false;
-        saveEl.dataset.state = Store.state.save;
-        saveEl.textContent = SAVE_TEXT[Store.state.save];
+    function renderActions() {
+        if (actions) actions.querySelector('[data-act="export"]').disabled = !Store.state.activeId;
+    }
+
+    renderActions();
+
+    // ── Signed-in user ─────────────────────────────────────────────────────
+    // The email comes from /api/me. Where there is no server (local dev) or the
+    // session is gone, the spot says so. Clicking opens Preferences → Account.
+    if (userEl) {
+        userEl.innerHTML = `${iconSvg('user-circle')}<span class="titlebar-user-name"></span>`;
+        const nameEl = userEl.querySelector('.titlebar-user-name');
+        userEl.addEventListener('click', () => Settings.open('account'));
+        const show = (email) => {
+            nameEl.textContent = email || 'Not signed in';
+            userEl.title = email ? `Signed in as ${email}` : 'Account';
+            userEl.setAttribute('aria-label', email ? `Account: ${email}` : 'Account');
+        };
+        show('');
+        fetch('/api/me', { credentials: 'same-origin' })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((me) => show(me && me.email))
+            .catch(() => {});
     }
 
     function renderTitle() {
@@ -196,11 +224,11 @@
 
     Store.on((c) => {
         if (c.type === 'tabs' || c.type === 'plan') renderTitle();
-        if (c.type === 'tabs') { render(); revealActive(); }
+        if (c.type === 'tabs') { render(); revealActive(); renderActions(); }
         else if (c.type === 'plan') {
             // A rename of the active plan arrives as a plan edit.
             const el = list.querySelector('.tab[aria-selected="true"] .tab-name');
             if (el && Store.state.plan && el.textContent !== Store.state.plan.name) render();
-        } else if (c.type === 'save') renderSave();
+        }
     });
 }());

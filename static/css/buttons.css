@@ -1,7 +1,7 @@
 /* ============================================================================
    buttons.css — the button system, as in Aventurine.
    ============================================================================
-     .button-primary    accent fill, uppercase micro label: the one main action
+     .button-primary    charcoal fill, white uppercase micro label: the one main action
      .button-secondary  outlined neutral sibling
      .button-icon       control-height square with a glyph
      .button-danger     outlined red, fills on hover: destructive actions
@@ -33,11 +33,11 @@
 .button-danger .icon { width: 16px; height: 16px; }
 
 .button-primary {
-    background: var(--accent-primary);
+    background: var(--accent-neutral-fill);
     border: 0;
     color: var(--button-text);
 }
-.button-primary:not(:disabled):hover { background: var(--accent-primary-hover); }
+.button-primary:not(:disabled):hover { background: var(--accent-gray-hover); }
 
 .button-secondary {
     background: transparent;

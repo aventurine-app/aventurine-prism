@@ -2,7 +2,7 @@
    canvas.css — the sandbox: a pannable, zoomable dot-grid plane holding the
    plan's modules (HTML cards) and the links between them (SVG curves).
    Geometry constants (card size, port positions) are mirrored in
-   app/canvas.js as NODE_W / NODE_H; change both together.
+   app/canvas.js as NODE_W / NODE_H (GEOM in sim/plan.js); change both together.
    ============================================================================ */
 
 .workbench {
@@ -148,71 +148,98 @@
 .link-label:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; }
 
 /* ── Module cards ───────────────────────────────────────────────────────── */
+:root { --node-tint: 17%; --node-edge: 38%; }
+html[data-theme="dark"] { --node-tint: 14%; --node-edge: 30%; }
+
 .node {
     position: absolute;
     left: 0;
     top: 0;
-    width: 208px;
-    height: 112px;
+    width: 220px;
+    height: 140px;
     display: flex;
     flex-direction: column;
-    gap: var(--space-8);
-    padding: var(--space-12) var(--space-12) var(--space-12);
-    background: var(--surface1);
-    border: var(--border-width) solid var(--border);
-    border-radius: var(--radius-panel);
+    gap: 4px;
+    padding: 14px 16px;
+    /* The card is tinted with its category's colour (--tile, from [data-role]),
+       with a hairline edge in the same hue. */
+    background: color-mix(in srgb, var(--tile, var(--role-none)) var(--node-tint), var(--surface1));
+    border: var(--border-width) solid color-mix(in srgb, var(--tile, var(--role-none)) var(--node-edge), var(--surface1));
+    border-radius: 18px;
     box-shadow: var(--shadow-card);
     color: var(--text-primary);
     cursor: grab;
     user-select: none;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
-    /* A stacking context of its own, so the selection ring can sit behind the
-       card's ports and flag instead of over them. */
+    /* A stacking context of its own, so the card's ports and flag stay above it. */
     isolation: isolate;
 }
-.node:hover { border-color: var(--stroke-strong); }
-/* The ring is drawn by ::after so it can wrap the whole card. */
+/* Hover lifts the border well past the resting one. */
+.node:hover { border-color: color-mix(in srgb, var(--node-active-ring) 55%, transparent); }
+/* Selected: the border itself turns to the active colour (white in dark mode)
+   and thickens. The extra width is an inset shadow, so the card's size and its
+   content do not move. */
 .node:focus-visible { outline: none; }
-.node:focus-visible::after,
-.node.is-selected::after {
-    content: '';
-    position: absolute;
-    left: -4px;
-    right: -4px;
-    top: -4px;
-    box-sizing: border-box;
-    height: 118px;
-    border: 2px solid var(--accent-ring);
-    border-radius: calc(var(--radius-panel) + 4px);
-    pointer-events: none;
-    z-index: -1;
+.node:focus-visible,
+.node.is-selected {
+    border-color: var(--node-active-ring);
+    box-shadow: inset 0 0 0 2px var(--node-active-ring), var(--shadow-card);
 }
 .node.is-selected { z-index: 2; }
 .node.is-dragging { cursor: grabbing; box-shadow: var(--shadow-popover); z-index: 3; }
+.node.is-selected.is-dragging { box-shadow: inset 0 0 0 2px var(--node-active-ring), var(--shadow-popover); }
 .node.is-dim { opacity: 0.35; }
 .node.is-target { border-color: var(--accent-ring); box-shadow: 0 0 0 4px var(--accent-wash), var(--shadow-card); }
 
-.node-head {
+/* A large, faint copy of the module's icon, cut off by the card's corner. It
+   has a layer of its own because the card cannot clip: its ports and flag
+   sit outside its edge. */
+.node-wm {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: inherit;
+    color: var(--tile);
+    pointer-events: none;
+}
+.node-wm .icon {
+    position: absolute;
+    right: -22px;
+    bottom: -30px;
+    width: 128px;
+    height: 128px;
+    opacity: 0.13;
+}
+
+.node-cat {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: var(--space-8);
+    gap: 7px;
     min-width: 0;
+    color: var(--tile);
+    font-size: 12px;
+    font-weight: var(--weight-semibold);
+    letter-spacing: 0.02em;
 }
-.node-head .role-tile { width: 32px; height: 32px; border-radius: 9px; }
-.node-head .role-tile .icon { width: 20px; height: 20px; }
+.node-glyph { display: inline-flex; flex: none; }
+.node-glyph .icon { width: 15px; height: 15px; }
+.node-cat-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .node-titles {
+    position: relative;
     display: flex;
     flex-direction: column;
     min-width: 0;
-    flex: 1;
+    margin-top: 6px;
 }
 .node-name {
     overflow: hidden;
     color: var(--text-primary);
-    font-size: var(--size-small);
-    font-weight: var(--weight-bold);
-    line-height: var(--lh-snug);
+    font-size: 18px;
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.02em;
+    line-height: 1.15;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -227,6 +254,7 @@
 }
 
 .node-figure {
+    position: relative;
     display: flex;
     align-items: baseline;
     gap: 6px;
@@ -269,6 +297,7 @@
     gap: 2px;
     height: 6px;
     border-radius: 3px;
+    position: relative;
     background: var(--frost-2);
     overflow: hidden;
 }
@@ -319,7 +348,10 @@
     transition: transform 0.12s ease, background-color 0.12s ease;
 }
 .node-port--in  { left: -8px; }
-.node-port--out { right: -8px; cursor: crosshair; border-color: var(--tile); background: var(--tile); }
+.node-port--out { right: -8px; cursor: crosshair; }
+/* A port is an empty outline until a link is attached, then it fills. */
+.node.has-in-link .node-port--in,
+.node.has-out-link .node-port--out { background: var(--tile); }
 .node-port--out::after {
     /* A bigger invisible hit area than the visible dot. */
     content: '';
