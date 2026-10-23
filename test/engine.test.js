@@ -430,17 +430,20 @@ test('a 401(k) contribution comes out of gross pay, before withholding', () => {
     close(r.nodes[salary.id].totals.pretax, 6000);
 });
 
-test('contributions through an employer match are pre-tax too', () => {
+test('an employer match adds to a pre-tax contribution without taking from pay', () => {
     const plan = mkPlan('2026-01', 1);
     const salary = node(plan, 'salary', { amount: 100000, per: 'year', tax: 20 });
     const match = node(plan, 'employer-match', { rate: 50 });
     const k = node(plan, 'pretax-account');
-    link(plan, salary, match, { mode: 'percent', value: 6 });
+    link(plan, salary, k, { mode: 'percent', value: 6 });
+    link(plan, salary, match, { mode: 'percent', value: 6 });   // the pay being matched
     link(plan, match, k, { mode: 'rest' });
     link(plan, salary, node(plan, 'expense'), { mode: 'rest' });
     const r = run(plan);
-    close(last(r.nodes[k.id].balance), 9000);
-    close(r.totals.withheld, 94000 * 0.2);
+    close(last(r.nodes[k.id].balance), 9000);                    // 6,000 contributed + 3,000 matched
+    close(r.totals.withheld, 94000 * 0.2);                        // only the contribution is pre-tax
+    close(r.totals.match, 3000);
+    close(r.nodes[salary.id].totals.pretax, 6000);
 });
 
 test('a Roth IRA is paid from take-home pay', () => {
@@ -459,7 +462,8 @@ test('an employer match stops at its yearly limit and restarts in January', () =
     const pay = node(plan, 'paycheck', { amount: 10000, per: 'month' });
     const match = node(plan, 'employer-match', { rate: 50, capYearly: 3000 });
     const k401 = node(plan, 'pretax-account', { balance: 0, rate: 0 });
-    link(plan, pay, match, { mode: 'fixed', value: 1000 });
+    link(plan, pay, k401, { mode: 'fixed', value: 1000 });
+    link(plan, pay, match, { mode: 'fixed', value: 1000 });   // the pay being matched
     link(plan, pay, node(plan, 'expense'));
     link(plan, match, k401);
     const r = run(plan);

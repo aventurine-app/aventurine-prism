@@ -481,7 +481,7 @@
                 + stat('Average', `${money(nr.totals.in / m)}/mo`)
                 + (nr.totals.out > 0.5 ? stat('Paid through links', money(nr.totals.out)) : '');
         } else {
-            if (kind === 'match') stats = stat('Match added', money(nr.totals.produced)) + stat('Contributions', money(nr.totals.in));
+            if (kind === 'match') stats = stat('Match added', money(nr.totals.produced)) + stat('Pay matched', money(nr.totals.in));
             else if (kind === 'group') stats = stat('Received', money(nr.totals.in)) + stat('Passed on', money(nr.totals.out))
                 + (nr.totals.consumed > 0.5 ? stat('Spent in group', money(nr.totals.consumed)) : '');
             else stats = stat('Taken', money(nr.totals.consumed)) + stat('Passed on', money(nr.totals.out));

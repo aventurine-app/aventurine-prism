@@ -32,8 +32,14 @@
     const nodeLayer = document.getElementById('nodes');
     if (!stage) return;
 
-    // Mirrors .node in canvas.css; the input port sits on the vertical centre
-    // and so does the output port.
+    // The grip on the selected flow's receiving end: drag it to another dot or module.
+    const handle = document.createElement('div');
+    handle.className = 'link-handle';
+    handle.title = 'Drag to move this end';
+    handle.hidden = true;
+    nodeLayer.appendChild(handle);   // with the cards, so it sits over their dots
+
+    // Mirrors .node in canvas.css; the dots sit at the middle of each side.
     const { NODE_W, NODE_H } = P.GEOM;
     const GRID = 24;
     const SNAP = 8;
@@ -163,18 +169,46 @@
      *  earnings, say) sit this far apart so none hides another. */
     const PARALLEL_GAP = 20;
 
-    function outPort(n) {
-        return { x: n.x + NODE_W + 1, y: n.y + NODE_H / 2 };
-    }
-    const inPort = (n) => ({ x: n.x - 1, y: n.y + NODE_H / 2 });
+    // Every card has a dot on each side. A link is drawn from the dot it was
+    // dragged out of to the dot it was dropped on, and either end can be dragged
+    // to another dot or module. Nothing re-routes it afterwards.
+    const SIDES = ['t', 'r', 'b', 'l'];
+    const DIR = { t: { x: 0, y: -1 }, r: { x: 1, y: 0 }, b: { x: 0, y: 1 }, l: { x: -1, y: 0 } };
 
-    /** A cubic from port to port. Forward links bow gently; a link that runs
-     *  backward loops out past both cards so it never cuts through them. */
-    function curve(a, b) {
-        const dx = b.x - a.x;
-        const c = dx > 40 ? Math.max(40, dx * 0.45) : Math.max(90, Math.abs(dx) * 0.5 + 60);
-        const p1 = { x: a.x + c, y: a.y };
-        const p2 = { x: b.x - c, y: b.y };
+    function portAt(n, side) {
+        switch (side) {
+            case 't': return { x: n.x + NODE_W / 2, y: n.y - 1 };
+            case 'b': return { x: n.x + NODE_W / 2, y: n.y + NODE_H + 1 };
+            case 'l': return { x: n.x - 1, y: n.y + NODE_H / 2 };
+            default:  return { x: n.x + NODE_W + 1, y: n.y + NODE_H / 2 };
+        }
+    }
+
+    /** The side of a card that faces a point (a vector from the card's centre),
+     *  measured against the card's own proportions. */
+    function sideToward(vx, vy) {
+        if (Math.abs(vx) * NODE_H >= Math.abs(vy) * NODE_W) return vx >= 0 ? 'r' : 'l';
+        return vy >= 0 ? 'b' : 't';
+    }
+
+    /** The sides a link uses: [leaves from, lands on]. Exactly the ones it was
+     *  given, wherever the cards move. A link made with none chosen (from the
+     *  picker, the "Pay from" menu, an older plan) leaves the right and lands
+     *  on the left until the user moves its ends. */
+    function linkSides(link) {
+        return [link.fromSide || 'r', link.toSide || 'l'];
+    }
+
+    /** A cubic from one port to another, leaving and arriving along the sides'
+     *  outward directions. Forward links bow gently; a link whose ends point
+     *  away from each other loops out past both cards so it never cuts through them. */
+    function curve(a, sa, b, sb) {
+        const da = DIR[sa];
+        const db = DIR[sb];
+        const reach = (b.x - a.x) * da.x + (b.y - a.y) * da.y;
+        const c = reach > 40 ? Math.max(40, reach * 0.45) : Math.max(90, Math.abs(reach) * 0.5 + 60);
+        const p1 = { x: a.x + da.x * c, y: a.y + da.y * c };
+        const p2 = { x: b.x + db.x * c, y: b.y + db.y * c };
         const mid = {
             x: (a.x + 3 * p1.x + 3 * p2.x + b.x) / 8,
             y: (a.y + 3 * p1.y + 3 * p2.y + b.y) / 8,
@@ -314,7 +348,23 @@
                 if (list) list.push(w); else warns.set(id, [w]);
             }
         }
-        return { plan, res, sel, vp: viewPoint(), byId, outs, ins, warns };
+        // Which side of each card its links use, and which dots they therefore fill.
+        const linkSide = new Map();
+        const used = new Map();
+        const use = (id, side) => {
+            const set = used.get(id);
+            if (set) set.add(side); else used.set(id, new Set([side]));
+        };
+        for (const l of plan.links) {
+            const from = byId.get(l.from);
+            const to = byId.get(l.to);
+            if (!from || !to) continue;
+            const sides = linkSides(l);
+            linkSide.set(l.id, sides);
+            use(l.from, sides[0]);
+            use(l.to, sides[1]);
+        }
+        return { plan, res, sel, vp: viewPoint(), byId, outs, ins, warns, linkSide, used };
     }
 
     // ── Cards ──────────────────────────────────────────────────────────────
@@ -325,13 +375,12 @@
         el.tabIndex = 0;
         el.dataset.id = node.id;
         el.innerHTML = `
-            <span class="node-port node-port--in" aria-hidden="true"></span>
+            ${SIDES.map((side) => `<span class="node-port" data-side="${side}" aria-hidden="true"></span>`).join('')}
             <div class="node-wm" aria-hidden="true"></div>
             <div class="node-cat"><span class="node-glyph"></span><span class="node-cat-name"></span></div>
             <div class="node-titles"><span class="node-name"></span><span class="node-meta"></span></div>
             <div class="node-figure"><span class="node-value"></span><span class="node-unit"></span><span class="node-delta"></span></div>
-            <div class="node-bar" aria-hidden="true"></div>
-            <span class="node-outs"></span>`;
+            <div class="node-bar" aria-hidden="true"></div>`;
         const view = {
             el,
             tile: el.querySelector('.node-glyph'),
@@ -343,8 +392,7 @@
             unit: el.querySelector('.node-unit'),
             delta: el.querySelector('.node-delta'),
             bar: el.querySelector('.node-bar'),
-            inPort: el.querySelector('.node-port--in'),
-            outs: el.querySelector('.node-outs'),
+            ports: [...el.querySelectorAll('.node-port')],
             sig: {},
             flag: null,
         };
@@ -369,20 +417,22 @@
         put(view, 'role', role, (r) => {
             view.el.dataset.role = r;
             view.tile.dataset.role = r;
-            view.inPort.hidden = !C.ROLES[r].hasIn;
         });
+        // A dot starts a link when the module sends money on. A debt's left dot is
+        // the exception: it asks who pays the debt. The rest only receive.
         const sends = P.basesFor(node).length > 0;
         put(view, 'ports', `${role}|${sends}`, () => {
-            view.outs.innerHTML = sends
-                ? '<span class="node-port node-port--out" title="Drag to link" aria-hidden="true"></span>'
-                : '';
+            for (const port of view.ports) {
+                const asks = role === 'debt' && port.dataset.side === 'l';
+                const out = sends && !asks;
+                port.className = `node-port ${out ? 'node-port--out' : 'node-port--in'}`;
+                if (out) port.title = 'Drag to link'; else port.removeAttribute('title');
+            }
         });
-        // A port is filled once a link is attached to it.
-        const linkedIn = frame.ins.has(node.id);
-        const linkedOut = frame.outs.has(node.id);
-        put(view, 'linked', `${linkedIn}|${linkedOut}`, () => {
-            view.el.classList.toggle('has-in-link', linkedIn);
-            view.el.classList.toggle('has-out-link', linkedOut);
+        // A dot is filled once a link is attached to it.
+        const used = frame.used.get(node.id);
+        put(view, 'linked', SIDES.filter((side) => used && used.has(side)).join(''), (sig) => {
+            for (const port of view.ports) port.classList.toggle('is-linked', sig.includes(port.dataset.side));
         });
         put(view, 'icon', P.iconOf(node), (icon) => {
             view.tile.innerHTML = iconSvg(icon);
@@ -466,7 +516,8 @@
     function parallelLifts(plan) {
         const pairs = new Map();
         for (const l of plan.links) {
-            const key = `${l.from}>${l.to}`;
+            // Either direction: two links the opposite way round share their sides too.
+            const key = l.from < l.to ? `${l.from}>${l.to}` : `${l.to}>${l.from}`;
             if (pairs.has(key)) pairs.get(key).push(l.id); else pairs.set(key, [l.id]);
         }
         const lifts = new Map();
@@ -482,10 +533,14 @@
         const to = frame.byId.get(link.to);
         if (!from || !to) return;
         // The curve is worked out again only when one of its ends moves.
-        const a = outPort(from);
-        const b = inPort(to);
-        put(view, 'ends', `${a.x},${a.y},${b.x},${b.y},${lift}`, () => {
-            const c = curve({ x: a.x, y: a.y + lift }, { x: b.x, y: b.y + lift });
+        const [sa, sb] = frame.linkSide.get(link.id);
+        const a = portAt(from, sa);
+        const b = portAt(to, sb);
+        // Parallel links spread across the sides they share.
+        const lx = sa === 't' || sa === 'b' ? lift : 0;
+        const ly = lx ? 0 : lift;
+        put(view, 'ends', `${a.x},${a.y},${sa},${b.x},${b.y},${sb},${lift}`, () => {
+            const c = curve({ x: a.x + lx, y: a.y + ly }, sa, { x: b.x + lx, y: b.y + ly }, sb);
             view.path.setAttribute('d', c.d);
             view.flow.setAttribute('d', c.d);
             view.hit.setAttribute('d', c.d);
@@ -564,6 +619,16 @@
                 view.label.remove();
                 linkViews.delete(id);
             }
+        }
+
+        const picked = frame.sel && frame.sel.kind === 'link' ? plan.links.find((l) => l.id === frame.sel.id) : null;
+        const pickedTo = picked && frame.byId.get(picked.to);
+        handle.hidden = !pickedTo;
+        if (pickedTo) {
+            const at = portAt(pickedTo, frame.linkSide.get(picked.id)[1]);
+            handle.style.left = `${at.x}px`;
+            handle.style.top = `${at.y}px`;
+            handle.dataset.id = picked.id;
         }
 
         stage.classList.toggle('flow-limited', plan.links.length > FLOW_LIMIT);
@@ -674,8 +739,14 @@
         try { stage.setPointerCapture(e.pointerId); } catch { /* inactive pointer */ }
     }
 
+    /** The element under a point, looking through the selected flow's grip: it
+     *  sits on a card's dot, and a drop there is meant for the card. */
+    function elementAt(clientX, clientY) {
+        return document.elementsFromPoint(clientX, clientY).find((el) => !el.closest('.link-handle')) || null;
+    }
+
     function nodeAt(clientX, clientY) {
-        const el = document.elementFromPoint(clientX, clientY);
+        const el = elementAt(clientX, clientY);
         const card = el && el.closest('.node');
         return card ? Store.node(card.dataset.id) : null;
     }
@@ -753,11 +824,28 @@
 
         const port = e.target.closest('.node-port--out');
         const card = e.target.closest('.node');
-        const linkEl = e.target.closest('[data-link]');
+        const grip = e.target.closest('.link-handle');
+        const linkEl = grip ? null : e.target.closest('[data-link]');
+
+        if (grip) {
+            const link = Store.link(grip.dataset.id);
+            const from = link && Store.node(link.from);
+            if (!from) return;
+            const side = linkSides(link)[0];
+            action = { type: 'reconnect', link, from, side, target: null };
+            ghost = document.createElementNS(SVG_NS, 'path');
+            ghost.classList.add('link-ghost');
+            svg.appendChild(ghost);
+            stage.classList.add('is-linking');
+            markTargets(from, link);
+            capture(e);
+            moveGhost(e);
+            return;
+        }
 
         if (port && card) {
             const from = Store.node(card.dataset.id);
-            action = { type: 'connect', from, target: null };
+            action = { type: 'connect', from, side: port.dataset.side, target: null };
             ghost = document.createElementNS(SVG_NS, 'path');
             ghost.classList.add('link-ghost');
             svg.appendChild(ghost);
@@ -819,7 +907,7 @@
             });
         } else if (action.type === 'marquee') {
             moveMarquee(e);
-        } else if (action.type === 'connect') {
+        } else if (action.type === 'connect' || action.type === 'reconnect') {
             moveGhost(e);
         }
     });
@@ -845,28 +933,67 @@
             for (const s of a.starts) nodeViews.get(s.id)?.el.classList.remove('is-dragging');
             if (a.moved) Store.endGesture();
         }
-        if (a.type === 'connect') {
+        if (a.type === 'connect' || a.type === 'reconnect') {
+            // Read the drop before the drag's look is taken down: the enlarged dots
+            // (which reach past the card's edge) are part of the card being shown
+            // as the target, so a release on one lands on that card.
+            const drop = e.type === 'pointerup' ? readDrop(e, a) : null;
             clearTargets();
             stage.classList.remove('is-linking');
             if (ghost) { ghost.remove(); ghost = null; }
-            if (e.type !== 'pointerup') return;
-            const target = nodeAt(e.clientX, e.clientY);
-            if (target && target.id !== a.from.id) {
-                const ok = P.canConnect(Store.state.plan, a.from.id, target.id);
-                if (ok.ok) Store.connect(a.from.id, target.id);
-                else if (ok.reason === 'duplicate') UI.toast('Those modules are already linked every way they can be.');
-                else if (ok.reason === 'role') UI.toast(linkRuleText(D.roleOf(a.from), D.roleOf(target)));
-                else if (ok.reason === 'basis') UI.toast(targetRuleText(a.from));
-            } else if (!target) {
-                const under = document.elementFromPoint(e.clientX, e.clientY);
-                if (under && stage.contains(under) && !under.closest('.island')) {
-                    openAddPicker(e.clientX, e.clientY, { from: a.from });
-                }
-            }
+            if (drop) (a.type === 'connect' ? dropLink : dropMovedLink)(e, a, drop);
         }
+    }
+
+    /** What a link drag was released over: the module (if any), the dot of it,
+     *  and the element under the pointer. */
+    function readDrop(e, a) {
+        const target = nodeAt(e.clientX, e.clientY);
+        const valid = target && target.id !== a.from.id;
+        return {
+            target: valid ? target : null,
+            onSelf: !!target && !valid,
+            side: valid ? dropSide(e, target, portAt(a.from, a.side)) : null,
+            under: elementAt(e.clientX, e.clientY),
+        };
+    }
+
+    function dropLink(e, a, { target, onSelf, side, under }) {
+        if (target) {
+            const ok = P.canConnect(Store.state.plan, a.from.id, target.id);
+            if (ok.ok) Store.connect(a.from.id, target.id, null, { fromSide: a.side, toSide: side });
+            else refuse(ok.reason, a.from, target);
+        } else if (!onSelf && under && stage.contains(under) && !under.closest('.island')) {
+            openAddPicker(e.clientX, e.clientY, { from: a.from });
+        }
+    }
+
+    /** Dropped on a module: onto it, at the dot it was dropped on. Dropped on
+     *  nothing, the flow stays as it was. */
+    function dropMovedLink(e, a, { target, side }) {
+        if (!target) return;
+        if (target.id === a.link.to && side === linkSides(a.link)[1]) return;   // put back where it was
+        const r = Store.reconnect(a.link.id, target.id, side);
+        if (!r.ok) refuse(r.reason, a.from, target);
     }
     stage.addEventListener('pointerup', endAction);
     stage.addEventListener('pointercancel', endAction);
+
+    /** Tell the user why a link was refused. */
+    function refuse(reason, from, target) {
+        if (reason === 'duplicate') UI.toast('Those modules are already linked every way they can be.');
+        else if (reason === 'role') UI.toast(linkRuleText(D.roleOf(from), D.roleOf(target)));
+        else if (reason === 'basis') UI.toast(targetRuleText(from));
+    }
+
+    /** The dot of `target` a drop lands on: the one under the pointer, else the
+     *  side of the card that faces `origin` (the dot the flow comes from). */
+    function dropSide(e, target, origin) {
+        const under = elementAt(e.clientX, e.clientY);
+        const dot = under && under.closest('.node-port');
+        if (dot) return dot.dataset.side;
+        return sideToward(origin.x - (target.x + NODE_W / 2), origin.y - (target.y + NODE_H / 2));
+    }
 
     const PLURAL = { account: 'accounts', expense: 'spending', debt: 'debts', modifier: 'modifiers' };
 
@@ -888,19 +1015,31 @@
     }
 
     function moveGhost(e) {
-        const a = outPort(action.from);
+        const a = portAt(action.from, action.side);
         const target = nodeAt(e.clientX, e.clientY);
-        const valid = target && P.canConnect(Store.state.plan, action.from.id, target.id).ok;
-        const b = valid ? inPort(target) : toWorld(e.clientX, e.clientY);
-        ghost.setAttribute('d', curve(a, b).d);
+        const plan = Store.state.plan;
+        // A flow being moved may stay on the module it already reaches (to change dot).
+        const stays = action.type === 'reconnect' && target && target.id === action.link.to;
+        const valid = target && target.id !== action.from.id && (stays || P.canConnect(plan, action.from.id, target.id).ok);
+        let b;
+        let sb;
+        if (valid) {
+            // Lands on the dot it would be dropped on.
+            sb = dropSide(e, target, a);
+            b = portAt(target, sb);
+        } else {
+            b = toWorld(e.clientX, e.clientY);
+            sb = sideToward(a.x - b.x, a.y - b.y);
+        }
+        ghost.setAttribute('d', curve(a, action.side, b, sb).d);
         for (const [id, v] of nodeViews) v.el.classList.toggle('is-target', !!valid && id === target.id);
     }
 
-    function markTargets(from) {
+    function markTargets(from, moving = null) {
         const plan = Store.state.plan;
         for (const [id, v] of nodeViews) {
             if (id === from.id) continue;
-            v.el.classList.toggle('is-dim', !P.canConnect(plan, from.id, id).ok);
+            v.el.classList.toggle('is-dim', !(moving && id === moving.to) && !P.canConnect(plan, from.id, id).ok);
         }
     }
 

@@ -332,10 +332,11 @@ html[data-theme="dark"] { --node-tint: 14%; --node-edge: 30%; }
 .node-check { background: var(--accent-positive); color: #fff; }
 
 /* ── Ports ──────────────────────────────────────────────────────────────── */
-/* Both ports sit on the vertical centre: money comes in on the left and leaves
-   on the right. What a link carries (a card's purchases, a loan's proceeds...) is chosen
-   on the link, not by which port it leaves, so the output port wears the
-   module's own colour. */
+/* A dot on every side, in the module's own colour. Links leave and land on the
+   sides that face each other. A module that sends money on starts a link from
+   any of its dots (--out); the rest only receive (--in). What a link carries
+   (a card's purchases, a loan's proceeds...) is chosen on the link, not by
+   which dot it leaves. */
 .node-port {
     position: absolute;
     top: 50%;
@@ -345,13 +346,23 @@ html[data-theme="dark"] { --node-tint: 14%; --node-edge: 30%; }
     border: 2px solid var(--tile);
     border-radius: 50%;
     background: var(--surface1);
-    transition: transform 0.12s ease, background-color 0.12s ease;
+    transition: transform 0.12s ease, background-color 0.12s ease, opacity 0.12s ease;
 }
-.node-port--in  { left: -8px; }
-.node-port--out { right: -8px; cursor: crosshair; }
+/* A dot on each side, centred on its edge. */
+.node-port[data-side="l"] { left: -8px; }
+.node-port[data-side="r"] { right: -8px; }
+.node-port[data-side="t"],
+.node-port[data-side="b"] { left: 50%; margin: 0 0 0 -7px; }
+.node-port[data-side="t"] { top: -8px; }
+.node-port[data-side="b"] { top: auto; bottom: -8px; }
+.node-port--out { cursor: crosshair; }
 /* A port is an empty outline until a link is attached, then it fills. */
-.node.has-in-link .node-port--in,
-.node.has-out-link .node-port--out { background: var(--tile); }
+.node-port.is-linked { background: var(--tile); }
+/* A dot with no link is hidden, and cannot be grabbed, until its module is
+   selected or a link is being drawn or moved. */
+.node-port:not(.is-linked) { opacity: 0; pointer-events: none; }
+.node.is-selected .node-port,
+.is-linking .node-port { opacity: 1; pointer-events: auto; }
 .node-port--out::after {
     /* A bigger invisible hit area than the visible dot. */
     content: '';
@@ -362,11 +373,29 @@ html[data-theme="dark"] { --node-tint: 14%; --node-edge: 30%; }
 .node:hover .node-port,
 .node.is-selected .node-port { transform: scale(1.15); }
 .node-port--out:hover { transform: scale(1.35); }
-.node.is-target .node-port--in { background: var(--accent-ring); border-color: var(--accent-ring); transform: scale(1.4); }
+.node.is-target .node-port { background: var(--accent-ring); border-color: var(--accent-ring); transform: scale(1.4); }
 
 /* A debt's input port is where a payment link lands. */
 .node[data-role="debt"] .node-port--in { cursor: pointer; }
 .node[data-role="debt"] .node-port--in::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; }
+
+/* The grip on the selected flow's receiving end. */
+.link-handle {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    box-sizing: border-box;
+    border: 3px solid var(--accent-ring);
+    border-radius: 50%;
+    background: var(--surface1);
+    box-shadow: 0 0 0 3px var(--accent-wash);
+    transform: translate(-50%, -50%);
+    cursor: grab;
+    pointer-events: auto;
+    z-index: 6;
+}
+.link-handle[hidden] { display: none; }
+.is-linking .link-handle { cursor: grabbing; }
 
 /* ── Floating islands over the canvas ───────────────────────────────────── */
 .island {

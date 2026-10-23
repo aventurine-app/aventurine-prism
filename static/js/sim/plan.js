@@ -419,7 +419,7 @@
             const basis = fp.role === 'account' ? 'balance' : 'inflow';
             return Object.assign(rule, { basis }, paymentRule(to));
         }
-        // A workplace contribution is usually a slice of pay.
+        // The pay a match matches is usually the workplace contribution: a slice of pay.
         if (tp.kind === 'match' && fp.role === 'source') {
             return Object.assign(rule, { mode: 'percent', value: 6 });
         }
@@ -479,6 +479,25 @@
         Object.assign(link, ruleOnBasis(plan, from, to, basis), { start, end, growth });
         fitRule(link, from);
         return true;
+    }
+
+    /** Move a link's receiving end: onto another module, or just to another dot
+     *  of the one it already reaches. The rule stays where the new target takes
+     *  it; otherwise the link moves to a basis that does. Returns { ok } or
+     *  { ok: false, reason } with canConnect's reasons. */
+    function reconnect(plan, link, toId, toSide = null) {
+        if (toId !== link.to) {
+            const check = canConnect(plan, link.from, toId);
+            if (!check.ok) return check;
+            const from = nodeById(plan, link.from);
+            const to = nodeById(plan, toId);
+            const keeps = canConnect(plan, link.from, toId, link.basis).ok;
+            link.to = toId;
+            if (!keeps) changeBasis(plan, link, basesBetween(plan, from, to)[0]);
+            fitRule(link, from);
+        }
+        if (toSide) link.toSide = toSide; else delete link.toSide;
+        return { ok: true };
     }
 
     // ── Validation ─────────────────────────────────────────────────────────
@@ -562,6 +581,7 @@
     const MODES = ['percent', 'fixed', 'rest', 'above'];
     const BASES = ['inflow', 'balance', 'proceeds', 'charges'];
     const WHENS = ['monthly', 'yearly', 'once'];
+    const SIDES = ['t', 'r', 'b', 'l'];
 
     function cleanLink(raw, nodesById, i) {
         if (!isObj(raw)) fail(`link ${i} is malformed`);
@@ -579,6 +599,10 @@
             end:    cleanYm(raw.end, `link ${i} end`, true),
             growth: cleanNumber(raw.growth ?? 0, -100, 100, `link ${i} growth`),
         };
+        // Which dot of each card the link is drawn from and to (top, right, bottom, left).
+        // Optional: a link without them is drawn between the sides that face each other.
+        if (SIDES.includes(raw.fromSide)) link.fromSide = raw.fromSide;
+        if (SIDES.includes(raw.toSide)) link.toSide = raw.toSide;
         const from = nodesById.get(link.from);
         const to = nodesById.get(link.to);
         if (!from || !to) fail(`link ${i} points at a module that does not exist`);
@@ -769,7 +793,7 @@
     }
 
     return {
-        PLAN_VERSION, LIMITS, GEOM, MONTHS, RULES, PlanError, REMOVED_TYPES,
+        PLAN_VERSION, LIMITS, GEOM, MONTHS, RULES, PlanError, REMOVED_TYPES, reconnect,
         ymParse, ymFormat, ymNow, ymAdd, ymDiff, ymLabel,
         newId, roleOf, basesFor, modesFor, timingsFor, portTargets, targetRoles, basesBetween, changeBasis, loanPayment, isPretax,
         createPlan, createNode, iconOf, RETIRED_TYPES, canConnect, createLink, fitRule,

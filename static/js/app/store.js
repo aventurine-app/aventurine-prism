@@ -543,18 +543,33 @@
     const removeNode = (id) => removeNodes([id]);
 
     /** Link two modules on `basis`, or on the usual (else next free) one. */
-    function connect(fromId, toId, basis = null) {
+    /** `sides` ({ fromSide, toSide }) pins the dots the link is drawn between. */
+    function connect(fromId, toId, basis = null, sides = null) {
         const check = P.canConnect(state.plan, fromId, toId, basis);
         if (!check.ok) return null;
         let created = null;
         edit((plan) => {
             if (plan.links.length >= P.LIMITS.links) return false;
             created = P.createLink(plan, fromId, toId, basis);
+            if (sides) Object.assign(created, sides);
             plan.links.push(created);
             return true;
         });
         if (created) select({ kind: 'link', id: created.id });
         return created;
+    }
+
+    /** Drag a link's receiving end to another module, or to another dot of the
+     *  same one. Returns { ok } or { ok: false, reason }. */
+    function reconnect(id, toId, toSide) {
+        let result = { ok: false, reason: 'missing' };
+        edit((plan) => {
+            const l = plan.links.find((x) => x.id === id);
+            if (!l) return false;
+            result = P.reconnect(plan, l, toId, toSide);
+            return result.ok;
+        });
+        return result;
     }
 
     function removeLink(id) {
@@ -566,6 +581,6 @@
         select, setScrub, setView, flush, boot, openPlan, newPlan, addPlan, duplicatePlan,
         renamePlan, deletePlan, reorderTabs, importPlan, exportPlan, planName, getPlan,
         node, link, previewPreset, setPreviewIcon, addNode, duplicateNode, copyNodes, pasteNodes, removeNode, removeNodes,
-        connect, removeLink,
+        connect, reconnect, removeLink,
     };
 }());

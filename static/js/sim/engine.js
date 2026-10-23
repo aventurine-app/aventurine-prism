@@ -28,6 +28,11 @@
 // withholding, so only what is left is taxed. Those links split gross pay;
 // every other link from income splits take-home pay.
 //
+// Employer match. Pay linked to a match is the pay being matched, not pay sent
+// to it: nothing leaves the income. The match works its rate out on that pay
+// (at gross, up to its yearly limit) and sends the result on as new money. The
+// contribution itself goes wherever the income's other links send it.
+//
 // Paying debts. A payment never exceeds what is owed: once a debt is paid off,
 // the money its links would have sent stays with the payer and falls through
 // to the payer's later links (its rest, usually savings). A debt that has its
@@ -112,7 +117,9 @@
                 givenMonth: -1, given: 0,   // fixed links: paid so far this month
             };
             // A source keeps its pre-tax links apart: they split gross pay.
-            const group = link.basis === 'inflow' && from.role === 'source' && Plan.isPretax(plan, link)
+            // Pay a match is told about is read at gross, with the pre-tax links.
+            L.matches = from.role === 'source' && to.kind === 'match';
+            const group = link.basis === 'inflow' && from.role === 'source' && (L.matches || Plan.isPretax(plan, link))
                 ? 'pretax' : link.basis;
             from.outs[group].push(L);
             linkStates.push(L);
@@ -194,6 +201,24 @@
             return L.to.role === 'debt' ? Math.min(want, room(L.to)) : want;
         }
 
+        /** A match is told `pay` is being matched along `L`. It adds its rate of
+         *  that, up to its yearly limit, as new money and sends it on. The pay
+         *  itself does not move. */
+        function addMatch(L, pay) {
+            const m = L.to;
+            const room = m.params.capYearly == null
+                ? Infinity : Math.max(0, m.params.capYearly - m.matchThisYear);
+            const added = Math.min(pay * (m.params.rate || 0) / 100, room);
+            L.flow[t] += pay;
+            m.inflow[t] += pay;
+            m.matchThisYear += added;
+            m.produced[t] += added;
+            totals.match[t] += added;
+            if (added <= EPS) return;
+            const left = allocate(m, 'inflow', added);
+            if (left > EPS) park(m, left);
+        }
+
         /** Split `amount` arriving at `s` across its links on `basis`.
          *  Returns what no link took. */
         function allocate(s, basis, amount) {
@@ -218,6 +243,11 @@
                 if (want <= EPS) continue;
                 const give = Math.min(want, remaining);
                 if (L.mode === 'fixed') L.given += give;
+                // Pay named to a match is matched, not moved: it stays in `remaining`.
+                if (L.matches) {
+                    if (give > EPS) addMatch(L, give);
+                    continue;
+                }
                 // A fixed amount can still be topped up by a later arrival this
                 // month, so its shortfall is settled at month end instead.
                 if (L.mode === 'percent' && want - give > EPS) noteShort(L, want - give);
