@@ -7,11 +7,12 @@
     <link rel="stylesheet" href="/static/css/auth.css">
 </head>
 <body>
-    <main class="auth-page">
+    <main class="auth-page auth-page-login">
+        <canvas class="dot-wave" aria-hidden="true"></canvas>
         <section class="auth-card" aria-labelledby="auth-title">
             <img class="auth-logo" src="/static/icons/logo/logo.svg" alt="" width="40" height="40">
             <h1 class="auth-title" id="auth-title">Sign in to Prism</h1>
-            <p class="auth-note">Enter the email you subscribed with and we will send you a link to sign in. There is no password.</p>
+            <p class="auth-note">Enter the email associated with your Aventurine Prism subscription.</p>
 
             <form class="auth-form" id="login-form" novalidate>
                 <label class="auth-label" for="email">Email</label>
@@ -27,5 +28,6 @@
     </main>
     <script src="/static/js/auth/common.js"></script>
     <script src="/static/js/auth/login.js"></script>
+    <script src="/static/js/auth/dot-wave.js"></script>
 </body>
 </html>

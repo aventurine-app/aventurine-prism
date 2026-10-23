@@ -81,7 +81,7 @@ test('the sign-in pages are built, and need only files the worker serves to anyo
 
 test('no file the worker serves to anyone holds app code', () => {
     const publicJs = fs.readdirSync(path.join(STATIC_DIR, 'js', 'auth'));
-    assert.deepEqual(publicJs.sort(), ['common.js', 'confirm.js', 'inactive.js', 'login.js']);
+    assert.deepEqual(publicJs.sort(), ['common.js', 'confirm.js', 'dot-wave.js', 'inactive.js', 'login.js']);
     for (const f of publicJs) {
         const code = fs.readFileSync(path.join(STATIC_DIR, 'js', 'auth', f), 'utf8');
         assert.ok(!/CitrinePlan|CitrineEngine|Store\.|citrineApi/.test(code), `${f} reaches into the app`);
