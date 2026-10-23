@@ -1,6 +1,6 @@
 'use strict';
 
-/* The sign-in page's ground (pages/auth/login.html): a square grid of light
+/* The sign-in pages' ground (pages/auth/): a square grid of light
    grey dots on white that swell and shrink in a slow wave. A copy of the
    website's home hero (aventurine-app.com, js/dot-wave.js); keep the two in
    step. The dots never move; only their size changes, so the wave reads as
