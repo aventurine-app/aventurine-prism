@@ -4,8 +4,9 @@
 
    The pages are white in either theme, under the website's dot wave
    (js/auth/dot-wave.js) in light grey. The card takes the dark theme's
-   tokens, so its text, fields, links and outlined buttons read on it; its
-   one main action is white with charcoal letters.
+   tokens, so its text, fields and outlined buttons read on it; its one main
+   action and its links are white, and the Aventurine mark sits faintly in
+   its lower right corner.
    ============================================================================ */
 
 /* The page isolates, so the canvas at z-index -1 sits over the page's white
@@ -51,11 +52,34 @@
     flex-direction: column;
     gap: var(--space-16);
     padding: var(--space-32);
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
     background: var(--color-base-800);
     border: var(--border-width) solid var(--color-base-800);
     border-radius: var(--radius-panel);
-    box-shadow: var(--shadow-card);
+    /* a drop shadow below the card: a tight one where it meets the page and a
+       soft one falling further, both pulled in so they stay off the sides */
+    box-shadow:
+        0 4px 8px -4px rgba(0, 0, 0, 0.20),
+        0 24px 48px -16px rgba(0, 0, 0, 0.35);
     color: var(--text-primary);
+}
+/* the watermark: the mark's rounded triangle (icons/logo/mark.svg) one step
+   up the grey ramp from the card, run off the corner, under the card's
+   content */
+.auth-card::after {
+    content: '';
+    position: absolute;
+    right: calc(-1 * var(--space-24));
+    bottom: calc(-1 * var(--space-24));
+    z-index: -1;
+    width: 160px;
+    aspect-ratio: 2.8173 / 2.7004;
+    background: var(--color-base-700);
+    -webkit-mask: url('/static/icons/logo/mark.svg') center / contain no-repeat;
+            mask: url('/static/icons/logo/mark.svg') center / contain no-repeat;
+    pointer-events: none;
 }
 
 .auth-card .button-primary {
@@ -65,13 +89,12 @@
 .auth-card .button-primary:not(:disabled):hover  { background: var(--color-base-100); }
 .auth-card .button-primary:not(:disabled):active { background: var(--color-base-200); }
 
-.auth-logo { width: 40px; height: 40px; }
-
 .auth-title {
     margin: 0;
-    font-size: var(--size-h2);
+    font-size: var(--size-h1);
     font-weight: var(--weight-semibold);
-    letter-spacing: var(--track-tight);
+    line-height: var(--lh-tight);
+    letter-spacing: var(--track-tighter);
 }
 
 .auth-note {
@@ -84,6 +107,21 @@
 
 .auth-form { display: flex; flex-direction: column; gap: var(--space-8); }
 .auth-form .field-input { height: 40px; font-size: var(--size-body); }
+/* a field in use is outlined in white, as the card's action is white; one
+   marked invalid keeps its red */
+.auth-form .field-input:focus:not([aria-invalid="true"]) { border-color: #fff; }
+/* An autofilled field keeps the card's fill and ink, not the browser's blue
+   tint. The tint is the browser's own background and cannot be unset, so an
+   inset shadow as large as the field paints the fill back over it. :is() is
+   forgiving, so a browser that knows only one of the two names still
+   matches. */
+.auth-form .field-input:is(:-webkit-autofill, :autofill) {
+    -webkit-box-shadow: inset 0 0 0 1000px var(--surface2);
+            box-shadow: inset 0 0 0 1000px var(--surface2);
+    -webkit-text-fill-color: var(--text-primary);
+    caret-color: var(--frost-caret);
+    filter: none;
+}
 .auth-form .button-primary,
 .auth-card > .button-primary { height: 40px; margin-top: var(--space-8); }
 
@@ -110,6 +148,7 @@
     color: var(--text-tertiary);
     font-size: var(--size-small);
 }
-.auth-foot a { color: var(--accent-primary); }
+.auth-foot a { color: #fff; }
+.auth-foot a:hover { color: var(--color-base-200); }
 .auth-foot a:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; border-radius: 2px; }
 
