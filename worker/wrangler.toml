@@ -51,11 +51,13 @@ crons = ["17 4 * * *"]
 APP_ORIGIN = "https://aventurine-prism.aventurine-app.workers.dev"
 # The verified sending domain in Resend (DNS records at the registrar).
 EMAIL_FROM = "Aventurine Prism <signin@aventurine-app.com>"
-# https://sandbox-api.paddle.com only while testing against a Paddle sandbox account.
-PADDLE_API_BASE = "https://api.paddle.com"
+# Paddle's customer portal link, where the billing button sends customers. The
+# same for everyone (Paddle signs them in by emailing a code) and it does not
+# expire. From the customer portal settings in Paddle. Public, not a secret.
+# Left empty, only the billing button fails.
+PADDLE_PORTAL_URL = "https://customer-portal.paddle.com/cpl_01m5fpd75bf8123nx8dck5fqjq"
 
 # Secrets (set with `wrangler secret put NAME`, never in this file):
 #   PADDLE_WEBHOOK_SECRET   the notification destination's secret (pdl_ntfset_...)
-#   PADDLE_API_KEY          a Paddle API key with only customer_portal_session.write
 #   RESEND_API_KEY          sends the sign-in email
 #   COMPLIMENTARY_EMAILS    optional: emails with free access, comma separated

@@ -15,6 +15,7 @@ const MIGRATIONS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..',
 
 export const ORIGIN = 'https://app.example.test';
 export const WEBHOOK_SECRET = 'pdl_ntfset_test_secret';
+export const PORTAL_URL = 'https://sandbox-customer-portal.paddle.com/cpl_01test';
 export const OWNER = 'owner@example.test';
 
 /** A D1-shaped wrapper (prepare/bind/first/all/run, batch) over node:sqlite. */
@@ -106,9 +107,8 @@ export function createSite({ complimentary = OWNER, files, rateLimit, origin = O
         },
         APP_ORIGIN: origin,
         EMAIL_FROM: 'Prism <signin@example.test>',
-        PADDLE_API_BASE: 'https://sandbox-api.paddle.com',
+        PADDLE_PORTAL_URL: PORTAL_URL,
         PADDLE_WEBHOOK_SECRET: WEBHOOK_SECRET,
-        PADDLE_API_KEY: 'pdl_test_key',
         RESEND_API_KEY: resendKey,
         COMPLIMENTARY_EMAILS: complimentary,
         RATE_LIMIT: rateLimit ?? { limit: async ({ key }) => ({ success: !limited.has(key) }) },
@@ -116,9 +116,8 @@ export function createSite({ complimentary = OWNER, files, rateLimit, origin = O
 
     const pending = [];
     const ctx = { waitUntil: (p) => { pending.push(p); } };
-    const sent = { emails: [], paddle: [] };
+    const sent = { emails: [] };
     const behavior = { resendStatus: 200 };
-    const paddleReply = { status: 201, body: { data: { urls: { general: { overview: 'https://portal.example.test/overview?token=abc' } } } } };
 
     const realFetch = globalThis.fetch;
     globalThis.fetch = async (url, init = {}) => {
@@ -127,10 +126,6 @@ export function createSite({ complimentary = OWNER, files, rateLimit, origin = O
         if (target.startsWith('https://api.resend.com/')) {
             sent.emails.push({ headers: init.headers, ...body });
             return new Response('{}', { status: behavior.resendStatus });
-        }
-        if (target.startsWith('https://sandbox-api.paddle.com/')) {
-            sent.paddle.push({ url: target, headers: init.headers, body });
-            return new Response(JSON.stringify(paddleReply.body), { status: paddleReply.status });
         }
         throw new Error(`unexpected outbound request to ${target}`);
     };
@@ -151,7 +146,7 @@ export function createSite({ complimentary = OWNER, files, rateLimit, origin = O
     }
 
     const site = {
-        env, db, clock, sent, paddleReply, behavior, call, files: assets, limit: (key) => limited.add(key),
+        env, db, clock, sent, behavior, call, files: assets, limit: (key) => limited.add(key),
         restore: () => { globalThis.fetch = realFetch; },
         advance: (ms) => { clock.now += ms; },
         iso: (offsetMs = 0) => new Date(clock.now + offsetMs).toISOString(),

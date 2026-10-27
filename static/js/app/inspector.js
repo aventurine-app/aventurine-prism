@@ -9,6 +9,9 @@
 //              when, and an optional window
 //   nothing    the plan: name, start, length, inflation, outlook, issues
 //
+// It shows only in the plan builder (the Plans workspace); the others have
+// the room to themselves.
+//
 // Controls are bound to the plan through `binds`: each has a get and a set,
 // and every change goes through Store.edit, so it is undoable and saved. The
 // panel is rebuilt only when the selection (or a field that changes which
@@ -26,7 +29,7 @@
     const OPEN_KEY = 'inspector-open';
     let isOpenState = Prefs.get(OPEN_KEY) !== '0';
 
-    let built = null;           // what the panel shows: 'plan' | 'preset:<id>' | 'node:<id>' | 'link:<id>'
+    let built = null;           // what the panel shows: 'plan' | 'preset:<id>' | 'node:<id>' | 'link:<id>' | 'none'
     let builtSig = '';          // structureSig() of the built panel
     let binds = new Map();      // data-bind key → { type, get, set, ... }
     let statsEl = null;
@@ -165,12 +168,17 @@
         el.removeAttribute('aria-invalid');
         const before = spec.get();
         if (before === v && !final) return;
-        Store.edit((p) => spec.set(p, v), { key: `${built}:${key}` });
+        apply(spec, v, `${built}:${key}`);
         if (final) {
             const shown = display(spec, spec.get());
             if (el.value !== shown && spec.type !== 'text') el.value = shown;
         }
         if (spec.rebuild) rebuild();
+    }
+
+    /** Write a control's value into the plan. */
+    function apply(spec, v, key = null) {
+        Store.edit((p) => spec.set(p, v), { key });
     }
 
     function rebuild() {
@@ -204,8 +212,10 @@
             <path class="spark-line" d="${line}" vector-effect="non-scaling-stroke"/></svg>`;
     }
 
-    function stat(label, value, dir = '') {
-        return `<div><div class="stat-label">${esc(label)}</div><div class="stat-value${dir ? ` is-${dir}` : ''}">${esc(value)}</div></div>`;
+    /** A labelled figure. `dir` colours it: 'up', 'down' or 'warn'. A wide one
+     *  takes the whole row. */
+    function stat(label, value, dir = '', { wide = false } = {}) {
+        return `<div${wide ? ' class="stat-wide"' : ''}><div class="stat-label">${esc(label)}</div><div class="stat-value${dir ? ` is-${dir}` : ''}">${esc(value)}</div></div>`;
     }
 
     const total = (arr) => (arr ? arr.reduce((a, b) => a + b, 0) : 0);
@@ -230,7 +240,7 @@
 
     // ── Plan panel ─────────────────────────────────────────────────────────
 
-    const ROLE_ICON = { source: 'briefcase', account: 'piggy-bank', expense: 'shopping-bag', debt: 'cardholder', modifier: 'sliders-horizontal' };
+    const ROLE_ICON = { person: 'user', source: 'briefcase', account: 'piggy-bank', expense: 'shopping-bag', debt: 'cardholder', modifier: 'sliders-horizontal' };
 
     function planPanel() {
         const nameB = bind('plan.name', {
@@ -239,11 +249,15 @@
             set: (pl, v) => { pl.name = v; },
             fallback: () => 'Untitled plan',
         });
+        // The start is set on a Person: the plan starts with the earliest one.
+        const people = plan().nodes.filter((n) => D.roleOf(n) === 'person');
         const settings = `<div class="insp-fields">
-            ${field('Starts', 'plan.start', {
-                type: 'yearmonth',
-                get: () => plan().settings.start,
-                set: (pl, v) => { pl.settings.start = v; },
+            ${row('Starts', `<span class="insp-static" title="${people.length ? 'Set on the earliest Person' : 'Add a Person to set when the plan starts'}">${
+                esc(P.ymLabel(plan().settings.start))}</span>`)}
+            ${field('Length', 'plan.years', {
+                type: 'number', min: 1, max: P.LIMITS.years, suffix: 'yrs',
+                get: () => plan().settings.years,
+                set: (pl, v) => { pl.settings.years = v; },
             })}
             ${field('Inflation', 'plan.inflation', {
                 type: 'percent', min: -20, max: 50, suffix: '/yr',
@@ -295,6 +309,7 @@
     const EMPTY_MONTH = {
         start: (p) => (p.role === 'debt' ? 'Already owed' : 'Plan start'),
         lockUntil: () => 'Not locked',
+        planStart: () => 'Plan start',
     };
 
     function paramSpec(node, key) {
@@ -396,7 +411,7 @@
 
         const outs = plan().links.filter((l) => l.from === id);
         const ins = plan().links.filter((l) => l.to === id);
-        const sends = P.basesFor(node).length ? section('Outgoing Flows',
+        const sends = P.basesFor(node).length ? section(role === 'person' ? 'Theirs' : 'Outgoing Flows',
             outs.length
                 ? `<ul class="insp-links">${outs.map((l) => linkRow(l, Store.node(l.to))).join('')}</ul>`
                 : '<p class="insp-none">No links yet</p>') : '';
@@ -444,11 +459,21 @@
         const kind = C.preset(node.type).kind;
         const m = r.months;
         let stats = '';
-        if (role === 'account') {
+        if (role === 'person') {
+            const end = nr.worth[m];
+            const age = P.ageAt(node, P.ymAdd(plan().settings.start, m));
+            const counted = [...P.personReach(plan(), node.id)].map((id) => Store.node(id))
+                .filter((n) => n && C.ROLES[D.roleOf(n)].holds);
+            stats = stat('Net worth at end', money(end), end < 0 ? 'down' : '')
+                + stat('Change', money(end - nr.worth[0], { sign: true }), end >= nr.worth[0] ? 'up' : 'down')
+                + (age != null ? stat('Age at end', String(age)) : '')
+                + stat('Counted', counted.length ? counted.map((n) => n.name).join(', ') : 'Nothing yet');
+        } else if (role === 'account') {
             const end = nr.balance[m];
             stats = stat('Balance at end', money(end))
                 + stat('Change', money(end - nr.balance[0], { sign: true }), end >= nr.balance[0] ? 'up' : 'down')
                 + stat('Deposits', money(nr.totals.in))
+                + (nr.totals.matched > 0.5 ? stat('Employer match', money(nr.totals.matched), 'up') : '')
                 + stat('Growth', money(nr.totals.earnings))
                 + (nr.totals.out > 0.5 ? stat('Sent on', money(nr.totals.out)) : '');
         } else if (role === 'debt') {
@@ -481,8 +506,7 @@
                 + stat('Average', `${money(nr.totals.in / m)}/mo`)
                 + (nr.totals.out > 0.5 ? stat('Paid through links', money(nr.totals.out)) : '');
         } else {
-            if (kind === 'match') stats = stat('Match added', money(nr.totals.produced)) + stat('Pay matched', money(nr.totals.in));
-            else if (kind === 'group') stats = stat('Received', money(nr.totals.in)) + stat('Passed on', money(nr.totals.out))
+            if (kind === 'group') stats = stat('Received', money(nr.totals.in)) + stat('Passed on', money(nr.totals.out))
                 + (nr.totals.consumed > 0.5 ? stat('Spent in group', money(nr.totals.consumed)) : '');
             else stats = stat('Taken', money(nr.totals.consumed)) + stat('Passed on', money(nr.totals.out));
         }
@@ -506,6 +530,7 @@
     function linkPanel(link) {
         const from = Store.node(link.from);
         const to = Store.node(link.to);
+        if (link.basis === 'person') return personLinkPanel(link, from, to);
         const id = link.id;
         const L = () => Store.link(id) || link;
         const ends = (pl, l) => [pl.nodes.find((n) => n.id === l.from), pl.nodes.find((n) => n.id === l.to)];
@@ -582,15 +607,7 @@
         return `
             <div class="insp-card insp-card--link">
             <div class="insp-header">
-                <div class="insp-titles">
-                    <div class="link-ends">
-                        <button class="link-end" type="button" data-select="node:${esc(from.id)}">
-                            <span class="role-tile" data-role="${D.roleOf(from)}">${iconSvg(P.iconOf(from))}</span><span>${esc(from.name)}</span></button>
-                        <span class="link-ends-arrow" aria-hidden="true">${iconSvg('arrow-right')}</span>
-                        <button class="link-end" type="button" data-select="node:${esc(to.id)}">
-                            <span class="role-tile" data-role="${D.roleOf(to)}">${iconSvg(P.iconOf(to))}</span><span>${esc(to.name)}</span></button>
-                    </div>
-                </div>
+                <div class="insp-titles">${linkEnds(from, to)}</div>
                 <button class="button-icon" type="button" data-act="link-delete" aria-label="Delete flow" title="Delete flow">${iconSvg('trash')}</button>
             </div>
             ${section('Flow', `<div class="insp-fields">${rule}</div>`)}
@@ -598,6 +615,26 @@
             </div>
             <div data-issues></div>
             <div data-stats></div>`;
+    }
+
+    /** A person's link has no rule to set: it says what it means. */
+    /** The two ends of a link, each a button that selects its module. */
+    function linkEnds(from, to) {
+        const end = (n) => `<button class="link-end" type="button" data-select="node:${esc(n.id)}">
+            <span class="role-tile" data-role="${D.roleOf(n)}">${iconSvg(P.iconOf(n))}</span><span>${esc(n.name)}</span></button>`;
+        return `<div class="link-ends">${end(from)}
+            <span class="link-ends-arrow" aria-hidden="true">${iconSvg('arrow-right')}</span>${end(to)}</div>`;
+    }
+
+    function personLinkPanel(link, from, to) {
+        return `
+            <div class="insp-card insp-card--link">
+            <div class="insp-header">
+                <div class="insp-titles">${linkEnds(from, to)}</div>
+                <button class="button-icon" type="button" data-act="link-delete" aria-label="Delete link" title="Delete link">${iconSvg('trash')}</button>
+            </div>
+            <section class="insp-section"><p class="sentence" data-sentence>${D.linkSentence(link, from, to)}</p></section>
+            </div>`;
     }
 
     function linkIssues(link) {
@@ -608,8 +645,9 @@
     // ── Render ─────────────────────────────────────────────────────────────
 
     function currentKey() {
-        if (Store.state.preview) return `preset:${Store.state.preview}`;
         const s = Store.state.selection;
+        if (Store.state.workspace !== 'plans') return 'none';
+        if (Store.state.preview) return `preset:${Store.state.preview}`;
         if (s && s.kind === 'node' && Store.node(s.id)) return `node:${s.id}`;
         if (s && s.kind === 'link' && Store.link(s.id)) return `link:${s.id}`;
         return 'plan';
@@ -620,7 +658,7 @@
         const key = built;
         let html = '';
         if (key === 'plan') html = planStats();
-        else if (key.startsWith('preset:')) html = '';
+        else if (key === 'none' || key.startsWith('preset:')) html = '';
         else if (key.startsWith('node:')) html = nodeStats(Store.node(key.slice(5)));
         statsEl.innerHTML = html;
         if (issuesEl) {
@@ -643,7 +681,8 @@
         built = key;
         binds = new Map();
         let html;
-        if (key === 'plan') html = planPanel();
+        if (key === 'none') html = '';
+        else if (key === 'plan') html = planPanel();
         else if (key.startsWith('preset:')) html = presetPanel(key.slice(7));
         else if (key.startsWith('node:')) html = nodePanel(Store.node(key.slice(5)));
         else html = linkPanel(Store.link(key.slice(5)));
@@ -729,7 +768,7 @@
                 fallback: plan().settings.start,
                 clearLabel: spec.optional ? 'Clear' : null,
                 onPick: (v) => {
-                    Store.edit((pl) => spec.set(pl, v));
+                    apply(spec, v);
                     if (spec.rebuild) rebuild(); else sync();
                 },
             });
@@ -794,7 +833,7 @@
     }
 
     Store.on((c) => {
-        if (c.type === 'selection' || c.type === 'tabs') { built = c.type === 'tabs' ? null : built; render(); }
+        if (c.type === 'selection' || c.type === 'tabs' || c.type === 'workspace') { built = c.type === 'tabs' ? null : built; render(); }
         else if (c.type === 'plan') {
             // Structural changes (links added or removed) change the panel's lists.
             const key = currentKey();

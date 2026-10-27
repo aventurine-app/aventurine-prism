@@ -23,8 +23,13 @@ const UI_ICONS = [
     'caret-left', 'caret-up', 'arrow-counter-clockwise', 'arrow-clockwise', 'corners-out',
     'gear-six', 'folder', 'export', 'download-simple', 'lock-key', 'warning', 'warning-circle',
     'info', 'check', 'check-circle', 'dots-three', 'pencil-simple', 'arrow-right', 'chart-line',
-    'chart-bar', 'table', 'sidebar-simple', 'flow-arrow', 'file-plus', 'calendar-blank',
+    'chart-bar', 'table', 'sidebar-simple', 'flow-arrow', 'calendar-blank',
     'sparkle', 'chart-line-up', 'squares-four', 'clock-counter-clockwise', 'shield-check', 'user-circle',
+    // The navigation: Plans and each plan, Goals, Compare (Analyze is chart-line-up).
+    'files', 'file', 'target', 'scales',
+    // A goal's rule: its comparison and deadline (the measures wear module icons),
+    // and its card's colour.
+    'greater-than-or-equal', 'less-than-or-equal', 'infinity', 'palette',
 ];
 
 // Each asset is one <svg> of <path d="…"/> elements. Anything

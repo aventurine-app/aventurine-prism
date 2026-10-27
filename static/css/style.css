@@ -110,7 +110,6 @@
        Preferences modal. */
     --accent-gray:       var(--color-base-800);
     --accent-gray-hover: var(--color-base-700);
-    --toggle-on:         var(--accent-gray);
     --icon-button-fill:      var(--surface1);
     --icon-button-ink:       var(--text-primary);
     --danger-text:           #fff;
@@ -173,6 +172,11 @@
 
     /* Unassigned money: no role, so it takes the neutral that recedes. */
     --role-none: var(--color-base-500);
+    /* A person is not a role colour: their card is white in both themes, with
+       neutral ink (--role-person-ink) for the icon, edge and ports on it. */
+    --role-person:      var(--color-base-600);
+    --role-person-card: #ffffff;
+    --role-person-ink:  var(--color-base-600);
 
     /* Every link on the canvas, whatever it carries. */
     --link-line:      #7bbcf2;
@@ -207,6 +211,31 @@
     --chart-growth:   #3e6dc8;
     --chart-interest: #a83630;
     --chart-grid:     var(--stroke-medium);
+
+    /* The Sankey wears Aventurine Manage's cash-flow ramps (its style.css and
+       core/chartramp.js, validated there), so the two apps' diagrams read
+       alike: money arriving on the green ramp, money leaving on the gold one
+       from Manage's expense step down, both deepest first (they grade size;
+       every band prints its own name), and a grey hub that is neither. Past
+       the hub, money splits into groups that wear their modules' role colours
+       (accounts blue, debts red, taxes and fees the modifier violet), so the
+       pipes read like the canvas. */
+    --chart-inflow-1: #0a5b47;
+    --chart-inflow-2: #10744c;
+    --chart-inflow-3: #1a8b52;
+    --chart-inflow-4: #2ba25b;
+    --chart-inflow-5: #48b76b;
+    --chart-inflow-6: #72c983;
+    --chart-outflow-1: #b28a06;
+    --chart-outflow-2: #c39a0e;
+    --chart-outflow-3: #d3ab1e;
+    --chart-outflow-4: #e2bd3c;
+    --chart-outflow-5: #eed168;
+    --chart-net:       #4e5153;
+    --chart-fee-1: var(--role-modifier);
+    --chart-fee-2: color-mix(in srgb, var(--role-modifier) 70%, white);
+    --chart-fee-3: color-mix(in srgb, var(--role-modifier) 85%, black);
+    --chart-fee-4: color-mix(in srgb, var(--role-modifier) 45%, white);
 }
 
 

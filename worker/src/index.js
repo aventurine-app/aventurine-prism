@@ -4,7 +4,7 @@
 //
 //   /api/paddle/webhook     Paddle only (signature checked)       paddle.js
 //   /api/auth/*, /api/me    sign-in, sign-out, "who am I"         auth.js
-//   /api/billing/portal     a link to Paddle's billing page       paddle.js
+//   /api/billing/portal     a link to Paddle's billing page       config.js
 //   /auth/*, css, fonts…    public: the sign-in pages and the look
 //   everything else         the app itself: only for a session whose email
 //                           has an active subscription            access.js
@@ -22,8 +22,8 @@ import { sendLoginEmail } from './email.js';
 import {
     HttpError, json, readJsonBody, redirect, requireSameOrigin, sessionCookie, withSecurityHeaders,
 } from './http.js';
-import { createPortalLink, handleWebhook, PortalError } from './paddle.js';
-import { billingIdsFor, pruneExpired } from './store.js';
+import { handleWebhook } from './paddle.js';
+import { hasCustomer, pruneExpired } from './store.js';
 
 // Served to anyone: the sign-in pages and what they need to look right. Not
 // the app's scripts.
@@ -114,18 +114,14 @@ export function createWorker({ now = Date.now } = {}) {
             requireSameOrigin(request, config.appOrigin);
             const session = await currentSession(deps, request);
             if (!session) return json({ ok: false, error: 'signed_out' }, 401);
-            const ids = await billingIdsFor(env.DB, session.email);
-            if (!ids) return json({ ok: false, error: 'no_billing' }, 404);
-            try {
-                const url = await createPortalLink({
-                    apiBase: config.paddleApiBase, apiKey: env.PADDLE_API_KEY, ...ids,
-                });
-                return json({ ok: true, url });
-            } catch (e) {
-                if (!(e instanceof PortalError)) throw e;
-                console.error('[billing] portal link failed:', e.message);
+            if (!(await hasCustomer(env.DB, session.email))) return json({ ok: false, error: 'no_billing' }, 404);
+            // Paddle's portal signs the customer in itself, by a code sent to
+            // their email, so the link is the same for everyone.
+            if (!config.portalUrl) {
+                console.error('[billing] PADDLE_PORTAL_URL is not set to an https link');
                 return json({ ok: false, error: 'billing_unavailable' }, 502);
             }
+            return json({ ok: true, url: config.portalUrl });
         }
 
         return json({ ok: false, error: 'not_found' }, 404);

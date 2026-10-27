@@ -34,7 +34,6 @@ html[data-theme="dark"],
     --accent-neutral-border: var(--stroke-medium);
     --accent-gray:           var(--color-base-600);
     --accent-gray-hover:     var(--color-base-500);
-    --toggle-on:             var(--color-base-400);
 
     --node-active-ring: #fff;
 
@@ -63,6 +62,7 @@ html[data-theme="dark"],
     --role-debt:     #d8777f;
     --role-modifier: #8053a4;
     --role-none:     var(--color-base-500);
+    --role-person:   var(--color-base-300);
 
     --chart-growth:   #6991dc;
     --chart-interest: #bc4a41;
@@ -85,4 +85,18 @@ html[data-theme="dark"],
     --chart-debt-5: color-mix(in srgb, #f0525e 70%, black);
     --chart-debt-6: color-mix(in srgb, #f0525e 40%, white);
     --chart-worth-line: #fff;
+
+    /* The Sankey: Manage's dark ramps (see style.css). */
+    --chart-inflow-1: #147a5a;
+    --chart-inflow-2: #1a9163;
+    --chart-inflow-3: #23a86c;
+    --chart-inflow-4: #3fbe7c;
+    --chart-inflow-5: #64d194;
+    --chart-inflow-6: #8ee0b0;
+    --chart-outflow-1: #c8a110;
+    --chart-outflow-2: #d7b227;
+    --chart-outflow-3: #e4c449;
+    --chart-outflow-4: #efd777;
+    --chart-outflow-5: #f7e6a8;
+    --chart-net:       #5f6265;
 }

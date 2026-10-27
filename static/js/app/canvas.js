@@ -94,6 +94,7 @@
     const zoomLabel = stage.querySelector('.zoom-level');
     const undoBtn = stage.querySelector('[data-act="undo"]');
     const redoBtn = stage.querySelector('[data-act="redo"]');
+    const inspectorBtn = stage.querySelector('[data-act="inspector"]');
     const timeIsland = stage.querySelector('.island--time');
     const timeLabel = timeIsland.querySelector('span');
     const emptyEl = stage.querySelector('.canvas-empty');
@@ -238,10 +239,17 @@
         return { value: net * (C.PER_MONTH[p.per] || 1), unit: '/mo' };
     }
 
-    function figure(node, role, nr, vp) {
+    function figure(node, role, nr, vp, plan) {
         const out = { value: '', unit: '', delta: '', deltaDir: '', negative: false, done: false };
         if (!nr || !vp) return out;
-        if (role === 'account') {
+        if (role === 'person') {
+            // Their net worth at the point shown, and how old they are then.
+            const v = nr.worth[vp.k];
+            out.value = Fmt.money(v, { compact: Math.abs(v) >= 1e6 });
+            out.negative = v < -0.005;
+            const age = P.ageAt(node, P.ymAdd(plan.settings.start, vp.k));
+            out.unit = age == null ? 'net worth' : `at ${age}`;
+        } else if (role === 'account') {
             const v = nr.balance[vp.k];
             out.value = Fmt.money(v, { compact: v >= 1e6 });
             // Only what the account has earned, not what flowed in or out of it.
@@ -277,12 +285,12 @@
                 out.unit = '/mo';
             }
         } else {
-            // Spending and a budget group show what reaches them; a card or a
-            // match shows what it adds; a tax or fee shows what it takes.
+            // Spending and a budget group show what reaches them; a tax or fee
+            // shows what it takes.
             const kind = C.preset(node.type).kind;
-            const series = role === 'expense' || kind === 'group' ? nr.inflow : kind === 'skim' ? nr.consumed : nr.produced;
+            const series = role === 'expense' || kind === 'group' ? nr.inflow : nr.consumed;
             const v = vp.all ? avg(series) : series[vp.month];
-            out.value = (role === 'modifier' && kind === 'match' && v >= 0.5 ? '+' : '') + Fmt.money(v);
+            out.value = Fmt.money(v);
             out.unit = '/mo';
         }
         return out;
@@ -292,7 +300,7 @@
     function barSegments(node, role, nr, frame) {
         const { res, vp } = frame;
         // Spending and income carry no balance, so they get no bar (see .node-bar in canvas.css).
-        if (!nr || !vp || role === 'expense' || role === 'source') return [];
+        if (!nr || !vp || role === 'expense' || role === 'source' || role === 'person') return [];
         const upto = vp.all ? res.months : Math.max(1, vp.k);
         const sumTo = (arr) => { let s = 0; for (let i = 0; i < upto && i < arr.length; i++) s += arr[i]; return s; };
         if (role === 'account') {
@@ -308,7 +316,7 @@
             return [{ role: 'growth', w: paid, label: 'Paid off' }, { role: 'owed', w: peak - paid, label: 'Owed' }];
         }
         const segs = [];
-        if (nr.consumed && C.preset(node.type).kind !== 'match') {
+        if (nr.consumed) {
             const spent = sumTo(nr.consumed);
             if (spent > 0) segs.push({ role, w: spent, label: 'Used' });
         }
@@ -443,7 +451,7 @@
         put(view, 'meta', D.nodeMeta(node), (t) => { view.meta.textContent = t; });
 
         const nr = res && res.nodes[node.id];
-        const f = figure(node, role, nr, vp);
+        const f = figure(node, role, nr, vp, plan);
         put(view, 'value', f.value, (t) => { view.value.textContent = t; });
         put(view, 'neg', f.negative, (v) => view.value.classList.toggle('is-negative', v));
         put(view, 'unit', f.unit, (t) => { view.unit.textContent = t; });
@@ -507,8 +515,13 @@
         label.type = 'button';
         label.className = 'link-label';
         label.dataset.link = link.id;
+        // The dollars, then the rule behind them in parentheses: '$1,200/mo (20%)'.
+        const amount = document.createElement('span');
+        const rule = document.createElement('span');
+        rule.className = 'link-rule';
+        label.append(amount, rule);
         labelLayer.appendChild(label);
-        return { g, path, flow, hit, label, sig: {} };
+        return { g, path, flow, hit, label, amount, rule, sig: {} };
     }
 
     /** How far each link moves off the port's centre: nothing for a pair's
@@ -548,18 +561,32 @@
             view.label.style.top = `${c.mid.y}px`;
         });
 
+        // A person's link names what is theirs: drawn dashed, with no money or label.
+        const person = link.basis === 'person';
+        put(view, 'person', person, (on) => {
+            view.g.classList.toggle('is-person', on);
+            view.flow.classList.toggle('is-person', on);
+            view.label.hidden = on;
+        });
         const lr = res && res.links[link.id];
         const amount = !lr || !vp ? 0 : vp.all ? lr.avg : lr.flow[vp.month];
-        const idle = !lr || lr.total < 0.005;
+        const idle = !person && (!lr || lr.total < 0.005);
         put(view, 'idle', idle, () => {
             view.g.classList.toggle('is-idle', idle);
             view.flow.classList.toggle('is-idle', idle);
         });
 
-        const text = vp && !vp.all ? Fmt.money(amount, { compact: amount >= 1e4 }) : D.linkShort(link, from);
-        put(view, 'text', text, (t) => { view.label.textContent = t; });
+        // Before the first run there are no dollars yet, only the rule.
+        const figure = lr && vp ? D.linkFigure(link, from, amount, vp.all) : { amount: D.linkShort(link, from), rule: null };
+        put(view, 'amount', figure.amount, (t) => { view.amount.textContent = t; });
+        put(view, 'rule', figure.rule, (t) => {
+            view.rule.textContent = t ? `(${t})` : '';
+            view.rule.hidden = !t;
+        });
         put(view, 'short', !!(lr && lr.short > 0.005), (v) => view.label.classList.toggle('is-short', v));
-        put(view, 'title', `${from.name} to ${to.name}`, (t) => view.label.setAttribute('aria-label', t));
+        const said = person ? `${to.name} is ${from.name}'s`
+            : `${from.name} to ${to.name}: ${figure.amount}${figure.rule ? ` (${figure.rule})` : ''}`;
+        put(view, 'title', said, (t) => view.label.setAttribute('aria-label', t));
 
         const selected = sel && sel.kind === 'link' && sel.id === link.id;
         const related = selected || (sel && sel.kind === 'node' && (link.from === sel.id || link.to === sel.id));
@@ -995,7 +1022,7 @@
         return sideToward(origin.x - (target.x + NODE_W / 2), origin.y - (target.y + NODE_H / 2));
     }
 
-    const PLURAL = { account: 'accounts', expense: 'spending', debt: 'debts', modifier: 'modifiers' };
+    const PLURAL = { source: 'income', account: 'accounts', expense: 'spending', debt: 'debts', modifier: 'modifiers' };
 
     /** Roles as a list in words: 'debts', 'accounts and debts', 'a, b and c'. */
     function rolesInWords(roles) {
@@ -1005,7 +1032,8 @@
 
     /** Why a link was refused, as what IS allowed. */
     function linkRuleText(fromRole, toRole) {
-        if (toRole === 'source') return 'Income has no input.';
+        if (toRole === 'person') return 'Nothing links into a person.';
+        if (toRole === 'source') return 'Only a person links to income.';
         return `${C.ROLES[fromRole].label} links only to ${rolesInWords(C.LINK_TARGETS[fromRole])}.`;
     }
 
@@ -1151,7 +1179,7 @@
         const s = Store.state.selection;
         if (!s) return;
         if (s.kind === 'node') removeNode(s.id);
-        else Store.removeLink(s.id);
+        else if (s.kind === 'link') Store.removeLink(s.id);
     }
 
     // Copied modules live here, so they paste into any open plan.
@@ -1293,6 +1321,8 @@
         } else if (c.type === 'results' || c.type === 'selection' || c.type === 'scrub') {
             // Picking anything else (a card, a link, the inspector) ends the group.
             if (c.type === 'selection' && Store.state.selection) group.clear();
+            // Picking a goal opens the inspector from outside this toolbar.
+            if (c.type === 'selection') inspectorBtn.setAttribute('aria-pressed', String(Inspector.isOpen()));
             render();
         }
     });

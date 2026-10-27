@@ -16,7 +16,7 @@ const cwd = new URL('..', import.meta.url).pathname;
 const env = { ...process.env, CI: '1', WRANGLER_SEND_METRICS: 'false', NO_COLOR: '1' };
 const state = fs.mkdtempSync(path.join(os.tmpdir(), 'prism-worker-smoke-'));
 // Settings passed on the command line, so no .dev.vars file is needed or read.
-const vars = ['APP_ORIGIN:http://127.0.0.1:8787', 'PADDLE_API_BASE:https://sandbox-api.paddle.com',
+const vars = ['APP_ORIGIN:http://127.0.0.1:8787',
     `PADDLE_WEBHOOK_SECRET:${SECRET}`, 'COMPLIMENTARY_EMAILS:test@example.com'].flatMap((v) => ['--var', v]);
 let failed = false;
 const check = (label, ok, extra = '') => { console.log(`${ok ? 'ok ' : 'FAIL'}  ${label}${ok ? '' : '  ' + extra}`); if (!ok) failed = true; };

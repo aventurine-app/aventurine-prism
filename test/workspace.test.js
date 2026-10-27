@@ -225,3 +225,65 @@ test('a failed put reports the error and can simply be sent again', async () => 
     await ws.putPlan(plan.id, edited);
     assert.equal(storage.snapshot().plans[0].name, 'Edited');
 });
+
+// ── Shared goals ─────────────────────────────────────────────────────────────
+
+const million = { ...Plan.createGoal({ name: 'First million', value: 1000000 }), id: 'g_million' };
+
+test('goals are stored beside the plans and come back after a reload', async () => {
+    const { ws, storage } = await open();
+    assert.deepEqual(ws.getGoals(), { goals: [] });
+    await ws.putGoals([million]);
+    assert.deepEqual(storage.snapshot().goals, [million]);
+    const { ws: again } = await open(storage);
+    assert.deepEqual(again.getGoals().goals, [million]);
+});
+
+test('the first load gathers the goals plans kept before goals were shared', async () => {
+    const a = samplePlan('A');
+    const b = samplePlan('B');
+    // Goals kept in plans, in the kinds from before goals were rules.
+    a.goals = [{ id: 'g_million', kind: 'net-worth', name: 'First million', target: 1000000, nodeId: a.nodes[1].id }];
+    b.goals = [{ id: 'g_again', kind: 'net-worth', name: 'First million', target: 1000000 }, { id: 'g_fi', kind: 'fi', name: 'FI', rate: 4 }];
+    const storage = createMemoryStorage({ plans: [a, b] });
+    const { ws } = await open(storage);
+    assert.deepEqual(ws.getGoals().goals.map((g) => g.name), ['First million', 'FI'], 'the same goal twice is kept once');
+    assert.deepEqual(ws.getGoals().goals.map((g) => g.metric), ['net-worth', 'savings'], 'and each is read as its rule');
+    assert.equal(storage.snapshot().goals.length, 2, 'the shared list is stored');
+    assert.equal('goals' in ws.getPlan(a.id), false, 'a plan keeps no goals');
+    // Once there is a shared list, a plan's leftover goals are not read again.
+    await ws.putGoals([]);
+    const { ws: again } = await open(storage);
+    assert.deepEqual(again.getGoals().goals, []);
+});
+
+test('importing an older plan file adds the goals it kept', async () => {
+    const { ws } = await open();
+    await ws.putGoals([million]);
+    const file = { ...samplePlan('Old'), goals: [{ ...million, id: 'g_dup' }, { id: 'g_free', kind: 'debt-free', name: 'Debt-free' }] };
+    await ws.importPlan(file);
+    assert.deepEqual(ws.getGoals().goals.map((g) => g.name), ['First million', 'Debt-free']);
+});
+
+test('putting goals checks them, and refuses a missing list', async () => {
+    const { ws, storage } = await open();
+    await rejectsWith(ws.putGoals([{ id: 'g_a', kind: 'someday' }]), 422);
+    await rejectsWith(ws.putGoals(undefined), 400);
+    assert.equal(storage.snapshot().goals.length, 0);
+});
+
+test('stored goals saved by a newer build are left alone and never saved over', async () => {
+    const storage = createMemoryStorage({ goals: [{ id: 'g_a', kind: 'someday', name: 'Later' }] });
+    const { ws } = await open(storage);
+    assert.deepEqual(ws.getGoals().goals, []);
+    await rejectsWith(ws.putGoals([million]), 409);
+    assert.equal(storage.snapshot().goals[0].kind, 'someday');
+});
+
+test('a failed goals write keeps the goals as they were', async () => {
+    const { ws, storage } = await open();
+    await ws.putGoals([million]);
+    storage.failNext = new Error('disk');
+    await rejectsWith(ws.putGoals([]), 500);
+    assert.deepEqual(ws.getGoals().goals, [million]);
+});

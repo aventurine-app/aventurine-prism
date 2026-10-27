@@ -37,6 +37,7 @@
             Store.redo();
         } else if (key === 't') {
             e.preventDefault();
+            Store.setWorkspace('plans');
             Store.newPlan();
         } else if (key === 'tab') {
             e.preventDefault();
@@ -47,9 +48,6 @@
         } else if (key === ',') {
             e.preventDefault();
             Settings.open();
-        } else if (key === 'f' && !typing(document.activeElement)) {
-            e.preventDefault();
-            Library.focusSearch();
         } else if (key === 's') {
             // Saving is automatic; Ctrl+S just makes it happen now.
             e.preventDefault();

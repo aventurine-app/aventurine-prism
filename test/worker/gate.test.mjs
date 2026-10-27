@@ -7,15 +7,21 @@ import test from 'node:test';
 import { hasAccess, summarize } from '../../worker/src/access.js';
 import { ConfigError, parseEmailList, readConfig } from '../../worker/src/config.js';
 import { createWorker } from '../../worker/src/index.js';
-import { createSite, ORIGIN, OWNER, subscriptionEvent } from './harness.mjs';
+import { createSite, ORIGIN, OWNER, PORTAL_URL, subscriptionEvent } from './harness.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
 const APP_CODE = 'secret app code';
 
 /** A signed-in browser for a customer whose subscription has `status`. */
 async function member(site, status = 'active', email = 'alice@example.com') {
-    await site.subscribe({ email, status });
-    return site.signIn(email);
+    await site.subscribe({ email });
+    const cookie = await site.signIn(email);
+    // Only access gets a sign-in link, so a lapsed member signed in while paid up.
+    if (status !== 'active') {
+        site.advance(1000);
+        await site.webhook(subscriptionEvent({ subscriptionId: 'sub_01alice', customerId: 'ctm_01alice', status, type: 'subscription.updated', at: site.iso() }));
+    }
+    return cookie;
 }
 
 // ── Signed out ─────────────────────────────────────────────────────────────
@@ -141,9 +147,9 @@ test('the owner on the complimentary list gets in with no subscription', async (
 test('one subscriber\'s cookie is not another\'s access', async (t) => {
     const site = createSite();
     t.after(site.restore);
-    const paying = await member(site, 'active', 'paying@example.com');
-    await site.subscribe({ email: 'lapsed@example.com', customerId: 'ctm_01lapsed', subscriptionId: 'sub_01lapsed', status: 'canceled' });
-    const lapsed = await site.signIn('lapsed@example.com');
+    await site.subscribe({ email: 'paying@example.com', customerId: 'ctm_01paying', subscriptionId: 'sub_01paying' });
+    const paying = await site.signIn('paying@example.com');
+    const lapsed = await member(site, 'canceled', 'lapsed@example.com');
     assert.equal((await site.call('/', { cookie: paying })).status, 200);
     assert.equal((await site.call('/', { cookie: lapsed })).status, 302);
 });
@@ -164,18 +170,13 @@ test('/api/me says who is signed in and what they have', async (t) => {
     assert.equal(me.complimentary, false);
 });
 
-test('the billing portal link comes from Paddle, for this customer only', async (t) => {
+test('the billing portal is Paddle\'s portal link, which asks Paddle nothing', async (t) => {
     const site = createSite();
     t.after(site.restore);
     const cookie = await member(site);
     const r = await site.call('/api/billing/portal', { method: 'POST', cookie, json: {} });
     assert.equal(r.status, 200);
-    assert.deepEqual(await r.json(), { ok: true, url: 'https://portal.example.test/overview?token=abc' });
-
-    const call = site.sent.paddle[0];
-    assert.equal(call.url, 'https://sandbox-api.paddle.com/customers/ctm_01alice/portal-sessions');
-    assert.equal(call.headers.Authorization, 'Bearer pdl_test_key');
-    assert.deepEqual(call.body, { subscription_ids: ['sub_01alice'] });
+    assert.deepEqual(await r.json(), { ok: true, url: PORTAL_URL });
 });
 
 test('the billing portal needs a session, our own origin, and a Paddle customer', async (t) => {
@@ -188,22 +189,21 @@ test('the billing portal needs a session, our own origin, and a Paddle customer'
 
     const owner = await site.signIn(OWNER);
     assert.equal((await site.call('/api/billing/portal', { method: 'POST', cookie: owner, json: {} })).status, 404);
-    assert.equal(site.sent.paddle.length, 0, 'Paddle was only asked for the real customer');
 });
 
-test('when Paddle cannot give a link the answer is a plain 502', async (t) => {
+test('with no usable portal link, only billing fails, with a plain 502', async (t) => {
     const site = createSite();
     t.after(site.restore);
     const cookie = await member(site);
     const original = console.error;
     console.error = () => {};
     try {
-        for (const reply of [{ status: 500, body: {} }, { status: 201, body: {} }, { status: 201, body: { data: { urls: { general: { overview: 'http://not-https.example' } } } } }]) {
-            site.paddleReply.status = reply.status;
-            site.paddleReply.body = reply.body;
+        for (const value of [undefined, '', 'not a url', 'http://customer-portal.paddle.com/cpl_x']) {
+            site.env.PADDLE_PORTAL_URL = value;
             const r = await site.call('/api/billing/portal', { method: 'POST', cookie, json: {} });
             assert.equal(r.status, 502);
             assert.deepEqual(await r.json(), { ok: false, error: 'billing_unavailable' });
+            assert.equal((await site.call('/', { cookie })).status, 200, 'the app still opens');
         }
     } finally {
         console.error = original;
@@ -258,7 +258,6 @@ test('if the database fails, the app stays locked and no detail leaks', async (t
 test('a misconfigured origin stops the worker instead of guessing', () => {
     assert.throws(() => readConfig({ APP_ORIGIN: 'http://app.example.com' }), ConfigError);
     assert.throws(() => readConfig({ APP_ORIGIN: 'not a url' }), ConfigError);
-    assert.throws(() => readConfig({ APP_ORIGIN: ORIGIN, PADDLE_API_BASE: 'https://evil.example' }), ConfigError);
     const local = readConfig({ APP_ORIGIN: 'http://127.0.0.1:8787' });
     assert.equal(local.secure, false);
     assert.equal(local.cookieName, 'prism_session');

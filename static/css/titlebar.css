@@ -1,11 +1,11 @@
 /* ============================================================================
-   titlebar.css — the bar across the top of the app: the logo, the plan tabs, the
-   import / export buttons and the signed-in user. Pure black in both themes, 40px.
+   titlebar.css — the bar across the top of the app: the logo, where the user
+   is (the workspace and its plan) and the signed-in user. Pure black in both
+   themes, 40px.
    ============================================================================ */
 
 /* The bar is black in both themes, so what sits on it uses light inks of its
-   own rather than the theme's text colours. (The selected tab is the canvas's
-   colour and keeps the theme's.) */
+   own rather than the theme's text colours. */
 :root {
     --titlebar-bg: #000;
     --titlebar-ink: var(--color-base-300);
@@ -24,8 +24,7 @@
     color: var(--titlebar-ink);
     user-select: none;
 }
-/* The gray rule along the bar's bottom edge. The tabs sit above it, so the
-   active tab's open bottom covers it and the tab joins the canvas. */
+/* The gray rule along the bar's bottom edge. */
 .titlebar::after {
     content: '';
     position: absolute;
@@ -36,7 +35,7 @@
     background: var(--stroke-divider);
 }
 
-/* As wide as the module library below, so the tabs start where the canvas does. */
+/* As wide as the navigation below, so the title starts where the workspace does. */
 .titlebar-lead {
     display: flex;
     align-items: center;
@@ -50,7 +49,7 @@
 .titlebar-icon {
     width: 22px;
     height: 22px;
-    /* Centred on the library's icon column (28px), expanded or collapsed. */
+    /* Centred on the navigation's icon column (28px), expanded or collapsed. */
     margin: 0 var(--space-8) 0 calc(28px - 11px);
     flex: none;
     pointer-events: none;
@@ -61,158 +60,20 @@
     min-width: var(--space-48);
 }
 
-/* ── Plan tabs ──────────────────────────────────────────────────────────── */
-.tabs {
-    display: flex;
-    align-items: flex-end;
-    gap: var(--space-4);
-    min-width: 0;
-    padding-top: var(--space-4);
-    /* The active tab's left border sits on the library's divider line, so the
-       tab and the canvas share one edge. */
-    margin-left: calc(-1 * var(--border-width));
-    position: relative;
-    z-index: 1;
-}
-
-.tabs-list {
-    display: flex;
-    align-items: flex-end;
-    gap: 2px;
-    min-width: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: none;
-}
-.tabs-list::-webkit-scrollbar { display: none; }
-
-.tab {
-    position: relative;
+/* ── Where the user is: the workspace, and the plan open in it ──────────── */
+.titlebar-title {
     display: flex;
     align-items: center;
     gap: var(--space-8);
-    width: 176px;
-    height: 36px;
-    flex: none;
-    padding: 0 var(--space-8) 0 var(--space-12);
-    border: 0;
-    border-radius: var(--radius-control) var(--radius-control) 0 0;
-    background: transparent;
-    color: var(--titlebar-ink);
-    font-size: var(--size-small);
-    font-weight: var(--weight-semibold);
-    cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
-}
-.tab:hover { background: var(--titlebar-frost); color: var(--titlebar-ink-strong); }
-.tab[aria-selected="true"] {
-    background: var(--background);
-    color: var(--text-primary);
-    border: var(--border-width) solid var(--stroke-divider);
-    background-clip: padding-box;
-    border-bottom: 0;
-}
-.tab:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
-
-.tab-name {
-    flex: 1;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    text-align: left;
-}
-
-.tab-rename {
-    flex: 1;
-    min-width: 0;
-    height: 24px;
-    padding: 0 var(--space-4);
-    border: var(--border-width) solid var(--accent-ring);
-    border-radius: 4px;
-    background: var(--surface1);
-    color: var(--text-primary);
-    font-size: var(--size-small);
-    font-weight: var(--weight-semibold);
-    outline: none;
-}
-
-.tab-menu {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    padding: 0;
-    border: 0;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--text-tertiary);
-    cursor: pointer;
-    opacity: 0;
-    transition: opacity 0.15s ease, background-color 0.15s ease;
-}
-.tab-menu .icon { width: 14px; height: 14px; }
-.tab:hover .tab-menu,
-.tab[aria-selected="true"] .tab-menu,
-.tab-menu:focus-visible,
-.tab-menu[aria-expanded="true"] { opacity: 1; }
-.tab-menu:hover { background: var(--frost-3); color: var(--text-primary); }
-.tab:not([aria-selected="true"]) .tab-menu { color: var(--titlebar-ink); }
-.tab:not([aria-selected="true"]) .tab-menu:hover { background: var(--titlebar-frost); color: var(--titlebar-ink-strong); }
-
-/* Dragging a tab to reorder it. */
-.tab.is-dragging { opacity: 0.5; }
-.tab.is-drop-before { box-shadow: inset 2px 0 0 var(--accent-primary); }
-.tab.is-drop-after  { box-shadow: inset -2px 0 0 var(--accent-primary); }
-
-.tab-new {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    align-self: center;
-    width: 28px;
-    height: 28px;
-    margin-left: var(--space-4);
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-control);
-    background: transparent;
-    color: var(--titlebar-ink);
-    cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
-}
-.tab-new .icon { width: 16px; height: 16px; }
-.tab-new:hover { background: var(--titlebar-frost); color: var(--titlebar-ink-strong); }
-.tab-new:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
-
-/* Import and export, right of the tabs. */
-.titlebar-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    padding: 0 var(--space-4) 0 var(--space-12);
-}
-.titlebar-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    height: 28px;
-    padding: 0 var(--space-8);
-    border: 0;
-    border-radius: var(--radius-control);
-    background: transparent;
+    padding-left: var(--space-16);
     color: var(--titlebar-ink);
     font-size: var(--size-small);
     font-weight: var(--weight-semibold);
     white-space: nowrap;
-    cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
 }
-.titlebar-btn .icon { width: 16px; height: 16px; }
-.titlebar-btn:hover:not(:disabled) { background: var(--titlebar-frost); color: var(--titlebar-ink-strong); }
-.titlebar-btn:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
-.titlebar-btn:disabled { opacity: 0.4; cursor: default; }
+.titlebar-sep { width: 12px; height: 12px; flex: none; opacity: 0.6; }
+.titlebar-plan { overflow: hidden; color: var(--titlebar-ink-strong); text-overflow: ellipsis; }
 
 /* The signed-in user, at the bar's right edge: a profile icon and the email. */
 .titlebar-user {
@@ -239,5 +100,5 @@
 .titlebar-user:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
 
 @media (prefers-reduced-motion: reduce) {
-    .tab, .tab-menu, .tab-new, .titlebar-btn, .titlebar-user { transition: none; }
+    .titlebar-user { transition: none; }
 }

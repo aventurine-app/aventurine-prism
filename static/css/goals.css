@@ -1,0 +1,308 @@
+/* ============================================================================
+   goals.css — the Goals workspace (goals-board.js): a card per goal, in a
+   solid colour of the user's choosing, its rule written as a sentence of
+   buttons and how each plan does against it, then the presets to start one
+   from. The page frame (.board-head, .board-body) is
+   shared with Compare.
+   ============================================================================ */
+
+.goals-board,
+.compare {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface1);
+}
+
+/* ── Page frame ─────────────────────────────────────────────────────────── */
+.board-head {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-16);
+    padding: var(--space-20) var(--space-24) var(--space-16);
+    border-bottom: var(--border-width) solid var(--stroke-divider);
+}
+.board-titles { flex: 1; min-width: 0; }
+.board-title {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: var(--size-h2);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--track-tighter);
+    line-height: var(--lh-tight);
+}
+.board-sub { margin: var(--space-4) 0 0; color: var(--text-secondary); font-size: var(--size-small); }
+.board-body {
+    flex: 1;
+    min-height: 0;
+    padding: var(--space-20) var(--space-24) var(--space-24);
+}
+
+/* ── Goal cards ─────────────────────────────────────────────────────────── */
+.board-goals {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    max-width: 880px;
+    margin: 0 0 var(--space-32);
+    padding: 0;
+    list-style: none;
+}
+/* Each card is a solid colour of the user's choosing (data-color), muted to
+   sit with the app's own teal. Every colour keeps white text at 5.2:1 on the
+   card and 7:1 on the darker controls inside it (WCAG formula), the same in
+   both themes, and marks a light chart at 4.7:1. */
+:root {
+    --goal-teal:   #36776f;
+    --goal-blue:   #496caa;
+    --goal-violet: #7a5eac;
+    --goal-rose:   #ac4d60;
+    --goal-orange: #9a5d3f;
+    --goal-green:  #407855;
+    --goal-slate:  #5d6e85;
+    /* What sits on a card: white, and darker washes of its colour. */
+    --goal-ink: #fff;
+    --goal-shade: rgba(0, 0, 0, 0.18);
+    --goal-shade-strong: rgba(0, 0, 0, 0.3);
+    --goal-line: rgba(255, 255, 255, 0.3);
+}
+
+/* A goal's colour where it marks a chart (Analyze's Net worth flags): its
+   card's colour on the light chart; on the dark one, a lighter shade of the
+   same muted hue, as the card colours would sink into it (5:1 instead). */
+:root {
+    --goal-teal-mark:   var(--goal-teal);
+    --goal-blue-mark:   var(--goal-blue);
+    --goal-violet-mark: var(--goal-violet);
+    --goal-rose-mark:   var(--goal-rose);
+    --goal-orange-mark: var(--goal-orange);
+    --goal-green-mark:  var(--goal-green);
+    --goal-slate-mark:  var(--goal-slate);
+}
+html[data-theme="dark"] {
+    --goal-teal-mark:   #44978c;
+    --goal-blue-mark:   #6b8ac0;
+    --goal-violet-mark: #967fbd;
+    --goal-rose-mark:   #c07382;
+    --goal-orange-mark: #bb7a59;
+    --goal-green-mark:  #52986b;
+    --goal-slate-mark:  #7a8ba2;
+}
+
+[data-color="teal"]   { --goal-color: var(--goal-teal); }
+[data-color="blue"]   { --goal-color: var(--goal-blue); }
+[data-color="violet"] { --goal-color: var(--goal-violet); }
+[data-color="rose"]   { --goal-color: var(--goal-rose); }
+[data-color="orange"] { --goal-color: var(--goal-orange); }
+[data-color="green"]  { --goal-color: var(--goal-green); }
+[data-color="slate"]  { --goal-color: var(--goal-slate); }
+
+/* The content keeps clear of the target at the card's left, so no text is
+   ever read over it. Sized to the app's controls: 28px buttons, 13px words. */
+.goal-card {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    padding: var(--space-12) var(--space-16) var(--space-12) 80px;
+    border-radius: var(--radius-panel);
+    background: var(--goal-color, var(--goal-teal));
+    color: var(--goal-ink);
+}
+/* The target, large and faint, cut off by the card's left edge. */
+.goal-wm {
+    position: absolute;
+    z-index: -1;
+    top: 50%;
+    left: -26px;
+    width: 104px;
+    height: 104px;
+    color: var(--goal-ink);
+    opacity: 0.16;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+.goal-wm .icon { width: 100%; height: 100%; }
+/* A goal just added: a ring that fades, so the eye finds it. */
+.goal-card.is-new { animation: goal-new 1.6s ease; }
+@keyframes goal-new {
+    from { box-shadow: 0 0 0 3px var(--accent-ring); }
+    to { box-shadow: 0 0 0 3px transparent; }
+}
+/* On a coloured card the accent focus ring would vanish into it; white does not. */
+.goal-card :focus-visible { outline: 2px solid var(--goal-ink); outline-offset: 2px; }
+
+.goal-card-head { display: flex; align-items: center; gap: var(--space-4); }
+/* The name reads as a title, and edits in place. */
+.goal-name {
+    flex: 1;
+    min-width: 0;
+    height: 28px;
+    margin-left: calc(-1 * var(--space-8));
+    padding: 0 var(--space-8);
+    border: var(--border-width) solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--goal-ink);
+    font-size: var(--size-body);
+    font-weight: var(--weight-semibold);
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.goal-name:hover { border-color: var(--goal-line); }
+.goal-name:focus { border-color: var(--goal-ink); background: var(--goal-shade); outline: none; }
+.goal-name::selection { background: rgba(255, 255, 255, 0.35); }
+/* The card's own buttons: its colour, and delete. */
+.goal-tool {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--goal-ink);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+.goal-tool .icon { width: 16px; height: 16px; }
+.goal-tool:hover,
+.goal-tool[aria-expanded="true"] { background: var(--goal-shade); }
+.goal-tool:active { background: var(--goal-shade-strong); }
+
+/* ── The rule: a sentence whose parts are buttons ───────────────────────── */
+.rule {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-8);
+    margin: 0;
+    font-size: var(--size-small);
+}
+.rule-word { color: var(--goal-ink); }
+.rule-tok {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+    height: 28px;
+    padding: 0 var(--space-8) 0 10px;
+    border: var(--border-width) solid var(--goal-line);
+    border-radius: var(--radius-sm);
+    background: var(--goal-shade);
+    color: var(--goal-ink);
+    font-size: var(--size-small);
+    font-weight: var(--weight-semibold);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.rule-tok:hover { border-color: rgba(255, 255, 255, 0.6); background: var(--goal-shade-strong); }
+.rule-tok:active { background: rgba(0, 0, 0, 0.36); }
+.rule-tok[aria-expanded="true"] { border-color: var(--goal-ink); box-shadow: 0 0 0 1px var(--goal-ink); }
+.rule-tok-caret { width: 12px; height: 12px; color: var(--goal-ink); opacity: 0.8; }
+/* The measure leads the sentence: white, in the card's colour. */
+.rule-tok[data-tok="metric"] { border-color: var(--goal-ink); background: var(--goal-ink); color: var(--goal-color); }
+.rule-tok[data-tok="metric"]:hover { background: rgba(255, 255, 255, 0.88); }
+.rule-tok[data-tok="metric"] .rule-tok-caret { color: var(--goal-color); opacity: 1; }
+/* No deadline is the quiet default. */
+.rule-tok.is-quiet { border-style: dashed; border-color: rgba(255, 255, 255, 0.6); background: transparent; font-weight: var(--weight-medium); }
+
+/* The panels a target, an age and a colour open (UI.popover gives the surface). */
+.rule-pop { width: 280px; }
+.rule-units { display: flex; }
+.rule-units .segctl-btn { flex: 1; justify-content: center; }
+.rule-pop-field { display: flex; align-items: center; gap: var(--space-8); color: var(--text-secondary); font-size: var(--size-small); }
+.rule-pop-field .field-affix { flex: 1; }
+.rule-pop-hint { margin: 0; color: var(--text-tertiary); font-size: var(--size-micro); line-height: var(--lh-normal); }
+.color-pop { width: auto; min-width: 0; }
+.swatches { display: grid; grid-template-columns: repeat(7, 32px); gap: var(--space-8); }
+.swatch {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--goal-color);
+    color: var(--goal-ink);
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.swatch .icon { width: 16px; height: 16px; visibility: hidden; }
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--surface1), 0 0 0 4px var(--text-primary); }
+.swatch[aria-pressed="true"] .icon { visibility: visible; }
+.swatch:hover { transform: scale(1.1); }
+.swatch:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 3px; }
+
+/* How each plan does: a chip per plan. On a coloured card the tone's colour
+   would not hold up, so the icon's shape carries it (a check, a warning, an
+   hourglass), with the words. */
+.board-plans { display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-8); }
+.board-plans:empty { display: none; }
+.board-plan {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    height: 24px;
+    padding: 0 var(--space-8);
+    border-radius: var(--radius-pill);
+    background: var(--goal-shade);
+    color: var(--goal-ink);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-semibold);
+}
+.board-plan .icon { width: 14px; height: 14px; flex: none; }
+.board-plan-name { overflow: hidden; font-weight: var(--weight-bold); text-overflow: ellipsis; white-space: nowrap; }
+.board-plan-when { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.board-empty {
+    max-width: 880px;
+    margin: 0 0 var(--space-32);
+    padding: var(--space-20);
+    border: var(--border-width) dashed var(--border);
+    border-radius: var(--radius-panel);
+    text-align: center;
+}
+.board-empty-title { margin: 0; color: var(--text-primary); font-size: var(--size-h3); font-weight: var(--weight-semibold); }
+.board-empty-text { margin: var(--space-4) 0 0; color: var(--text-secondary); font-size: var(--size-small); }
+
+/* ── Presets: rules to start a goal from ────────────────────────────────── */
+.board-presets { max-width: 880px; }
+.board-presets .eyebrow { margin: 0 0 var(--space-12); }
+.board-preset-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: var(--space-8);
+}
+.board-preset {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-12);
+    padding: var(--space-12);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-panel);
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.board-preset:hover { border-color: var(--stroke-strong); background: var(--frost-2); }
+.board-preset:active { background: var(--frost-3); }
+.board-preset:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; }
+.board-preset-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.board-preset-name { color: var(--text-primary); font-size: var(--size-small); font-weight: var(--weight-semibold); }
+.board-preset-hint { color: var(--text-secondary); font-size: var(--size-micro); line-height: var(--lh-snug); }
+
+@media (prefers-reduced-motion: reduce) {
+    .board-preset, .goal-name, .goal-tool, .rule-tok, .swatch { transition: none; }
+    .swatch:hover { transform: none; }
+    .goal-card.is-new { animation: none; }
+}

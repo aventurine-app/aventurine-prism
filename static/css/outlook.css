@@ -1,33 +1,18 @@
 /* ============================================================================
-   outlook.css — the results panel under the canvas: the headline figures, the
-   charts (net worth, cash flow) and the tables. Hovering a chart scrubs the
-   whole plan to that month; the canvas cards follow.
+   outlook.css — the Analyze workspace: the header row (view tabs, plan
+   dropdown, plan length), the charts (net worth, cash flow, Sankey, goals) and the tables. Hovering a
+   chart scrubs the plan to that month.
    ============================================================================ */
 
 .outlook {
     position: relative;
     container-type: inline-size;
-    flex-shrink: 0;
-    height: var(--outlook-h, 300px);
+    flex: 1;
+    min-height: 0;
     display: flex;
     background: var(--surface1);
-    border-top: var(--border-width) solid var(--stroke-divider);
 }
-.outlook.is-collapsed { height: 48px; }
-.outlook.is-collapsed .outlook-body { display: none; }
-/* Collapsed, the headline column keeps just the net worth figure. */
-.outlook.is-collapsed .kpis {
-    justify-content: center;
-    padding-top: 0;
-    padding-bottom: 0;
-    overflow: hidden;
-}
-.outlook.is-collapsed .kpis > :not(.kpi-hero),
-.outlook.is-collapsed .kpi-hero > :not(.kpi-hero-value) { display: none; }
-.outlook.is-collapsed .kpi-hero-value { font-size: var(--size-body); }
 
-/* The headline column runs the panel's full height; the view tabs sit above
-   the chart, in the column beside it. */
 .outlook-main {
     flex: 1;
     min-width: 0;
@@ -35,42 +20,41 @@
     flex-direction: column;
 }
 
-.outlook-grip {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: -5px;
-    z-index: 6;
-    height: 10px;
-    cursor: ns-resize;
-}
-.outlook-grip::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 3px;
-    height: 4px;
-    background: var(--accent-primary);
-    opacity: 0;
-    transition: opacity 0.15s ease;
-}
-.outlook-grip:hover::after,
-.outlook.is-resizing .outlook-grip::after { opacity: 1; }
-.outlook.is-collapsed .outlook-grip { display: none; }
-
+/* View tabs on the left, the plan dropdown centred in the row, the plan
+   length on the right. The dropdown is the one to give up width when the
+   row runs short. */
 .outlook-head {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr minmax(0, 220px) 1fr;
     align-items: center;
     gap: var(--space-12);
     height: 48px;
     flex-shrink: 0;
-    padding: 0 var(--space-12) 0 0;
     border-bottom: var(--border-width) solid var(--stroke-divider);
 }
-/* The tabs start at the headline column's divider, which is their left edge. */
-.outlook-head .segctl--rules { border-left: 0; }
-.outlook-spacer { flex: 1; }
+/* The view tabs: rounded buttons in one rounded track, inset from the
+   panel's left edge as far as the plan length is from its right. */
+.outlook-views { justify-self: start; margin-left: var(--space-12); }
+/* The plan dropdown: a field showing the open plan, which opens a menu of
+   every plan (outlook.js). */
+.plan-pick {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    width: 100%;
+    text-align: left;
+}
+.plan-pick .icon { width: 16px; height: 16px; flex: none; color: var(--text-secondary); }
+.plan-pick .plan-pick-caret { width: 14px; height: 14px; color: var(--text-tertiary); }
+.plan-pick-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-pick:focus-visible { border-color: var(--accent-ring); }
+.outlook-length {
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    margin-right: var(--space-12);
+}
 .outlook-label {
     color: var(--text-tertiary);
     font-size: var(--size-micro);
@@ -84,60 +68,6 @@
     min-height: 0;
     display: flex;
 }
-
-/* ── Headline figures ───────────────────────────────────────────────────── */
-.kpis {
-    width: 272px;
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-16);
-    padding: var(--space-16) var(--space-20);
-    border-right: var(--border-width) solid var(--stroke-divider);
-}
-.kpi-hero { display: flex; flex-direction: column; gap: var(--space-4); }
-.kpi-hero-value {
-    color: var(--text-primary);
-    font-family: var(--font-numeric);
-    font-size: 1.875rem;
-    font-weight: var(--weight-medium);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: var(--track-tighter);
-    line-height: var(--lh-tight);
-}
-.kpi-hero-delta {
-    font-size: var(--size-small);
-    font-weight: var(--weight-bold);
-    font-variant-numeric: tabular-nums;
-}
-.kpi-hero-delta.is-up { color: var(--accent-positive); }
-.kpi-hero-delta.is-down { color: var(--accent-negative); }
-.kpi-hero-range {
-    color: var(--text-tertiary);
-    font-size: var(--size-small);
-    font-variant-numeric: tabular-nums;
-}
-.kpi-list { display: flex; flex-direction: column; gap: var(--space-8); margin: 0; }
-.kpi-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: var(--space-8);
-    font-size: var(--size-small);
-}
-.kpi-row dt { color: var(--text-secondary); }
-.kpi-group { display: flex; flex-direction: column; gap: var(--space-8); }
-.kpi-head {
-    margin: 0;
-    padding-bottom: var(--space-4);
-    border-bottom: var(--border-width) solid var(--stroke-divider);
-    color: var(--text-tertiary);
-    font-size: var(--size-micro);
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--track-wide);
-    text-transform: uppercase;
-}
-.kpi-row dd { margin: 0; color: var(--text-primary); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; }
 
 /* ── Chart ──────────────────────────────────────────────────────────────── */
 .chart-pane {
@@ -163,51 +93,6 @@
     padding-top: 3px;
 }
 
-/* A small on/off switch with its label. */
-.toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-8);
-    flex-shrink: 0;
-    height: 24px;
-    padding: 0 var(--space-4);
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: var(--size-micro);
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--track-wide);
-    white-space: nowrap;
-    cursor: pointer;
-}
-.toggle:hover { color: var(--text-primary); }
-.toggle:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; }
-.toggle-track {
-    position: relative;
-    width: 28px;
-    height: 16px;
-    border-radius: var(--radius-pill);
-    background: var(--surface4);
-    transition: background-color 0.15s ease;
-}
-.toggle-track::after {
-    content: '';
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: #fff;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-    transition: transform 0.15s ease;
-}
-.toggle[aria-pressed="true"] .toggle-track { background: var(--toggle-on); }
-.toggle[aria-pressed="true"] .toggle-track::after { transform: translateX(12px); }
-@media (prefers-reduced-motion: reduce) {
-    .toggle-track, .toggle-track::after { transition: none; }
-}
 .chart-legend-item {
     display: inline-flex;
     align-items: center;
@@ -303,32 +188,80 @@
 .outlook-table .cell-name { display: inline-flex; align-items: center; gap: var(--space-8); }
 .outlook-table .is-negative { color: var(--accent-negative); }
 
-/* Narrow panels: the header row gives things up, least useful first, so it
-   always fits beside the headline column instead of running into the
-   inspector. Each step leaves ~15px spare over what was measured: the full
-   row needs 692px beside a 272px column, 654px without "Over", and 451px
-   with icon-only view tabs (a 1440px window with the inspector open gives
-   the panel 916px). */
-@container (max-width: 980px) {
+/* Narrow windows: the header row gives things up, least useful first, so the
+   dropdown stays centred. Measured with the five view tabs and seven length
+   chips, keeping it centred takes ~1122px with full view tabs, ~898px with
+   text-only ones, ~890px with icon-only ones and ~814px without "Over" too.
+   Below that the dropdown sits off centre, then narrows. A 1440px window with
+   the navigation open gives Analyze 1216px, which keeps everything. */
+@container (max-width: 1121px) and (min-width: 898px) {
+    .outlook-views .segctl-btn { padding: 0 var(--space-8); }
+    .outlook-views .segctl-btn .icon { display: none; }
+}
+@container (max-width: 889px) {
     .outlook-label { display: none; }
-    .kpis { width: 232px; padding-inline: var(--space-16); }
 }
-@container (max-width: 900px) {
+@container (max-width: 897px) {
     /* Each view tab keeps its name as its aria-label and title. */
-    .outlook-head .segctl--rules .segctl-btn span { display: none; }
-}
-@container (max-width: 700px) {
-    .kpis { display: none; }
+    .outlook-views .segctl-btn { padding: 0 var(--space-12); }
+    .outlook-views .segctl-btn span { display: none; }
 }
 
-/* A compared plan's net worth: dashed, behind the active plan's line. */
-.chart-ghost { stroke-width: 2; stroke-dasharray: 6 5; }
-.chart-ghost-halo { stroke: var(--surface1); stroke-width: 5; opacity: 0.85; }
-.chart-legend-item i.is-dashed {
-    height: 0;
-    border-top: 2px dashed var(--swatch);
-    background: none;
-    border-radius: 0;
+/* A goal met (chart.js markers): a dashed rule in the goal's chart shade
+   (--goal-*-mark), hanging from a rounded badge in its card colour with a
+   white target and label, the pairing the cards are made for (goals.css). */
+.chart-marker { stroke: currentColor; stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.7; }
+.chart-marker-icon { fill: var(--goal-ink); overflow: visible; }
+.chart-marker-label {
+    fill: var(--goal-ink);
+    font-size: 11px;
+    font-weight: var(--weight-semibold);
 }
-.compare-btn .icon { width: 14px; height: 14px; }
-.compare-btn[aria-pressed="true"] { color: var(--text-primary); }
+
+/* ── Sankey (sankey.js) ─────────────────────────────────────────────────────
+   Styled after Aventurine Manage's Cash Flow Sankey (forecast.css there).
+   Ribbons rest translucent; a band that stands for a module brightens under
+   the pointer or keyboard focus, since clicking it selects that module. The
+   others (Saved, Other, the middle channel) hold still: brightening would
+   offer a click with nowhere to go. Their tooltips still show. */
+/* No y-axis to clear, so the span picker lines up with the diagram's edge. */
+.chart-pane.is-sankey .chart-top { padding-left: 0; }
+.span-btn .icon { width: 14px; height: 14px; }
+.span-btn span { font-variant-numeric: tabular-nums; }
+
+.sankey .sankey-link { opacity: 0.42; transition: opacity 0.15s ease; }
+.sankey .is-pickable { cursor: pointer; }
+.sankey .is-pickable:hover .sankey-link,
+.sankey .is-pickable:focus-visible .sankey-link { opacity: 0.72; }
+.sankey .is-pickable:focus { outline: none; }
+.sankey .is-pickable:focus-visible .sankey-link { stroke: var(--accent-ring); stroke-width: 1.5; }
+
+/* Thin connector from a bar to a label that was moved off its centreline. */
+.sankey .sankey-leader { fill: none; stroke: var(--text-tertiary); stroke-width: 1; opacity: 0.45; }
+
+/* Name, amount and share all take the full text colour: they float over the
+   ribbons, where a muted tone reads poorly. */
+.sankey .sankey-label {
+    fill: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: var(--weight-semibold);
+    letter-spacing: 0.03em;
+}
+.sankey .sankey-amount {
+    fill: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: var(--weight-bold);
+    font-variant-numeric: tabular-nums;
+}
+.sankey .sankey-share { font-size: 10px; font-weight: var(--weight-regular); }
+.sankey .sankey-empty { fill: var(--text-tertiary); font-size: var(--size-small); }
+
+/* Fade in when the view opens; redraws on edits and resizes do not. */
+.sankey.sankey-enter { animation: sankey-fade 0.5s ease both; }
+@keyframes sankey-fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+    .sankey .sankey-link { transition: none; }
+    .sankey.sankey-enter { animation: none; }
+}

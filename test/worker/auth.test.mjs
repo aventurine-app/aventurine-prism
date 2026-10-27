@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createWorker } from '../../worker/src/index.js';
-import { createSite, ORIGIN, OWNER } from './harness.mjs';
+import { createSite, customerEvent, ORIGIN, OWNER, subscriptionEvent } from './harness.mjs';
 
 const MINUTE = 60 * 1000;
 const DAY = 24 * 60 * MINUTE;
@@ -54,6 +54,35 @@ test('the answer is the same for a customer and a stranger, and a stranger is se
     assert.equal(site.sent.emails.length, 1, 'only the customer was emailed');
     assert.deepEqual(site.sent.emails[0].to, ['alice@example.com']);
     assert.equal(site.db.sqlite.prepare('SELECT COUNT(*) AS n FROM login_tokens').get().n, 1);
+});
+
+test('a link goes only to a subscription that grants access', async (t) => {
+    const site = createSite();
+    t.after(site.restore);
+    for (const status of ['active', 'trialing', 'past_due', 'paused', 'canceled']) {
+        await site.subscribe({ email: `${status}@example.com`, customerId: `ctm_01${status.replace('_', '')}`, subscriptionId: `sub_01${status.replace('_', '')}`, status });
+    }
+    // Paddle creates the customer as soon as an email is typed into checkout.
+    await site.webhook(customerEvent({ customerId: 'ctm_01leftcheckout', email: 'left@example.com', at: site.iso() }));
+
+    const answers = [];
+    for (const email of ['active', 'trialing', 'past_due', 'paused', 'canceled', 'left'].map((s) => `${s}@example.com`)) {
+        const r = await requestLink(site, email);
+        answers.push([r.status, await r.json()]);
+    }
+    assert.deepEqual(site.sent.emails.map((m) => m.to[0]), ['active@example.com', 'trialing@example.com', 'past_due@example.com']);
+    assert.ok(answers.every((a) => JSON.stringify(a) === JSON.stringify(answers[0])), 'every caller gets the same answer');
+});
+
+test('a lapsed customer who subscribes again can sign in again', async (t) => {
+    const site = createSite();
+    t.after(site.restore);
+    await site.subscribe({ email: 'alice@example.com', status: 'canceled' });
+    await requestLink(site, 'alice@example.com');
+    assert.equal(site.sent.emails.length, 0);
+    await site.webhook(subscriptionEvent({ subscriptionId: 'sub_01second', customerId: 'ctm_01alice', status: 'active', at: site.iso(1000) }));
+    await requestLink(site, 'alice@example.com');
+    assert.equal(site.sent.emails.length, 1);
 });
 
 test('an address with different capitals or spaces still finds the customer', async (t) => {

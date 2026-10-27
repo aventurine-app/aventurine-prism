@@ -1,9 +1,10 @@
 'use strict';
 
 // ─── workspace.js ───────────────────────────────────────────────────────────
-// The user's plans, kept in memory and mirrored to browser storage. It answers
-// the app's questions about them (list, get, add, put, delete, reorder), so the
-// app's code does not know where plans live.
+// The user's plans and the goals they share, kept in memory and mirrored to
+// browser storage. It answers the app's questions about them (list, get, add,
+// put, delete, reorder; get and put the goals), so the app's code does not know
+// where they live.
 //
 // Reads are synchronous and come from memory. Writes are async functions: they
 // validate and update memory right away, start the storage write in the same
@@ -12,11 +13,17 @@
 // fails, add, delete and reorder undo their memory change; a failed put is left
 // for the caller to retry, which the store does.
 //
-// Storage holds one record per plan plus the tab order, so saving an edit
-// writes one plan, not all of them. A stored plan that fails validation (say,
-// one saved by a newer build) is left untouched in storage and only counted.
+// Storage holds one record per plan plus the tab order and the goal list, so
+// saving an edit writes one plan, not all of them. A stored plan that fails
+// validation (say, one saved by a newer build) is left untouched in storage
+// and only counted; stored goals that fail it are left alone too, and goals
+// are not saved over them.
 //
-// `storage` is { load() -> { plans, meta }, write({ put, remove, meta }) }.
+// Goals were once kept in each plan. The first load with no shared list
+// gathers them from the plans into one (Plan.legacyGoals, Plan.mergeGoals),
+// and importing an older plan file adds its goals the same way.
+//
+// `storage` is { load() -> { plans, meta, goals }, write({ put, remove, meta, goals }) }.
 // Dual-environment: window.PrismWeb.createWorkspace in the page, CommonJS for
 // tests, which pass an in-memory storage.
 
@@ -47,6 +54,8 @@
         let order = [];
         let active = null;
         let unreadable = 0;
+        let goals = [];
+        let goalsUnreadable = false;
 
         const stamp = () => clock().toISOString();
         const tabMeta = () => ({ order: order.slice(), active });
@@ -70,6 +79,17 @@
             }
         }
 
+        /** A plan's own goals, from before goals were shared. A malformed list
+         *  is skipped: it is not worth refusing the plan over. */
+        function legacyOf(raw) {
+            try {
+                return Plan.legacyGoals(raw);
+            } catch (e) {
+                logger.warn('[workspace] a plan\'s old goals were left unread:', e.message);
+                return [];
+            }
+        }
+
         function find(id) {
             const p = plans.get(id);
             if (!p) throw new ApiError('plan not found', 404);
@@ -81,9 +101,11 @@
         async function init() {
             const stored = await storage.load();
             const readable = [];
+            let legacy = [];
             for (const raw of stored.plans) {
                 try {
                     readable.push(Plan.validatePlan(raw));
+                    legacy = Plan.mergeGoals(legacy, legacyOf(raw));
                 } catch (e) {
                     unreadable += 1;
                     logger.warn('[workspace] a stored plan was left unread:', e.message);
@@ -103,6 +125,23 @@
             }
             for (const p of readable) if (!seen.has(p.id)) order.push(p.id);
             active = stored.meta && order.includes(stored.meta.active) ? stored.meta.active : (order[0] || null);
+
+            if (stored.goals == null) {
+                // Goals are shared from now on: start the list from the plans' own.
+                goals = legacy;
+                try {
+                    await storage.write({ goals });
+                } catch (e) {
+                    logger.error('[workspace] the shared goals could not be stored yet:', e);
+                }
+            } else {
+                try {
+                    goals = Plan.validateGoals(stored.goals);
+                } catch (e) {
+                    goalsUnreadable = true;
+                    logger.warn('[workspace] the stored goals were left unread:', e.message);
+                }
+            }
         }
 
         // ── Reads ──────────────────────────────────────────────────────────
@@ -117,6 +156,10 @@
 
         function status() {
             return { storage: 'browser', busy: false, plans: plans.size, quarantined: unreadable };
+        }
+
+        function getGoals() {
+            return { goals };
         }
 
         // ── Writes ─────────────────────────────────────────────────────────
@@ -139,9 +182,31 @@
         }
 
         /** Add a plan from an exported file. Ids are regenerated, so importing
-         *  the same file twice gives two independent plans. */
-        function importPlan(raw) {
-            return addPlan(Plan.cloneWithNewIds(validated(raw)));
+         *  the same file twice gives two independent plans. Goals an older file
+         *  kept in the plan join the shared list, unless it holds them already. */
+        async function importPlan(raw) {
+            const plan = await addPlan(Plan.cloneWithNewIds(validated(raw)));
+            const merged = goalsUnreadable ? goals : Plan.mergeGoals(goals, legacyOf(raw));
+            if (merged.length !== goals.length) await putGoals(merged);
+            return plan;
+        }
+
+        /** Replace the goal list. Refused while stored goals could not be
+         *  read, so a newer build's goals are never saved over. */
+        async function putGoals(raw) {
+            if (goalsUnreadable) throw new ApiError('the goals were saved by a newer version', 409);
+            if (!Array.isArray(raw)) throw new ApiError('goals required', 400);
+            let next;
+            try {
+                next = Plan.validateGoals(raw);
+            } catch (e) {
+                if (e instanceof Plan.PlanError) throw new ApiError(e.message, 422);
+                throw e;
+            }
+            const prev = goals;
+            goals = next;
+            await persist({ goals: next }, () => { goals = prev; });
+            return { goals: next };
         }
 
         async function putPlan(id, raw) {
@@ -190,7 +255,7 @@
             return result;
         }
 
-        return { init, status, listPlans, getPlan, addPlan, importPlan, putPlan, deletePlan, setTabs };
+        return { init, status, listPlans, getPlan, addPlan, importPlan, putPlan, deletePlan, setTabs, getGoals, putGoals };
     }
 
     return { createWorkspace, MAX_PLANS };

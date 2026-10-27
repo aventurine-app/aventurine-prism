@@ -15,6 +15,28 @@
 //
 // `type` is a preset id from catalog.js, which fixes the node's role.
 //
+// GOALS are shared by all of a user's plans, not part of any one: a list kept
+// beside the plans (validateGoals). Each goal is one rule, a sentence of four
+// parts (GOAL_METRICS and the rest below):
+//
+//   { id, name,
+//     metric,          what is measured: 'net-worth' | 'savings' | 'debt' |
+//                      'expenses' | 'income'
+//     op,              'gte' (is at least) | 'lte' (is at most)
+//     unit, value, of, the target: 'amount' (value dollars), 'times' (value
+//                      times the `of` measure) or 'percent' (value percent of it)
+//     due, by, age,    the deadline: 'none', 'date' (the month `by`) or 'age'
+//                      (the month the plan's person turns `age`)
+//     color }          the card's colour (GOAL_COLORS), only for show
+//
+// e.g. "Net worth is at least 25 times yearly expenses by age 65". Every plan
+// is measured against every goal (sim/goals.js works out when each is met).
+// Goals move no money and are not drawn on the canvas. Goals of the kinds
+// that came before rules (net worth, savings, debt-free, FI, retiring) are
+// read as the rules they meant. Plans saved before goals were shared held
+// their own; those are read out of the old plan (legacyGoals) and merged into
+// the shared list, and a plan no longer keeps any.
+//
 // LINK RULES. Every link answers one question: how much of the money at its
 // source moves to its target. The answer is a mode and a basis:
 //
@@ -80,7 +102,7 @@
             'brokerage': 'chart-line-up', 'index-fund': 'chart-pie-slice', 'stocks': 'trend-up',
             'bonds': 'seal-percent', 'treasuries': 'bank', 'crypto': 'currency-btc', 'reit': 'building-office',
             'gold': 'diamond' }),
-        ...retireInto('pretax-account', { '401k': 'plant', 'trad-ira': 'tree', 'hsa': 'heartbeat' }),
+        ...retireInto('pretax-account', { 'trad-ira': 'tree', 'hsa': 'heartbeat' }),
         ...retireInto('tax-free-account', { 'roth-ira': 'tree-evergreen', '529': 'graduation-cap' }),
         ...retireInto('expense', {
             'rent': 'house', 'groceries': 'basket', 'dining': 'fork-knife', 'utilities': 'lightning',
@@ -107,6 +129,7 @@
     const LIMITS = {
         nodes:    400,
         links:    1200,
+        goals:    24,
         name:     60,
         years:    60,
         idLength: 40,
@@ -174,6 +197,8 @@
     // ── Link rule space ────────────────────────────────────────────────────
     // Which modes each basis offers, per source role. Order is display order.
     const RULES = {
+        // A person's links move no money: they name what is theirs.
+        person:   { person: ['rest'] },
         source:   { inflow: ['percent', 'fixed', 'rest'] },
         expense:  { inflow: ['percent', 'fixed', 'rest'] },
         modifier: { inflow: ['percent', 'fixed', 'rest'] },
@@ -188,6 +213,7 @@
     /** The `when` values a rule offers. The first is the default. */
     function timingsFor(basis, mode) {
         if (basis === 'proceeds') return ['once'];
+        if (basis === 'person') return ['monthly'];
         if (basis === 'charges') return ['monthly', 'yearly', 'once'];
         if (basis === 'inflow') return mode === 'fixed' ? ['monthly', 'yearly', 'once'] : ['monthly'];
         if (mode === 'above') return ['monthly', 'yearly'];
@@ -215,17 +241,11 @@
     }
 
     /** Whether income sent along `link` is a pre-tax contribution: it leaves
-     *  an income module for a pre-tax account (401(k), HSA, Traditional IRA),
-     *  or for an employer match that feeds one. */
+     *  an income module for a pre-tax account (401(k), HSA, Traditional IRA). */
     function isPretax(plan, link) {
         const from = nodeById(plan, link.from);
         const to = nodeById(plan, link.to);
-        if (roleOf(from) !== 'source' || !to) return false;
-        const tp = Catalog.preset(to.type);
-        if (tp.pretax) return true;
-        if (tp.kind !== 'match') return false;
-        return plan.links.some((l) => l.from === to.id
-            && (Catalog.preset((nodeById(plan, l.to) || {}).type) || {}).pretax);
+        return roleOf(from) === 'source' && !!to && !!Catalog.preset(to.type).pretax;
     }
 
     /** A loan's monthly payment: the level payment that clears `balance` over
@@ -269,6 +289,50 @@
             && !plan.links.some((l) => l.id !== exceptLinkId && l.from === from.id && l.to === to.id && l.basis === basis));
     }
 
+    // ── Goals ──────────────────────────────────────────────────────────────
+    // The parts a goal's rule is built from (see the header). A goal is shared
+    // by every plan, so it names no module of any one: its measures cover them
+    // all. What each measure counts is sim/goals.js's.
+
+    const GOAL_METRICS = ['net-worth', 'savings', 'debt', 'expenses', 'income'];
+    const GOAL_OPS = ['gte', 'lte'];
+    const GOAL_UNITS = ['amount', 'times', 'percent'];
+    const GOAL_DUES = ['none', 'date', 'age'];
+    // How large a target may be, by unit.
+    const GOAL_VALUE = { amount: 1e11, times: 1000, percent: 1000 };
+    const GOAL_AGE = { min: 1, max: 120 };
+    // The colours a goal's card can be, in the order offered.
+    const GOAL_COLORS = ['teal', 'blue', 'violet', 'rose', 'orange', 'green', 'slate'];
+
+    /** A new goal: "Net worth is at least $100,000", with any of `fields` over it. */
+    function createGoal(fields = {}) {
+        const goal = {
+            id: newId('g'), name: 'New goal',
+            metric: 'net-worth', op: 'gte', unit: 'amount', value: 100000, of: 'expenses',
+            due: 'none', by: null, age: null, color: GOAL_COLORS[0],
+        };
+        for (const key of Object.keys(goal)) {
+            if (key !== 'id' && fields[key] !== undefined) goal[key] = fields[key];
+        }
+        return goal;
+    }
+
+    /** Who a goal's age deadline is for in `plan`: its first person. Null when it has none. */
+    function goalPerson(plan) {
+        return plan.nodes.find((n) => roleOf(n) === 'person') || null;
+    }
+
+    /** The month a goal is due in `plan` ('YYYY-MM'), or null when it has no
+     *  deadline there. An age deadline is the month the plan's person turns
+     *  that age, so it has none in a plan without a person whose age is set. */
+    function goalDate(plan, goal) {
+        if (goal.due === 'date') return goal.by || null;
+        if (goal.due !== 'age') return null;
+        const person = goalPerson(plan);
+        if (!person || person.params.age == null || !person.params.planStart) return null;
+        return ymAdd(person.params.planStart, Math.round((goal.age - person.params.age) * 12));
+    }
+
     // ── Construction ───────────────────────────────────────────────────────
 
     function createPlan({ name = 'Untitled plan', start = ymNow(), years = 5 } = {}) {
@@ -294,7 +358,53 @@
     function createNode(plan, presetId, x, y) {
         const p = Catalog.preset(presetId);
         if (!p) throw new Error(`unknown module type: ${presetId}`);
-        return { id: newId('n'), type: p.id, name: p.name, x: Math.round(x), y: Math.round(y), params: Catalog.defaultParams(p) };
+        const params = Catalog.defaultParams(p);
+        // A new person starts with the plan, so placing one moves nothing.
+        if (p.role === 'person') params.planStart = plan.settings.start;
+        return { id: newId('n'), type: p.id, name: p.name, x: Math.round(x), y: Math.round(y), params };
+    }
+
+    // ── People ─────────────────────────────────────────────────────────────
+
+    /** The plan starts when its earliest person's plan does. A plan with no
+     *  person keeps the start it has. Call after any edit; returns true when
+     *  the start moved. */
+    function syncStart(plan) {
+        let start = null;
+        for (const n of plan.nodes) {
+            const s = roleOf(n) === 'person' && n.params.planStart;
+            if (s && (!start || ymDiff(s, start) > 0)) start = s;
+        }
+        if (!start || start === plan.settings.start) return false;
+        plan.settings.start = start;
+        return true;
+    }
+
+    /** The modules a person counts: the ones their links point at, and every
+     *  module the money from those reaches along money links. */
+    function personReach(plan, personId) {
+        const next = new Map();
+        for (const l of plan.links) {
+            const list = next.get(l.from);
+            if (list) list.push(l.to); else next.set(l.from, [l.to]);
+        }
+        const seen = new Set();
+        const stack = [...(next.get(personId) || [])];
+        while (stack.length) {
+            const id = stack.pop();
+            if (seen.has(id)) continue;
+            seen.add(id);
+            for (const to of next.get(id) || []) if (!seen.has(to)) stack.push(to);
+        }
+        return seen;
+    }
+
+    /** A person's age in month `ym`, in whole years, from their age when
+     *  their plan starts. Null when no age is set. */
+    function ageAt(person, ym) {
+        const { age, planStart } = person.params;
+        if (age == null || !planStart) return null;
+        return Math.floor(age + ymDiff(planStart, ym) / 12);
     }
 
     /** Whether a link from `fromId` to `toId` may be drawn, and why not. Two
@@ -402,6 +512,8 @@
         const existing = plan.links.filter((l) => l.from === from.id);
         const hasRest = (basis) => existing.some((l) => l.basis === basis && takesRest(l));
 
+        if (fp.role === 'person') return Object.assign(rule, { basis: 'person' });
+
         // A card pays for spending: a purchase, at that spending's usual price.
         if (fp.kind === 'card') {
             return Object.assign(rule, { basis: 'charges' }, priceRule(plan, tp.inLink || { when: 'monthly', value: 100 }));
@@ -419,8 +531,8 @@
             const basis = fp.role === 'account' ? 'balance' : 'inflow';
             return Object.assign(rule, { basis }, paymentRule(to));
         }
-        // The pay a match matches is usually the workplace contribution: a slice of pay.
-        if (tp.kind === 'match' && fp.role === 'source') {
+        // Pay into a 401(k) is usually a slice of it.
+        if (tp.employerMatch && fp.role === 'source') {
             return Object.assign(rule, { mode: 'percent', value: 6 });
         }
 
@@ -579,7 +691,7 @@
     }
 
     const MODES = ['percent', 'fixed', 'rest', 'above'];
-    const BASES = ['inflow', 'balance', 'proceeds', 'charges'];
+    const BASES = ['inflow', 'balance', 'proceeds', 'charges', 'person'];
     const WHENS = ['monthly', 'yearly', 'once'];
     const SIDES = ['t', 'r', 'b', 'l'];
 
@@ -622,14 +734,146 @@
         return link;
     }
 
-    function validatePlan(raw) {
-        if (!isObj(raw)) fail('plan is malformed');
+    /** A goal of a kind from before goals were rules, as the rule it meant.
+     *  An FI or retirement goal compared all savings with a year of spending
+     *  and loan payments over its withdrawal rate (4% is 25 times). */
+    function ruleOfKind(raw, i) {
+        const by = raw.by ?? null;
+        const dated = { due: by ? 'date' : 'none', by };
+        const fi = { metric: 'savings', op: 'gte', unit: 'times', value: 100 / (Number(raw.rate) || 4), of: 'expenses' };
+        switch (raw.kind) {
+            case 'net-worth': return { metric: 'net-worth', op: 'gte', unit: 'amount', value: raw.target ?? 1000000, ...dated };
+            case 'savings':   return { metric: 'savings', op: 'gte', unit: 'amount', value: raw.target ?? 10000, ...dated };
+            case 'debt-free': return { metric: 'debt', op: 'lte', unit: 'amount', value: 0, ...dated };
+            case 'fi':        return { ...fi, ...dated };
+            case 'retire':    return { ...fi, due: 'age', by: null, age: raw.age ?? 65 };
+            default: return fail(`goal ${i} has an unknown kind`);
+        }
+    }
+
+    const oneOf = (list, v, what) => (list.includes(v) ? v : fail(`${what} has an unknown value`));
+
+    /** A goal, normalized. A goal it cannot read (an unknown measure, saved by
+     *  a newer build) is rejected rather than dropped: dropping it would lose
+     *  it on the next save. Fields a rule does not have (a module a goal once
+     *  named, when goals belonged to one plan) are left behind. */
+    function cleanGoal(raw, i) {
+        if (!isObj(raw)) fail(`goal ${i} is malformed`);
+        const src = raw.metric === undefined && raw.kind !== undefined ? { ...raw, ...ruleOfKind(raw, i) } : raw;
+        const what = `goal ${i}`;
+        const unit = oneOf(GOAL_UNITS, src.unit ?? 'amount', `${what} target`);
+        const due = oneOf(GOAL_DUES, src.due ?? 'none', `${what} deadline`);
+        const goal = {
+            id: cleanId(raw.id, what),
+            name: cleanString(raw.name ?? '', LIMITS.name, `${what} name`) || 'Goal',
+            metric: oneOf(GOAL_METRICS, src.metric, `${what} measure`),
+            op: oneOf(GOAL_OPS, src.op ?? 'gte', `${what} comparison`),
+            unit,
+            value: cleanNumber(src.value ?? 0, 0, GOAL_VALUE[unit], `${what} target`),
+            of: oneOf(GOAL_METRICS, src.of ?? 'expenses', `${what} measure`),
+            due,
+            by: cleanYm(src.by, `${what} date`, true),
+            age: src.age == null ? null : cleanNumber(src.age, GOAL_AGE.min, GOAL_AGE.max, `${what} age`),
+            // Only for show, so a colour this build does not know is not worth refusing the goal over.
+            color: GOAL_COLORS.includes(src.color) ? src.color : GOAL_COLORS[0],
+        };
+        if (due === 'date' && !goal.by) goal.due = 'none';
+        if (due === 'age' && goal.age == null) goal.age = 65;
+        return goal;
+    }
+
+    /** The shared goal list, normalized. Returns a fresh copy; throws a
+     *  PlanError on one it cannot trust (see cleanGoal). */
+    function validateGoals(raw) {
+        if (raw == null) return [];
+        if (!Array.isArray(raw)) fail('goals are malformed');
+        if (raw.length > LIMITS.goals) fail(`at most ${LIMITS.goals} goals`);
+        const seen = new Set();
+        return raw.map((g, i) => {
+            const goal = cleanGoal(g, i);
+            if (seen.has(goal.id)) fail(`goal id ${goal.id} is used twice`);
+            seen.add(goal.id);
+            return goal;
+        });
+    }
+
+    /** The goals a plan saved before goals were shared held, normalized; none
+     *  for a plan without. Read from the plan as saved, before validatePlan
+     *  (which keeps none). */
+    function legacyGoals(rawPlan) {
+        return isObj(rawPlan) && Array.isArray(rawPlan.goals) ? validateGoals(rawPlan.goals.slice(0, LIMITS.goals)) : [];
+    }
+
+    /** `goals` with every goal of `incoming` that it does not already hold
+     *  (the same kind, name and figures) added, up to the limit. A newcomer
+     *  whose id is taken gets a new one. Returns a new list. */
+    function mergeGoals(goals, incoming) {
+        const sameAs = (g) => JSON.stringify({ ...g, id: null });
+        const held = new Set(goals.map(sameAs));
+        const ids = new Set(goals.map((g) => g.id));
+        const out = goals.slice();
+        for (const g of incoming) {
+            if (out.length >= LIMITS.goals) break;
+            if (held.has(sameAs(g))) continue;
+            const goal = ids.has(g.id) ? { ...g, id: newId('g') } : { ...g };
+            held.add(sameAs(goal));
+            ids.add(goal.id);
+            out.push(goal);
+        }
+        return out;
+    }
+
+    /** The Match module is gone: a 401(k) has an Employer match setting now.
+     *  A saved Match folds into the pre-tax account it fed, which becomes a
+     *  401(k) with the Match's rate and yearly limit. The pay the Match was
+     *  told about becomes pay into that 401(k), unless the pay already goes
+     *  there. A Match that fed no pre-tax account is dropped. Returns new
+     *  node and link lists; `raw` is left as it was. */
+    function foldMatches(raw) {
+        const isMatch = (n) => isObj(n) && n.type === 'employer-match';
+        if (!raw.nodes.some(isMatch)) return { nodes: raw.nodes, links: raw.links };
+        const byId = new Map(raw.nodes.filter(isObj).map((n) => [n.id, n]));
+        // Saved types may be retired ones, so read them as their survivors.
+        const presetOf = (n) => (n && Catalog.preset((RETIRED_TYPES[n.type] || n).type)) || {};
+        const takesPretax = (n) => !!presetOf(n).pretax;
+        const links = raw.links.filter(isObj);
+        const intoK = new Map();   // a 401(k) id -> the node it is saved as
+        const moved = new Map();   // a pay link -> the 401(k) id it now feeds
+        const dropped = new Set();
+        for (const m of raw.nodes.filter(isMatch)) {
+            const out = links.find((l) => l.from === m.id && takesPretax(byId.get(l.to)));
+            const k = out && byId.get(out.to);
+            if (k && !intoK.has(k.id)) {
+                const params = isObj(m.params) ? m.params : {};
+                intoK.set(k.id, { ...k, type: '401k',
+                    params: { ...(isObj(k.params) ? k.params : {}), match: params.rate ?? 0, matchLimit: params.capYearly ?? null } });
+                for (const pay of links.filter((l) => l.to === m.id && presetOf(byId.get(l.from)).role === 'source')) {
+                    const paid = links.some((l) => l.from === pay.from && l.to === k.id && l.basis === pay.basis);
+                    if (!paid) moved.set(pay, k.id);
+                }
+            }
+            dropped.add(m.id);
+        }
+        return {
+            nodes: raw.nodes.filter((n) => !isMatch(n)).map((n) => (isObj(n) && intoK.get(n.id)) || n),
+            links: raw.links.flatMap((l) => {
+                if (moved.has(l)) return [{ ...l, to: moved.get(l) }];
+                return isObj(l) && (dropped.has(l.from) || dropped.has(l.to)) ? [] : [l];
+            }),
+        };
+    }
+
+    function validatePlan(input) {
+        if (!isObj(input)) fail('plan is malformed');
+        if (!Array.isArray(input.nodes)) fail('plan modules are missing');
+        if (!Array.isArray(input.links)) fail('plan links are missing');
+        if (input.nodes.length > LIMITS.nodes) fail(`a plan holds at most ${LIMITS.nodes} modules`);
+        if (input.links.length > LIMITS.links) fail(`a plan holds at most ${LIMITS.links} links`);
+        const raw = { ...input, ...foldMatches(input) };
         const settings = isObj(raw.settings) ? raw.settings : fail('plan settings are missing');
         const view = isObj(raw.view) ? raw.view : { x: 0, y: 0, zoom: 1 };
-        if (!Array.isArray(raw.nodes)) fail('plan modules are missing');
-        if (!Array.isArray(raw.links)) fail('plan links are missing');
-        if (raw.nodes.length > LIMITS.nodes) fail(`a plan holds at most ${LIMITS.nodes} modules`);
-        if (raw.links.length > LIMITS.links) fail(`a plan holds at most ${LIMITS.links} links`);
+        // Goals are shared now, not kept in a plan: the ones an older plan held
+        // are read out of it (legacyGoals) before this drops them.
 
         const plan = {
             id: cleanId(raw.id, 'plan'),
@@ -675,6 +919,7 @@
             nodesById.set(node.id, node);
             plan.nodes.push(node);
         });
+        syncStart(plan);
 
         // Cash back lands in an account that exists, else it credits the card.
         for (const n of plan.nodes) {
@@ -789,6 +1034,7 @@
             l.from = map.get(l.from);
             l.to = map.get(l.to);
         }
+        delete copy.goals;
         return copy;
     }
 
@@ -796,7 +1042,8 @@
         PLAN_VERSION, LIMITS, GEOM, MONTHS, RULES, PlanError, REMOVED_TYPES, reconnect,
         ymParse, ymFormat, ymNow, ymAdd, ymDiff, ymLabel,
         newId, roleOf, basesFor, modesFor, timingsFor, portTargets, targetRoles, basesBetween, changeBasis, loanPayment, isPretax,
-        createPlan, createNode, iconOf, RETIRED_TYPES, canConnect, createLink, fitRule,
-        validatePlan, cloneWithNewIds,
+        createPlan, createNode, iconOf, syncStart, personReach, ageAt, RETIRED_TYPES, canConnect, createLink, fitRule,
+        GOAL_METRICS, GOAL_OPS, GOAL_UNITS, GOAL_DUES, GOAL_VALUE, GOAL_AGE, GOAL_COLORS, createGoal, goalPerson, goalDate,
+        validateGoals, legacyGoals, mergeGoals, validatePlan, cloneWithNewIds,
     };
 }));

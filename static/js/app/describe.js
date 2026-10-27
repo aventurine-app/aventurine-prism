@@ -63,6 +63,7 @@
 
     /** The label on a link's pill: '20%', '$1,800/mo', 'Rest', 'Above $20K'. */
     function linkShort(link, from) {
+        if (link.basis === 'person') return 'Theirs';
         const onArrival = ON_ARRIVAL.has(link.basis);
         const tag = onArrival ? '' : link.basis === 'charges' ? ' of limit' : ' of balance';
         switch (link.mode) {
@@ -80,12 +81,35 @@
         }
     }
 
+    /** A link's rule in a word or two, shown beside its dollars on the
+     *  canvas: '20%', 'Rest', 'Above $20K'. A fixed link's rule is its
+     *  amount, so it has none. */
+    function linkRule(link) {
+        switch (link.mode) {
+            case 'percent': return `${Fmt.number(link.value, 2)}%`;
+            case 'rest':    return 'Rest';
+            case 'above':   return `Above ${compact(link.value)}`;
+            default:        return null;
+        }
+    }
+
+    /** What a link's line says on the canvas: the dollars it moves, and the
+     *  rule behind them when that is not a fixed amount ('$1,200/mo' and
+     *  '20%'). `amount` is one month's flow, or with `perMonth` the plan's
+     *  monthly average; over the whole plan a fixed link shows its own amount
+     *  and timing instead ('$1,800/mo', '$5K/yr'). */
+    function linkFigure(link, from, amount, perMonth) {
+        if (link.mode === 'fixed' && perMonth) return { amount: linkShort(link, from), rule: null };
+        return { amount: `${compact(amount)}${perMonth ? '/mo' : ''}`, rule: linkRule(link) };
+    }
+
     /** The full rule as HTML, numbers and names in <b>. Names are escaped. */
     function linkSentence(link, from, to) {
         const b = (s) => `<b>${escapeHtml(s)}</b>`;
-        // Pay linked to a match is the pay it matches (read before tax); none of it is sent.
-        const matched = roleOf(from) === 'source' && C.preset(to.type).kind === 'match';
-        const pretax = matched || (Store.state.plan && P.isPretax(Store.state.plan, link));
+        if (link.basis === 'person') {
+            return `${b(to.name)} is ${b(from.name)}'s: it counts toward their net worth, with every account and debt its money reaches. No money moves along this link.`;
+        }
+        const pretax = Store.state.plan && P.isPretax(Store.state.plan, link);
         const noun = pretax ? 'pay before tax' : basisNoun(from, link.basis);
         const target = b(to.name);
         let what;
@@ -105,13 +129,12 @@
         }
         // A card's fixed purchase names what it buys; a share of its limit or
         // the credit left is charged to the card for that spending.
-        const parts = [matched ? `${target} matches ${what}`
-            : link.basis !== 'charges' ? `Send ${what} to ${target}`
+        const parts = [link.basis !== 'charges' ? `Send ${what} to ${target}`
             : link.mode === 'fixed' ? `Charge ${what} of ${target} to ${b(from.name)}`
                 : `Charge ${what} on ${b(from.name)} for ${target}`];
         const onArrival = ON_ARRIVAL.has(link.basis) && !(link.basis === 'inflow' && link.mode === 'fixed');
         // A percent or rest already says "of the pay before tax".
-        if (pretax && !matched && link.mode === 'fixed') parts.push('before tax');
+        if (pretax && link.mode === 'fixed') parts.push('before tax');
         if (!onArrival) parts.push(timingWords(link));
         if (link.mode === 'fixed' && link.growth) parts.push(`growing ${b(`${Fmt.number(link.growth, 2)}%`)} a year`);
         if (link.start && link.end) parts.push(`from ${P.ymLabel(link.start)} to ${P.ymLabel(link.end)}`);
@@ -128,10 +151,11 @@
         const r = node.params.rate;
         switch (p.role) {
             case 'account': {
-                if (!r) return '';
                 const label = C.fieldLabel(p, 'rate');
                 const word = label === 'APY' ? 'APY' : label === 'Interest' ? 'interest' : 'return';
-                return `${Fmt.pct(r)} ${word}`;
+                const growth = r ? `${Fmt.pct(r)} ${word}` : '';
+                const match = p.employerMatch && node.params.match ? `${Fmt.pct(node.params.match)} match` : '';
+                return [growth, match].filter(Boolean).join(' · ');
             }
             case 'debt': {
                 const apr = r ? `${Fmt.pct(r)} APR` : '';
@@ -144,7 +168,6 @@
             }
             case 'modifier':
                 if (p.kind === 'group') return '';
-                if (p.kind === 'match') return `+${Fmt.pct(r)} match`;
                 return `${Fmt.pct(r)} tax`;
             default:
                 return '';
@@ -154,6 +177,11 @@
     /** One line under a module's name: its key setting. */
     function nodeMeta(node) {
         const p = presetOf(node);
+        if (p.role === 'person') {
+            const v = node.params;
+            const from = v.planStart ? `from ${P.ymLabel(v.planStart)}` : '';
+            return [v.age != null ? `Age ${Fmt.number(v.age, 1)}` : '', from].filter(Boolean).join(' · ');
+        }
         if (p.role === 'source') {
             const v = node.params;
             if (v.per === 'once') return v.start ? P.ymLabel(v.start) : 'once';
@@ -227,7 +255,100 @@
         }
     }
 
+    // ── Goals ──────────────────────────────────────────────────────────────
+    // A goal reads as one sentence: its measure, its comparison, its target
+    // and its deadline ("Net worth is at least 25 × yearly expenses by age
+    // 65"). Each part's words are here, so the goal builder and anything that
+    // names a goal say it the same way.
+
+    // Each measure: its name at the head of a rule, its name after "of",
+    // whether it is plural (so the rule says "are"), and its icon. In the
+    // order the builder offers them.
+    const GOAL_METRICS = {
+        'net-worth': { label: 'Net worth', of: 'net worth', icon: 'chart-line-up' },
+        'savings':   { label: 'Account balance', of: 'account balance', icon: 'bank' },
+        'debt':      { label: 'Debt', of: 'debt', icon: 'credit-card' },
+        'expenses':  { label: 'Yearly expenses', of: 'yearly expenses', plural: true, icon: 'shopping-cart' },
+        'income':    { label: 'Yearly income', of: 'yearly income', icon: 'briefcase' },
+    };
+    const GOAL_OPS = {
+        gte: { words: 'at least', icon: 'greater-than-or-equal' },
+        lte: { words: 'at most', icon: 'less-than-or-equal' },
+    };
+    // The names of the colours a goal's card can be (plan.js, GOAL_COLORS).
+    const GOAL_COLORS = {
+        teal: 'Teal', blue: 'Blue', violet: 'Violet', rose: 'Rose',
+        orange: 'Orange', green: 'Green', slate: 'Slate',
+    };
+
+    /** '7 months', '2 years', '1 year 3 months'. */
+    function duration(months) {
+        const y = Math.floor(months / 12);
+        const m = months % 12;
+        const part = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+        return [y ? part(y, 'year') : '', m || !y ? part(m, 'month') : ''].filter(Boolean).join(' ');
+    }
+
+    /** A goal's comparison in words, agreeing with its measure: 'is at least', 'are at most'. */
+    function goalOp(goal) {
+        return `${GOAL_METRICS[goal.metric].plural ? 'are' : 'is'} ${GOAL_OPS[goal.op].words}`;
+    }
+
+    /** A goal's target in words: '$20,000', '25 × yearly expenses', '40% of yearly income'. */
+    function goalTarget(goal) {
+        if (goal.unit === 'amount') return Fmt.money(goal.value);
+        const of = GOAL_METRICS[goal.of].of;
+        return goal.unit === 'percent' ? `${Fmt.number(goal.value, 2)}% of ${of}` : `${Fmt.number(goal.value, 2)} × ${of}`;
+    }
+
+    /** A goal's deadline in words: 'any time', 'by Mar 2040', 'by age 65'. */
+    function goalDue(goal) {
+        if (goal.due === 'date' && goal.by) return `by ${P.ymLabel(goal.by)}`;
+        if (goal.due === 'age') return `by age ${Fmt.number(goal.age, 1)}`;
+        return 'any time';
+    }
+
+    /** A goal's rule as a sentence: 'Net worth is at least 25 × yearly expenses by age 65.' */
+    function goalSentence(goal) {
+        const due = goal.due === 'none' ? '' : ` ${goalDue(goal)}`;
+        return `${GOAL_METRICS[goal.metric].label} ${goalOp(goal)} ${goalTarget(goal)}${due}.`;
+    }
+
+    // Why a goal cannot be measured in a plan, as what to do about it.
+    const BLOCKED = {
+        'no-person': 'Add a person to date it',
+        'no-age': 'Set their age to date it',
+        'no-income': 'Add income to measure',
+        'no-expenses': 'Add spending to measure',
+    };
+
+    /** A goal's status: `text` in a few words, an optional `detail` beside its
+     *  date, and its tone: 'positive' (met on time), 'warning' (late, or
+     *  behind its deadline) or 'muted'. `ev` is one of CitrineGoals.evaluate's
+     *  results; `months` is the plan's length. */
+    function goalStatus(ev, plan, months) {
+        if (ev.blocked) return { tone: 'muted', text: BLOCKED[ev.blocked] || 'Cannot measure yet', detail: null };
+        if (ev.status === 'reached') {
+            if (ev.month === 0) return { tone: 'positive', text: 'Met already', detail: null };
+            const ahead = ev.byIdx != null && ev.byIdx >= 0 ? ev.byIdx - ev.month : null;
+            return {
+                tone: 'positive',
+                text: `Met ${monthLabel(plan, ev.month)}`,
+                detail: ahead == null ? null : ahead === 0 ? 'Right on time' : `${duration(ahead)} early`,
+            };
+        }
+        if (ev.status === 'late') {
+            return { tone: 'warning', text: `Met ${monthLabel(plan, ev.month)}`, detail: `${duration(ev.month - ev.byIdx)} late` };
+        }
+        // Due after the plan's end: lengthening the plan would tell.
+        if (ev.status === 'open' && ev.byIdx != null && ev.byIdx > months) {
+            return { tone: 'muted', text: 'Due after the plan ends', detail: monthLabel(plan, ev.byIdx) };
+        }
+        return { tone: ev.status === 'behind' ? 'warning' : 'muted', text: 'Not met', detail: `by ${monthLabel(plan, months)}` };
+    }
+
     window.Describe = {
-        CATEGORY_NAME, roleOf, portLabel, linkShort, linkSentence, nodeMeta, monthLabel, warning, warningLevel,
+        CATEGORY_NAME, roleOf, portLabel, linkShort, linkFigure, linkSentence, nodeMeta, monthLabel, warning, warningLevel,
+        GOAL_METRICS, GOAL_OPS, GOAL_COLORS, duration, goalOp, goalTarget, goalDue, goalSentence, goalStatus,
     };
 }());

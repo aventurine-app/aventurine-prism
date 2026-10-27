@@ -28,24 +28,18 @@ export async function upsertSubscription(db, s) {
     ).bind(s.id, s.customerId, s.status, s.priceId, s.periodEnd, s.cancelAt, s.occurredAt).run();
 }
 
+/** The subscriptions of the customer with this email; none for a stranger. */
+export async function subscriptionsFor(db, email) {
+    const { results } = await db.prepare(
+        `SELECT s.status FROM customers c JOIN subscriptions s ON s.customer_id = c.id WHERE c.email = ?`,
+    ).bind(email).all();
+    return results;
+}
+
 /** Is there a Paddle customer with this email? */
 export async function hasCustomer(db, email) {
     const row = await db.prepare('SELECT 1 AS found FROM customers WHERE email = ? LIMIT 1').bind(email).first();
     return Boolean(row);
-}
-
-/** A customer's Paddle id and subscription ids, for the billing portal. */
-export async function billingIdsFor(db, email) {
-    const { results } = await db.prepare(
-        `SELECT c.id AS customer_id, s.id AS subscription_id
-         FROM customers c LEFT JOIN subscriptions s ON s.customer_id = c.id
-         WHERE c.email = ?`,
-    ).bind(email).all();
-    if (!results.length) return null;
-    return {
-        customerId: results[0].customer_id,
-        subscriptionIds: results.map((r) => r.subscription_id).filter(Boolean),
-    };
 }
 
 // ── Sign-in links ───────────────────────────────────────────────────────────

@@ -26,6 +26,7 @@ const appGlobals = {
     CitrineCatalog: 'readonly',
     CitrinePlan: 'readonly',
     CitrineEngine: 'readonly',
+    CitrineGoals: 'readonly',
     // shell/
     UI: 'readonly',             // ui.js
     Settings: 'readonly',       // settings.js
@@ -35,10 +36,12 @@ const appGlobals = {
     Describe: 'readonly',
     CitrineExample: 'readonly',
     Store: 'readonly',
-    Library: 'readonly',
+    Runs: 'readonly',           // app/runs.js
+    Nav: 'readonly',            // app/nav.js
     Canvas: 'readonly',
     Inspector: 'readonly',
     Chart: 'readonly',
+    Sankey: 'readonly',
     Outlook: 'readonly',
     OtherTab: 'readonly',
     // web/ (the browser backend; each file adds its parts to this one object)

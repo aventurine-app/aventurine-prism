@@ -1,5 +1,5 @@
 // ─── paddle.js ──────────────────────────────────────────────────────────────
-// Everything that talks to or hears from Paddle.
+// Everything that hears from Paddle.
 //
 // Webhooks: Paddle POSTs events as customers sign up and pay. We check each one
 // really came from Paddle (a signature over the exact bytes received), then
@@ -11,9 +11,6 @@
 // A subscription event carries only a customer id, never an email, so the two
 // are joined later by customer id. Paddle may deliver events out of order or
 // more than once; store.js applies each only if it is newer than what it holds.
-//
-// The billing portal: Paddle hosts the page where a customer updates their card
-// or cancels. We ask Paddle for a short-lived signed-in link to it.
 
 import { hmacSha256Hex, timingSafeEqual } from './crypto.js';
 import { normalizeEmail } from './email-address.js';
@@ -135,33 +132,4 @@ export async function handleWebhook({ request, db, secret, nowMs, logger = conso
     if (change.kind === 'customer') await upsertCustomer(db, change);
     else await upsertSubscription(db, change);
     return json({ ok: true });
-}
-
-// ── Billing portal ──────────────────────────────────────────────────────────
-
-export class PortalError extends Error {}
-
-/**
- * A signed-in link to Paddle's customer portal, good for a short while. Never
- * stored or reused: ask again each time. Throws PortalError if Paddle refuses.
- */
-export async function createPortalLink({ apiBase, apiKey, customerId, subscriptionIds, fetchImpl = fetch }) {
-    if (!apiKey) throw new PortalError('no Paddle API key is set');
-    let response;
-    try {
-        response = await fetchImpl(`${apiBase}/customers/${customerId}/portal-sessions`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ subscription_ids: subscriptionIds.slice(0, 25) }),
-            signal: AbortSignal.timeout(5000),
-        });
-    } catch {
-        throw new PortalError('Paddle could not be reached');
-    }
-    if (!response.ok) throw new PortalError(`Paddle answered ${response.status}`);
-    const body = await response.json().catch(() => null);
-    const url = body?.data?.urls?.general?.overview;
-    // Only ever hand the browser an https link.
-    if (typeof url !== 'string' || !url.startsWith('https://')) throw new PortalError('Paddle sent no link');
-    return url;
 }

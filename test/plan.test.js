@@ -147,17 +147,40 @@ test('no rule asks for "the payment due": a saved one becomes the fixed payment 
     assert.deepEqual([get('l_card').mode, get('l_card').value], ['fixed', 400], 'the balance plus a month of purchases');
 });
 
-test('pre-tax links: income into a 401(k), HSA or Traditional IRA, or a match that feeds one', () => {
-    const { plan, nodes: [salary, k, roth, match, hsa, savings] } = planWith('salary', 'pretax-account', 'tax-free-account', 'employer-match', 'pretax-account', 'bank-account');
+test('pre-tax links: income into a 401(k), HSA or Traditional IRA', () => {
+    const { plan, nodes: [salary, k, roth, hsa, savings] } = planWith('salary', '401k', 'tax-free-account', 'pretax-account', 'bank-account');
     const into = (a, b) => { const l = Plan.createLink(plan, a.id, b.id); plan.links.push(l); return l; };
     assert.equal(Plan.isPretax(plan, into(salary, k)), true);
     assert.equal(Plan.isPretax(plan, into(salary, hsa)), true);
     assert.equal(Plan.isPretax(plan, into(salary, roth)), false);
-    const toMatch = into(salary, match);
-    assert.equal(Plan.isPretax(plan, toMatch), false);
-    into(match, k);
-    assert.equal(Plan.isPretax(plan, toMatch), true);
     assert.equal(Plan.isPretax(plan, into(savings, k)), false);   // only pay is pre-tax
+});
+
+test('a saved Match module folds into the 401(k) it fed', () => {
+    const { plan, nodes: [salary, pay, k, roth] } = planWith('salary', 'paycheck', 'pretax-account', 'tax-free-account');
+    const rule = { value: 0, basis: 'inflow', when: 'monthly', month: 1, date: null, start: null, end: null, growth: 0 };
+    plan.nodes.push(
+        { id: 'n_match', type: 'employer-match', name: 'Match', x: 0, y: 0, params: { rate: 50, capYearly: 3000 } },
+        { id: 'n_lost', type: 'employer-match', name: 'Roth match', x: 0, y: 0, params: { rate: 100, capYearly: null } });
+    plan.links.push(
+        { ...rule, id: 'l_k', from: salary.id, to: k.id, mode: 'percent', value: 6 },
+        { ...rule, id: 'l_seen', from: salary.id, to: 'n_match', mode: 'percent', value: 6 },
+        { ...rule, id: 'l_told', from: pay.id, to: 'n_match', mode: 'fixed', value: 200 },
+        { ...rule, id: 'l_in', from: 'n_match', to: k.id, mode: 'rest' },
+        { ...rule, id: 'l_roth', from: pay.id, to: 'n_lost', mode: 'fixed', value: 100 },
+        { ...rule, id: 'l_out', from: 'n_lost', to: roth.id, mode: 'rest' });
+    const before = JSON.stringify(plan);
+    const v = Plan.validatePlan(plan);
+    assert.equal(JSON.stringify(plan), before, 'the saved plan is not touched');
+    const saved = v.nodes.find((n) => n.id === k.id);
+    assert.equal(saved.type, '401k');
+    assert.deepEqual([saved.params.match, saved.params.matchLimit], [50, 3000]);
+    assert.equal(v.nodes.some((n) => n.type === 'employer-match'), false);
+    // Pay already going to the 401(k) stays as it was; pay only told to the match now goes there.
+    assert.deepEqual(v.links.map((l) => l.id).sort(), ['l_k', 'l_told']);
+    assert.equal(v.links.find((l) => l.id === 'l_told').to, k.id);
+    // A match that fed no pre-tax account is dropped, and the Roth keeps its own type.
+    assert.equal(v.nodes.find((n) => n.id === roth.id).type, 'tax-free-account');
 });
 
 test('a loan payment levels out over its years left', () => {
@@ -217,15 +240,70 @@ test('cloneWithNewIds gives a plan that shares no id with the original', () => {
     assert.doesNotThrow(() => Plan.validatePlan(copy));
 });
 
-test('default rules: a debt is paid what it asks for, a match a slice of pay', () => {
-    const { plan, nodes: [salary, loan, match, savings] } = planWith('salary', 'loan', 'employer-match', 'bank-account');
+test('default rules: a debt is paid what it asks for, a 401(k) a slice of pay', () => {
+    const { plan, nodes: [salary, loan, k, savings] } = planWith('salary', 'loan', '401k', 'bank-account');
     Object.assign(loan.params, { balance: 12000, rate: 0, term: 1 });
     const pay = Plan.createLink(plan, salary.id, loan.id);
     assert.deepEqual([pay.mode, pay.value, pay.when], ['fixed', 1000, 'monthly']);
     const fromSavings = Plan.createLink(plan, savings.id, loan.id);
     assert.deepEqual([fromSavings.basis, fromSavings.mode, fromSavings.value], ['balance', 'fixed', 1000]);
-    const contribute = Plan.createLink(plan, salary.id, match.id);
+    const contribute = Plan.createLink(plan, salary.id, k.id);
     assert.deepEqual([contribute.mode, contribute.value], ['percent', 6]);
+});
+
+// ── People ───────────────────────────────────────────────────────────────────
+
+test('a person links to any module, income included, and nothing links into a person', () => {
+    const { plan, nodes: [me, salary, savings] } = planWith('person', 'salary', 'bank-account');
+    assert.equal(Plan.canConnect(plan, me.id, salary.id).ok, true);
+    assert.equal(Plan.canConnect(plan, salary.id, me.id).ok, false);
+    assert.equal(Plan.canConnect(plan, savings.id, salary.id).ok, false, 'only a person reaches income');
+    const l = Plan.createLink(plan, me.id, salary.id);
+    assert.deepEqual([l.basis, l.mode, l.when], ['person', 'rest', 'monthly']);
+    plan.links.push(l);
+    assert.equal(Plan.validatePlan(plan).links[0].basis, 'person');
+});
+
+test('a new person starts with the plan, and the plan starts with its earliest person', () => {
+    const { plan, nodes: [a] } = planWith('person');
+    assert.equal(a.params.planStart, '2026-01');
+    const b = Plan.createNode(plan, 'person', 0, 0);
+    plan.nodes.push(b);
+    b.params.planStart = '2025-06';
+    assert.equal(Plan.syncStart(plan), true);
+    assert.equal(plan.settings.start, '2025-06');
+    a.params.planStart = '2027-03';
+    assert.equal(Plan.syncStart(plan), false, 'the earlier person still starts it');
+    b.params.planStart = '2028-01';
+    Plan.syncStart(plan);
+    assert.equal(plan.settings.start, '2027-03');
+    // A saved plan opens at its earliest person's start.
+    const saved = JSON.parse(JSON.stringify(plan));
+    saved.settings.start = '2020-01';
+    assert.equal(Plan.validatePlan(saved).settings.start, '2027-03');
+});
+
+test('a plan with no person keeps its start', () => {
+    const { plan } = planWith('salary');
+    assert.equal(Plan.syncStart(plan), false);
+    assert.equal(plan.settings.start, '2026-01');
+});
+
+test('a person reaches what their modules\' money reaches, and their age counts from their start', () => {
+    const { plan, nodes: [me, salary, savings, card, shop, other] } = planWith('person', 'salary', 'bank-account', 'credit-card', 'expense', 'investment');
+    const into = (a, b) => plan.links.push(Plan.createLink(plan, a.id, b.id));
+    into(me, salary);
+    into(salary, savings);
+    into(salary, card);
+    into(card, shop);
+    assert.deepEqual([...Plan.personReach(plan, me.id)].sort(), [salary.id, savings.id, card.id, shop.id].sort());
+    assert.equal(Plan.personReach(plan, me.id).has(other.id), false);
+    Object.assign(me.params, { age: 34, planStart: '2026-10' });
+    assert.equal(Plan.ageAt(me, '2026-10'), 34);
+    assert.equal(Plan.ageAt(me, '2027-09'), 34);
+    assert.equal(Plan.ageAt(me, '2027-10'), 35);
+    me.params.age = null;
+    assert.equal(Plan.ageAt(me, '2030-01'), null);
 });
 
 // ── What a link carries ──────────────────────────────────────────────────────

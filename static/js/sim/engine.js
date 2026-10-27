@@ -24,14 +24,14 @@
 // monthly at APR/12, which is how cards and loans quote it.
 //
 // Pre-tax contributions. Income sent to a 401(k), an HSA or a Traditional IRA
-// (directly or through an employer match) is taken from gross pay before
-// withholding, so only what is left is taxed. Those links split gross pay;
-// every other link from income splits take-home pay.
+// is taken from gross pay before withholding, so only what is left is taxed.
+// Those links split gross pay; every other link from income splits take-home
+// pay.
 //
-// Employer match. Pay linked to a match is the pay being matched, not pay sent
-// to it: nothing leaves the income. The match works its rate out on that pay
-// (at gross, up to its yearly limit) and sends the result on as new money. The
-// contribution itself goes wherever the income's other links send it.
+// Employer match. A 401(k)'s Employer match is the share of each contribution
+// the employer adds, up to its yearly match limit. Only pay sent straight from
+// income is matched (not transfers from other accounts), and the match is new
+// money: it does not count toward the account's yearly contribution limit.
 //
 // Paying debts. A payment never exceeds what is owed: once a debt is paid off,
 // the money its links would have sent stays with the payer and falls through
@@ -54,6 +54,10 @@
 // counts toward net worth. So the change in net worth always equals
 //   income - withholding + match + cash back + growth - interest - spent - taxes/fees
 // and the test suite checks that identity on every scenario.
+//
+// People. A person moves no money and their links carry none. Each person's
+// result is a `worth` series: the balances of the accounts their modules'
+// money reaches, less the debts it reaches (plan.js, personReach).
 
 (function (root, factory) {
     const isNode = typeof module === 'object' && module.exports;
@@ -117,9 +121,7 @@
                 givenMonth: -1, given: 0,   // fixed links: paid so far this month
             };
             // A source keeps its pre-tax links apart: they split gross pay.
-            // Pay a match is told about is read at gross, with the pre-tax links.
-            L.matches = from.role === 'source' && to.kind === 'match';
-            const group = link.basis === 'inflow' && from.role === 'source' && (L.matches || Plan.isPretax(plan, link))
+            const group = link.basis === 'inflow' && from.role === 'source' && Plan.isPretax(plan, link)
                 ? 'pretax' : link.basis;
             from.outs[group].push(L);
             linkStates.push(L);
@@ -153,7 +155,8 @@
         let runaway = false;
 
         // ── Moving money ───────────────────────────────────────────────────
-        // A flat queue of [state, amount] arrivals, drained after each phase.
+        // A flat queue of [state, amount, link] arrivals, drained after each
+        // phase. The link is the one the money came along (null for cash back).
         const queue = [];
         let head = 0;
         let arrivals = 0;
@@ -185,7 +188,7 @@
             L.flow[t] += amount;
             L.from.outflow[t] += amount;
             if (L.to.role === 'debt') L.to.pending += amount;
-            queue.push(L.to, amount);
+            queue.push(L.to, amount, L);
         }
 
         /** How much more a debt can take this month: what it owes less what is
@@ -201,22 +204,16 @@
             return L.to.role === 'debt' ? Math.min(want, room(L.to)) : want;
         }
 
-        /** A match is told `pay` is being matched along `L`. It adds its rate of
-         *  that, up to its yearly limit, as new money and sends it on. The pay
-         *  itself does not move. */
-        function addMatch(L, pay) {
-            const m = L.to;
-            const room = m.params.capYearly == null
-                ? Infinity : Math.max(0, m.params.capYearly - m.matchThisYear);
-            const added = Math.min(pay * (m.params.rate || 0) / 100, room);
-            L.flow[t] += pay;
-            m.inflow[t] += pay;
-            m.matchThisYear += added;
-            m.produced[t] += added;
-            totals.match[t] += added;
+        /** The employer's match on `contribution`, paid into account `s`: its
+         *  match rate of it, up to the yearly match limit. */
+        function addMatch(s, contribution) {
+            const room = s.matchLimit == null ? Infinity : Math.max(0, s.matchLimit - s.matchedThisYear);
+            const added = Math.min(contribution * s.matchRate / 100, room);
             if (added <= EPS) return;
-            const left = allocate(m, 'inflow', added);
-            if (left > EPS) park(m, left);
+            s.matchedThisYear += added;
+            s.matched[t] += added;
+            s.bal += added;
+            totals.match[t] += added;
         }
 
         /** Split `amount` arriving at `s` across its links on `basis`.
@@ -243,11 +240,6 @@
                 if (want <= EPS) continue;
                 const give = Math.min(want, remaining);
                 if (L.mode === 'fixed') L.given += give;
-                // Pay named to a match is matched, not moved: it stays in `remaining`.
-                if (L.matches) {
-                    if (give > EPS) addMatch(L, give);
-                    continue;
-                }
                 // A fixed amount can still be topped up by a later arrival this
                 // month, so its shortfall is settled at month end instead.
                 if (L.mode === 'percent' && want - give > EPS) noteShort(L, want - give);
@@ -277,7 +269,9 @@
             return pay;
         }
 
-        function receive(s, amount) {
+        /** Money `amount` reaching `s`, along link `via` (null when it came
+         *  some other way). */
+        function receive(s, amount, via) {
             switch (s.role) {
                 case 'account': {
                     let accepted = amount;
@@ -294,6 +288,7 @@
                     s.depositsThisYear += accepted;
                     s.inflow[t] += accepted;
                     s.bal += accepted;
+                    if (s.matchRate > 0 && via && via.from.role === 'source') addMatch(s, accepted);
                     return;
                 }
                 case 'expense': {
@@ -315,15 +310,7 @@
                     s.inflow[t] += amount;
                     const rate = (s.params.rate || 0) / 100;
                     let out;
-                    if (s.kind === 'match') {
-                        const room = s.params.capYearly == null
-                            ? Infinity : Math.max(0, s.params.capYearly - s.matchThisYear);
-                        const match = Math.min(amount * rate, room);
-                        s.matchThisYear += match;
-                        s.produced[t] += match;
-                        totals.match[t] += match;
-                        out = amount + match;
-                    } else if (s.kind === 'group') {
+                    if (s.kind === 'group') {
                         out = amount;
                     } else {
                         const cut = amount * Math.min(1, rate);
@@ -354,13 +341,14 @@
             while (head < queue.length) {
                 const s = queue[head];
                 const amount = queue[head + 1];
-                head += 2;
+                const via = queue[head + 2];
+                head += 3;
                 if (++arrivals > MAX_ARRIVALS_PER_MONTH) {
                     runaway = true;
                     park(null, amount);
                     continue;
                 }
-                receive(s, amount);
+                receive(s, amount, via);
             }
             queue.length = 0;
             head = 0;
@@ -394,7 +382,7 @@
                     totals.cashback[t] += back;
                     if (s.cashBackTo) {
                         s.outflow[t] += back;
-                        queue.push(s.cashBackTo, back);
+                        queue.push(s.cashBackTo, back, null);
                     } else {
                         settle(s, back);
                     }
@@ -455,8 +443,7 @@
             cal = ((startMonth - 1 + t) % 12) + 1;
             arrivals = 0;
             if (cal === 1) {
-                for (const s of accounts) s.depositsThisYear = 0;
-                for (const s of states) if (s.role === 'modifier') s.matchThisYear = 0;
+                for (const s of accounts) { s.depositsThisYear = 0; s.matchedThisYear = 0; }
             }
 
             // Card annual fees: charged in the plan's first month and every
@@ -576,6 +563,11 @@
             s.lockIdx = params.lockUntil ? idxOf(params.lockUntil) : null;
             s.cap = params.capYearly == null ? null : params.capYearly;
             s.depositsThisYear = 0;
+            // Only a preset that shows the Employer match setting is matched.
+            s.matchRate = preset.employerMatch ? params.match || 0 : 0;
+            s.matchLimit = params.matchLimit == null ? null : params.matchLimit;
+            s.matched = series();
+            s.matchedThisYear = 0;
             s.capped = 0;
             s.cappedFirst = -1;
         }
@@ -606,10 +598,8 @@
         }
         if (role === 'modifier') {
             s.inflow = series();
-            s.produced = series();
             s.consumed = series();
             s.unplaced = series();
-            s.matchThisYear = 0;
         }
         return s;
     }
@@ -712,7 +702,7 @@
             const out = { role: s.role, kind: s.kind, outflow: s.outflow };
             if (s.role === 'debt' && s.scheduled > 0) out.payment = s.scheduled;
             for (const key of ['balance', 'inflow', 'earnings', 'gross', 'pretax', 'produced',
-                'consumed', 'interest', 'paid', 'unplaced', 'charged', 'cashback', 'fees']) {
+                'consumed', 'interest', 'paid', 'unplaced', 'charged', 'cashback', 'fees', 'matched']) {
                 if (s[key]) out[key] = s[key];
             }
             out.totals = {
@@ -725,6 +715,7 @@
                 cashback: s.cashback ? sum(s.cashback) : 0,
                 fees: s.fees ? sum(s.fees) : 0,
                 earnings: s.earnings ? sum(s.earnings) : 0,
+                matched: s.matched ? sum(s.matched) : 0,
                 interest: s.interest ? sum(s.interest) : 0,
                 paid: s.paid ? sum(s.paid) : 0,
                 unplaced: s.unplaced ? sum(s.unplaced) : 0,
@@ -759,6 +750,19 @@
                 const pct = list.filter((L) => L.mode === 'percent').reduce((a, L) => a + L.value, 0);
                 if (pct > 100 + 1e-9) warnings.push({ code: 'over-100', nodeId: s.id, basis, amount: pct });
             }
+        }
+
+        const byId = new Map(states.map((s) => [s.id, s]));
+        for (const s of states) {
+            if (s.role !== 'person') continue;
+            const worth = new Float64Array(months + 1);
+            for (const id of Plan.personReach(r.plan, s.id)) {
+                const held = byId.get(id);
+                if (!held || (held.role !== 'account' && held.role !== 'debt')) continue;
+                const sign = held.role === 'debt' ? -1 : 1;
+                for (let k = 0; k <= months; k++) worth[k] += sign * held.balance[k];
+            }
+            nodes[s.id].worth = worth;
         }
 
         const links = Object.create(null);

@@ -4,33 +4,45 @@
     <meta charset="utf-8">
     <title>Aventurine Prism</title>
     <!-- @include head -->
+    <link rel="stylesheet" href="/static/css/nav.css">
     <link rel="stylesheet" href="/static/css/library.css">
     <link rel="stylesheet" href="/static/css/canvas.css">
     <link rel="stylesheet" href="/static/css/inspector.css">
     <link rel="stylesheet" href="/static/css/outlook.css">
+    <link rel="stylesheet" href="/static/css/goals.css">
+    <link rel="stylesheet" href="/static/css/compare.css">
 </head>
 <body>
     <!-- @include chrome -->
 
-    <!-- The workspace: the module library, the canvas over the outlook panel,
-         and the inspector. Hidden until the plans have loaded, so nothing paints
-         half-built. -->
-    <div class="body_container" id="app" hidden>
-        <aside class="library" id="library" aria-label="Modules"></aside>
+    <!-- The app: the navigation, the workspace it has open, and the inspector.
+         data-workspace (set by nav.js) shows one workspace: the plan builder
+         (Plans), Goals, Analyze or Compare. Hidden until the plans have
+         loaded, so nothing paints half-built. -->
+    <div class="body_container" id="app" data-workspace="plans" hidden>
+        <aside class="nav" id="nav" aria-label="Navigation"></aside>
 
         <main class="workbench">
-            <div class="stage" id="stage" tabindex="0" aria-label="Plan canvas">
-                <!-- The world is the one transformed layer: links (SVG), the
-                     moving dots on them, the labels, then the module cards.
-                     Camera moves change only its transform. -->
-                <div class="canvas-world" id="world">
-                    <svg class="canvas-links" id="links" aria-hidden="true"></svg>
-                    <svg class="canvas-links" id="flows" aria-hidden="true"></svg>
-                    <div class="canvas-labels" id="labels"></div>
-                    <div class="canvas-nodes" id="nodes"></div>
+            <!-- Plans: the builder. The modules across the top, the canvas,
+                 and the net worth scrubber under it. -->
+            <section class="builder" aria-label="Plan builder">
+                <div class="library" id="library" role="toolbar" aria-label="Modules"></div>
+                <div class="stage" id="stage" tabindex="0" aria-label="Plan canvas">
+                    <!-- The world is the one transformed layer: links (SVG), the
+                         moving dots on them, the labels, then the module cards.
+                         Camera moves change only its transform. -->
+                    <div class="canvas-world" id="world">
+                        <svg class="canvas-links" id="links" aria-hidden="true"></svg>
+                        <svg class="canvas-links" id="flows" aria-hidden="true"></svg>
+                        <div class="canvas-labels" id="labels"></div>
+                        <div class="canvas-nodes" id="nodes"></div>
+                    </div>
                 </div>
-            </div>
-            <section class="outlook" id="outlook" aria-label="Outlook"></section>
+                <div class="scrubber" id="scrubber"></div>
+            </section>
+            <section class="goals-board" id="goals-board" aria-label="Goals"></section>
+            <section class="outlook" id="outlook" aria-label="Analyze"></section>
+            <section class="compare" id="compare" aria-label="Compare plans"></section>
         </main>
 
         <aside class="inspector" id="inspector" aria-label="Inspector"></aside>
@@ -42,12 +54,18 @@
     <script src="/static/js/app/describe.js"></script>
     <script src="/static/js/app/example.js"></script>
     <script src="/static/js/app/store.js"></script>
-    <script src="/static/js/app/tabs.js"></script>
+    <script src="/static/js/app/runs.js"></script>
+    <script src="/static/js/app/titlebar.js"></script>
+    <script src="/static/js/app/nav.js"></script>
     <script src="/static/js/app/library.js"></script>
     <script src="/static/js/app/canvas.js"></script>
-    <script src="/static/js/app/inspector.js"></script>
     <script src="/static/js/app/chart.js"></script>
+    <script src="/static/js/app/scrubber.js"></script>
+    <script src="/static/js/app/inspector.js"></script>
+    <script src="/static/js/app/sankey.js"></script>
     <script src="/static/js/app/outlook.js"></script>
+    <script src="/static/js/app/goals-board.js"></script>
+    <script src="/static/js/app/compare.js"></script>
     <script src="/static/js/app/other-tab.js"></script>
     <script src="/static/js/app/main.js"></script>
 </body>

@@ -1,12 +1,12 @@
 'use strict';
 
 // ─── chart.js ───────────────────────────────────────────────────────────────
-// The outlook's two chart forms, drawn as SVG:
+// Analyze's two chart forms, drawn as SVG:
 //
 //   area   stacked bands over time (accounts above zero, debts below) with a
-//          headline line on top (net worth)
-//   bars   one in-bar above zero and one out-bar below it per period, with a
-//          line for the difference (cash flow)
+//          headline line on top
+//   bars   stacked bars per period, ups above zero and downs below, with a
+//          line on top (net worth, cash flow)
 //
 // Both share the same frame (recessive dashed grid, compact currency ticks,
 // year ticks along the bottom) and the same hover layer: a crosshair, a
@@ -19,6 +19,15 @@
 (function () {
     const SVG_NS = 'http://www.w3.org/2000/svg';
     const M = { top: 10, right: 16, bottom: 26, left: 60 };
+    // Height of the marker label strip above the plot.
+    const MARKER_STRIP = 18;
+    // A marker's badge: its height (and the side of the square that holds the
+    // target), the target's size, its corner radius, and the padding after
+    // its label.
+    const BADGE_H = 18;
+    const BADGE_ICON = 12;
+    const BADGE_R = 4;
+    const BADGE_PAD = 6;
 
     /** Round tick steps (1, 2, 2.5, 5 × 10^n) covering [lo, hi] in ~5 steps. */
     function niceTicks(lo, hi, count = 5) {
@@ -31,6 +40,17 @@
         const ticks = [];
         for (let v = start; v <= end + step * 1e-6; v += step) ticks.push(Math.abs(v) < step * 1e-6 ? 0 : v);
         return ticks;
+    }
+
+    /** The width of a marker label (11px semibold, as .chart-marker-label
+     *  sets it) in the chart's font, measured on a canvas since the chart is
+     *  drawn before it joins the page. */
+    let measurer = null;
+    function labelWidth(box, text) {
+        if (!measurer) measurer = document.createElement('canvas').getContext('2d');
+        const weight = getComputedStyle(document.documentElement).getPropertyValue('--weight-semibold').trim() || '600';
+        measurer.font = `${weight} 11px ${getComputedStyle(box).fontFamily}`;
+        return measurer.measureText(text).width;
     }
 
     function el(tag, attrs = {}, parent = null) {
@@ -46,11 +66,18 @@
      *   opts.count      number of x positions
      *   opts.xTicks     [{ i, label }]
      *   opts.bands      area: [{ label, color, values, sign }]   sign -1 stacks below zero
-     *   opts.bars       bars: [{ label, color, values, sign }]   one up series, one down
+     *   opts.bars       bars: [{ label, color, values, sign }]   sign -1 stacks below zero
+     *   opts.gap        bars: px of surface between stacked segments (default 2;
+     *                   0 butts them together with no seam)
      *   opts.line       { label, color, values }
-     *   opts.ghost      optional { label, color, values } drawn dashed behind the
-     *                   line; NaN values leave gaps (a compared plan's months
-     *                   outside this one)
+     *   opts.markers    optional [{ i, label, color, fill }]: a dated event at
+     *                   index i (a goal met), drawn as a dashed rule topped with
+     *                   a rounded badge in a strip above the plot: a white target
+     *                   and label on `fill`. `color` and `fill` are custom
+     *                   property names for the rule and the badge (default: the
+     *                   accent; `fill` defaults to `color`). A label that would
+     *                   overlap another badge is left off, leaving the target's
+     *                   square; the tooltip still names every marker.
      *   opts.format     value → axis label
      *   opts.tooltip    index → { title, rows: [{ label, color, value, total }] }
      *   opts.onHover    index | null
@@ -61,8 +88,11 @@
         const W = box.clientWidth;
         const H = box.clientHeight;
         if (W < 60 || H < 60 || opts.count < 2) return;
+        const markers = opts.markers || [];
+        // Markers get a strip of their own above the plot for their labels.
+        const top = M.top + (markers.length ? MARKER_STRIP : 0);
         const pw = W - M.left - M.right;
-        const ph = H - M.top - M.bottom;
+        const ph = H - top - M.bottom;
 
         // ── Domain ─────────────────────────────────────────────────────────
         let lo = 0;
@@ -79,18 +109,12 @@
         }
         for (let i = 0; i < n; i++) { hi = Math.max(hi, up[i]); lo = Math.min(lo, -down[i]); }
         if (opts.line) for (let i = 0; i < n; i++) { hi = Math.max(hi, opts.line.values[i]); lo = Math.min(lo, opts.line.values[i]); }
-        if (opts.ghost) {
-            for (let i = 0; i < n; i++) {
-                const v = opts.ghost.values[i];
-                if (Number.isFinite(v)) { hi = Math.max(hi, v); lo = Math.min(lo, v); }
-            }
-        }
         // A flat-zero plan still gets a readable axis rather than $0..$1.
         if (hi - lo < 1) hi = lo + 1000;
         const ticks = niceTicks(lo, hi);
         const y0 = ticks[0];
         const y1 = ticks[ticks.length - 1];
-        const Y = (v) => M.top + ph - ((v - y0) / (y1 - y0)) * ph;
+        const Y = (v) => top + ph - ((v - y0) / (y1 - y0)) * ph;
 
         const bars = opts.kind === 'bars';
         const slot = bars ? pw / n : 0;
@@ -133,9 +157,12 @@
         } else {
             // Series stack away from zero: ups upward, downs downward. Only the
             // outermost segment of each stack gets the rounded data end; the
-            // others are square, separated by a 2px surface gap.
+            // others are square, separated by opts.gap of surface. With no gap,
+            // each segment tucks 0.5px under the next so antialiasing leaves
+            // no hairline between them.
             const bw = Math.max(2, Math.min(36, slot * 0.62));
             const r = Math.min(4, bw / 2);
+            const gap = opts.gap ?? 2;
             const accUp = new Float64Array(n);
             const accDown = new Float64Array(n);
             layers.forEach((s, li) => {
@@ -149,10 +176,11 @@
                     if (v <= 0) continue;
                     const ya = Y(below ? -a : a);
                     const yb = Y(below ? -b : b);
-                    const h = Math.abs(yb - ya) - (a > 0 ? 2 : 0);
+                    const join = a > 0 ? (gap || -0.5) : 0;
+                    const h = Math.abs(yb - ya) - join;
                     if (h < 0.5) continue;
                     const x = X(i) - bw / 2;
-                    const start = below ? ya + (a > 0 ? 2 : 0) : ya - (a > 0 ? 2 : 0);
+                    const start = below ? ya + join : ya - join;
                     // Is anything stacked beyond this segment at this index?
                     let outer = true;
                     for (let k = li + 1; k < layers.length; k++) {
@@ -167,20 +195,41 @@
             });
         }
 
-        if (opts.ghost) {
-            let d = '';
-            let pen = false;
-            for (let i = 0; i < n; i++) {
-                const v = opts.ghost.values[i];
-                if (!Number.isFinite(v)) { pen = false; continue; }
-                d += `${pen ? 'L' : 'M'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`;
-                pen = true;
-            }
-            if (d) {
-                // A surface-coloured halo keeps the dashes legible over the bands.
-                el('path', { class: 'chart-line chart-ghost-halo', d }, svg);
-                el('path', { class: 'chart-line chart-ghost', d, style: `stroke: var(${opts.ghost.color})` }, svg);
-            }
+        // Marker rules sit under the headline line, so the line stays readable.
+        // Each hangs from a rounded badge in the marker's colour: a square
+        // holding a white target centred on the rule, and the white label
+        // after it, or before it where that would cover another badge or run
+        // off the plot. With room on neither side the label is left off,
+        // leaving the square.
+        const placed = [...markers].sort((a, b) => a.i - b.i).map((mk) => ({ mk, x: X(mk.i) }));
+        const markY = M.top + 4;
+        const half = BADGE_H / 2;
+        let badgeEnd = -Infinity;
+        for (const { mk, x } of placed) {
+            const rule = `color: var(${mk.color || '--accent-primary'})`;
+            const fill = `fill: var(${mk.fill || mk.color || '--accent-primary'})`;
+            el('line', { class: 'chart-marker', x1: x, x2: x, y1: markY + half, y2: top + ph, style: rule }, svg);
+            const width = labelWidth(box, mk.label) + BADGE_PAD;
+            // A label that fits right of its square, else left of it.
+            const fits = (from) => {
+                const to = from + BADGE_H + width;
+                return from >= 0 && to <= W && from >= badgeEnd + 4
+                    && !placed.some((o) => o.mk !== mk && Math.abs(o.x - x) > 0.5 && o.x + half + 4 > from && o.x - half - 4 < to);
+            };
+            const side = fits(x - half) ? 'right' : fits(x - half - width) ? 'left' : null;
+            const flip = side === 'left';
+            const labelled = side !== null;
+            const badge = labelled ? { x: flip ? x - half - width : x - half, w: BADGE_H + width } : { x: x - half, w: BADGE_H };
+            badgeEnd = badge.x + badge.w;
+            el('rect', { class: 'chart-marker-badge', x: badge.x, y: markY - half, width: badge.w, height: BADGE_H, rx: BADGE_R, style: fill }, svg);
+            const target = el('svg', {
+                class: 'chart-marker-icon', x: x - BADGE_ICON / 2, y: markY - BADGE_ICON / 2,
+                width: BADGE_ICON, height: BADGE_ICON, viewBox: '0 0 256 256',
+            }, svg);
+            target.innerHTML = window.CITRINE_ICON_DATA.regular.target;
+            if (!labelled) continue;
+            const text = el('text', { class: 'chart-marker-label', x: flip ? x - half : x + half, y: markY + 4, 'text-anchor': flip ? 'end' : 'start' }, svg);
+            text.textContent = mk.label;
         }
 
         if (opts.line) {
@@ -190,9 +239,9 @@
         }
 
         // ── Hover ──────────────────────────────────────────────────────────
-        const cross = el('line', { class: 'chart-cross', x1: 0, x2: 0, y1: M.top, y2: M.top + ph, visibility: 'hidden' }, svg);
+        const cross = el('line', { class: 'chart-cross', x1: 0, x2: 0, y1: top, y2: top + ph, visibility: 'hidden' }, svg);
         const dot = opts.line ? el('circle', { class: 'chart-dot', r: 5, cx: 0, cy: 0, visibility: 'hidden', style: `fill: var(${opts.line.color})` }, svg) : null;
-        const hit = el('rect', { class: 'chart-hit', x: M.left, y: M.top, width: pw, height: ph }, svg);
+        const hit = el('rect', { class: 'chart-hit', x: M.left, y: top, width: pw, height: ph }, svg);
         box.appendChild(svg);
 
         const tip = document.createElement('div');

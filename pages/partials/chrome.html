@@ -1,13 +1,12 @@
-<!-- Shared page chrome: the top bar (with the plan tabs) and the Preferences
-     dialog. Spliced into pages/index.html by scripts/assemble.js. The tabs are
-     built by app/tabs.js, Preferences is wired by shell/settings.js. -->
+<!-- Shared page chrome: the top bar and the Preferences dialog. Spliced into
+     pages/index.html by scripts/assemble.js. The bar is filled by
+     app/titlebar.js, Preferences is wired by shell/settings.js. -->
     <div class="titlebar">
         <div class="titlebar-lead">
             <img class="titlebar-icon" src="/static/icons/logo/logo.svg" alt="" draggable="false">
         </div>
-        <nav class="tabs" id="tabs" aria-label="Plans"></nav>
+        <div class="titlebar-title" id="titlebar-title"></div>
         <div class="titlebar-drag"></div>
-        <div class="titlebar-actions" id="titlebar-actions"></div>
         <button class="titlebar-user" id="titlebar-user" type="button"></button>
     </div>
 

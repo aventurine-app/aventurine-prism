@@ -13,15 +13,15 @@ subscription, and who is signed in. Nothing else.
 | Route | Who | Job |
 |---|---|---|
 | `POST /api/paddle/webhook` | Paddle (signature checked) | Copies customers and subscriptions into the database |
-| `POST /api/auth/request` | anyone | Emails a one-time sign-in link, to real customers only |
+| `POST /api/auth/request` | anyone | Emails a one-time sign-in link, only to emails with access (the access rule below) |
 | `POST /api/auth/verify` | anyone with a link | Spends the link, starts a session |
 | `POST /api/auth/logout`, `GET /api/me` | signed in | End the session; who am I and what do I have |
-| `POST /api/billing/portal` | signed in | A short-lived link to Paddle's billing page |
+| `POST /api/billing/portal` | signed in customers | The link to Paddle's billing page |
 | `/auth/login`, `/auth/confirm`, `/auth/inactive`, CSS, fonts, icons | public | The sign-in pages and what they need |
 | everything else (`/`, all app JavaScript) | active subscription | The app |
 
 Code map: `src/index.js` (routes and the access rule's enforcement), `paddle.js`
-(signature, events, portal), `auth.js` (links and sessions), `access.js` (who
+(signature, events), `auth.js` (links and sessions), `access.js` (who
 gets in), `store.js` (every SQL statement), `email.js`, `http.js`, `config.js`,
 `crypto.js`. Schema: `migrations/`.
 
@@ -92,13 +92,11 @@ is redirected to it.
 
 In the sandbox dashboard:
 
-1. **Catalog → Products**: create "Aventurine Prism" with two recurring prices,
-   monthly ($5) and yearly ($50). Note both `pri_…` ids; the website's pricing
-   buttons need them.
-2. **Developer tools → Authentication**:
-   - *API key*: create one with only the `customer_portal_session.write`
-     permission. `npx wrangler secret put PADDLE_API_KEY --config worker/wrangler.toml`
-   - *Client-side token*: for Paddle.js on the website's pricing page (not a secret).
+1. **Catalog → Products**: create "Aventurine Prism" with three recurring
+   prices: monthly ($7.99), monthly with a 14-day trial, and yearly ($74.99).
+   Note the `pri_…` ids; the website's pricing buttons need them.
+2. **Developer tools → Authentication → Client-side token**: for Paddle.js on
+   the website's pricing page (not a secret). The worker needs no API key.
 3. **Events → Notifications → New destination** (not under Developer tools):
    - URL: `<APP_ORIGIN>/api/paddle/webhook`
    - Events: `customer.created`, `customer.updated`, and every `subscription.*`
@@ -106,9 +104,14 @@ In the sandbox dashboard:
      `resumed`, `canceled`).
    - Copy its secret (`pdl_ntfset_…`; later, Events → Notifications → the destination's menu → Edit destination → the copy icon):
      `npx wrangler secret put PADDLE_WEBHOOK_SECRET --config worker/wrangler.toml`
-4. **Checkout → Checkout settings**: set the default payment link and approve the
-   website's domain for checkout. Turn the customer portal on.
-5. Set `PADDLE_API_BASE` to `https://sandbox-api.paddle.com` in `wrangler.toml`.
+4. **Checkout → Checkout settings**: set the default payment link to the
+   website's pricing page (`https://aventurine-app.com/prism.html`) and approve
+   the website's domain for checkout.
+5. Turn the customer portal on and put its link (`https://…customer-portal.paddle.com/cpl_…`)
+   in `PADDLE_PORTAL_URL` in `wrangler.toml`. It is one link for every
+   customer: Paddle signs them in by emailing a code, so there is no key to
+   expire. Left empty, the billing button says billing is unavailable and
+   nothing else changes.
 
 Optionally `npx wrangler secret put COMPLIMENTARY_EMAILS` (comma separated) for
 yourself and testers.
@@ -131,18 +134,20 @@ npx wrangler d1 execute aventurine-prism --remote --config worker/wrangler.toml 
 
 ### 6. Going live
 
-Paddle's live account is separate: repeat step 4 there (live catalog, live API
-key, live notification destination), re-set the three Paddle secrets and
-`PADDLE_API_BASE=https://api.paddle.com`, use the live client token and price
-ids on the website, and deploy again. Buy once with a real card and refund it.
+Paddle's live account is separate: repeat step 4 there (live catalog, live
+notification destination, live portal link), re-set `PADDLE_WEBHOOK_SECRET`
+and `PADDLE_PORTAL_URL`, use the live client token and price ids on the
+website, and deploy again. Buy once with a real card and refund it.
 
 ## Things worth knowing
 
-- **Customers who cannot sign in.** The sign-in form only emails addresses that
-  Paddle has told us about (`customers` table). If someone says no email
-  arrives: check the table above first (a missing row means Paddle's
-  `customer.created` was never delivered: see Paddle's notification log), then
-  Resend's log, then spam.
+- **Customers who cannot sign in.** The sign-in form only emails addresses
+  whose subscription grants access (or that are in `COMPLIMENTARY_EMAILS`), so
+  someone who left checkout before paying, or whose subscription has ended,
+  gets nothing. If someone says no email arrives: run the query above first (no
+  row means Paddle's `customer.created` or `subscription.created` was never
+  delivered: see Paddle's notification log; a `canceled` or `paused` status
+  means it is working as intended), then Resend's log, then spam.
 - **A different email.** Paddle's `customer.updated` event changes the address
   here too; existing sessions are tied to the old address and stop working.
 - **Out-of-order events.** Paddle may deliver webhooks in any order or twice.

@@ -6,11 +6,13 @@
 //
 //   APP_ORIGIN              where the app is served, e.g. https://app.aventurine-app.com
 //   EMAIL_FROM              the From address of sign-in emails
-//   PADDLE_API_BASE         https://api.paddle.com (live) or https://sandbox-api.paddle.com
+//   PADDLE_PORTAL_URL       Paddle's customer portal link (https://customer-portal.paddle.com/cpl_...)
 //   COMPLIMENTARY_EMAILS    (secret, optional) emails with free access, comma or space separated
-//   PADDLE_WEBHOOK_SECRET, PADDLE_API_KEY, RESEND_API_KEY   (secrets)
+//   PADDLE_WEBHOOK_SECRET, RESEND_API_KEY   (secrets)
+//
+// PADDLE_PORTAL_URL is the exception to refusing to run: without it only the
+// billing button fails, so a missing or bad value is null, not an error.
 
-const PADDLE_API_BASES = new Set(['https://api.paddle.com', 'https://sandbox-api.paddle.com']);
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
 
 export class ConfigError extends Error {}
@@ -29,6 +31,16 @@ function parseOrigin(value) {
     return { origin: url.origin, secure: url.protocol === 'https:' };
 }
 
+/** The portal link if it is an https URL, else null. */
+function parsePortalUrl(value) {
+    try {
+        const url = new URL(value);
+        return url.protocol === 'https:' ? url.href : null;
+    } catch {
+        return null;
+    }
+}
+
 /** The emails in a comma- or space-separated list, lower-cased. */
 export function parseEmailList(value) {
     return new Set(String(value || '').split(/[\s,]+/).map((e) => e.trim().toLowerCase()).filter(Boolean));
@@ -36,13 +48,11 @@ export function parseEmailList(value) {
 
 export function readConfig(env) {
     const { origin, secure } = parseOrigin(env.APP_ORIGIN);
-    const paddleApiBase = env.PADDLE_API_BASE || 'https://api.paddle.com';
-    if (!PADDLE_API_BASES.has(paddleApiBase)) throw new ConfigError('PADDLE_API_BASE is not a Paddle API host');
     return {
         appOrigin: origin,
         secure,
         emailFrom: env.EMAIL_FROM || '',
-        paddleApiBase,
+        portalUrl: parsePortalUrl(env.PADDLE_PORTAL_URL),
         complimentary: parseEmailList(env.COMPLIMENTARY_EMAILS),
         // Local development has no Paddle: the cookie name and flags follow the scheme.
         cookieName: secure ? '__Host-prism_session' : 'prism_session',

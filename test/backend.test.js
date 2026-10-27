@@ -179,3 +179,15 @@ test('the file picker is opened before anything is awaited', async () => {
     assert.equal(opened, true, 'the picker needs the click that asked for it');
     await pending;
 });
+
+test('goals are read and saved over /api/goals', async () => {
+    const { call } = await setup();
+    const goal = { ...Plan.createGoal({ name: 'FI', unit: 'times', value: 25 }), id: 'g_a' };
+    const put = await call('PUT', '/api/goals', { goals: [goal] });
+    assert.equal(put.status, 200);
+    assert.deepEqual(put.body.goals, [goal]);
+    const got = await call('GET', '/api/goals');
+    assert.deepEqual(got.body, { goals: [goal] });
+    const bad = await call('PUT', '/api/goals', {});
+    assert.equal(bad.status, 400);
+});

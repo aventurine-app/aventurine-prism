@@ -4,6 +4,7 @@
 // Shared UI primitives, all keyboard-operable:
 //
 //   UI.menu(anchor, items)            dropdown of actions
+//   UI.popover(anchor, el, opts)      a small panel of controls by its button
 //   UI.picker(point, groups, opts)    searchable list (add or link a module)
 //   UI.iconPicker / UI.monthPicker    grids for a module's icon, a month
 //   UI.confirm({ title, message })    yes/no dialog → Promise<boolean>
@@ -128,6 +129,25 @@
         if (at.el) at.el.setAttribute('aria-expanded', 'true');
         const first = el.querySelector('.menu-item:not(:disabled)');
         if (first) first.focus({ preventScroll: true });
+    }
+
+    // ── Popover ────────────────────────────────────────────────────────────
+
+    /** A small panel of controls (`el`, built by the caller) by `anchor`, as
+     *  the one open pop: it closes on an outside press, Escape (back to the
+     *  anchor), a resize, or another pop opening. Its first control takes the
+     *  focus. `onClose` runs when it closes, however that happens. */
+    function popover(anchor, el, { align = 'left', onClose = null } = {}) {
+        closePop();
+        const at = pointFor(anchor, align);
+        el.classList.add('panel-pop');
+        el.setAttribute('role', 'dialog');
+        showPop(el, at, () => {
+            if (at.el) at.el.setAttribute('aria-expanded', 'false');
+            if (onClose) onClose();
+        });
+        if (at.el) at.el.setAttribute('aria-expanded', 'true');
+        el.querySelector('input, select, button')?.focus({ preventScroll: true });
     }
 
     // ── Picker ─────────────────────────────────────────────────────────────
@@ -458,5 +478,5 @@
         if (toastEl) toastEl.classList.remove('is-visible');
     }
 
-    window.UI = { menu, picker, iconPicker, monthPicker, closePop, confirm, toast, openModal, closeModal };
+    window.UI = { menu, popover, picker, iconPicker, monthPicker, closePop, confirm, toast, openModal, closeModal };
 }());

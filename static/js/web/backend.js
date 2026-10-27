@@ -72,6 +72,8 @@
             ['PUT',    '/api/plans/<id>',         ({ params, body }) => workspace.putPlan(params.id, planBody(body))],
             ['DELETE', '/api/plans/<id>',         ({ params }) => workspace.deletePlan(params.id)],
             ['POST',   '/api/plans/<id>/export',  exportPlan],
+            ['GET',    '/api/goals',              () => workspace.getGoals()],
+            ['PUT',    '/api/goals',              ({ body }) => workspace.putGoals(body ? body.goals : undefined)],
         ].map(([method, pattern, handler]) => ({ method, handler, ...compile(pattern) }));
 
         // No await before a handler runs: a file picker needs the click that

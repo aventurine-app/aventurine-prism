@@ -1,12 +1,14 @@
 /* ============================================================================
-   ui.css — shared primitives: menus, the module picker, dialogs, toasts,
-   segmented controls, chips and empty states. Built by shell/ui.js.
+   ui.css — shared primitives: menus, popovers, the module picker, dialogs,
+   toasts, segmented controls, chips and empty states. Built by shell/ui.js.
    ============================================================================ */
 
 /* ─── Popovers ──────────────────────────────────────────────────────────────
- * The one surface under every pop-up ui.js opens: the menu, the module
- * picker, and the icon and month grids. Each adds only its own size below. */
+ * The one surface under every pop-up ui.js opens: the menu, a panel of
+ * controls, the module picker, and the icon and month grids. Each adds only
+ * its own size below. */
 .menu-pop,
+.panel-pop,
 .picker,
 .icon-pop,
 .month-pop {
@@ -16,6 +18,15 @@
     border: var(--border-width) solid var(--border);
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-menu);
+}
+
+/* ─── Panel of controls (UI.popover) ──────────────────────────────────────── */
+.panel-pop {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    min-width: 240px;
+    padding: var(--space-12);
 }
 
 /* ─── Dropdown menu ───────────────────────────────────────────────────────── */
@@ -125,6 +136,7 @@
 /* A tile for the app itself rather than a module (the plan, the lock screen). */
 .role-tile--accent { --tile: var(--accent-primary); }
 
+[data-role="person"]   { --tile: var(--role-person); }
 [data-role="source"]   { --tile: var(--role-source); }
 [data-role="account"]  { --tile: var(--role-account); }
 [data-role="expense"]  { --tile: var(--role-expense); }
@@ -210,26 +222,6 @@
 
 /* The compact version: horizon chips (1Y 5Y 10Y…). */
 .segctl--chips .segctl-btn { padding: 0 var(--space-8); }
-
-/* Full-height tabs: square buttons that fill their bar, split by vertical
-   rules. The bar sets the height; this only stretches to it. */
-.segctl--rules {
-    align-self: stretch;
-    gap: 0;
-    padding: 0;
-    background: transparent;
-    border: 0;
-    border-inline: var(--border-width) solid var(--stroke-divider);
-    border-radius: 0;
-}
-.segctl--rules .segctl-btn {
-    align-self: stretch;
-    height: auto;
-    padding: 0 var(--space-16);
-    border-radius: 0;
-}
-.segctl--rules .segctl-btn + .segctl-btn { border-left: var(--border-width) solid var(--stroke-divider); }
-.segctl--rules .segctl-btn:focus-visible { outline-offset: -2px; }
 
 /* ─── Chip ────────────────────────────────────────────────────────────────── */
 .chip {

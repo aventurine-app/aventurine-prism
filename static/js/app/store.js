@@ -3,13 +3,21 @@
 // ─── store.js ───────────────────────────────────────────────────────────────
 // App state and the only ways to change it.
 //
-//   Store.state         plans (tabs), the active plan, selection, results,
+//   Store.state         plans (in navigation order: `tabs`), the active plan,
+//                       the shared goals, the workspace, selection, results,
 //                       the scrubbed month, save state. Read freely; never write.
 //   Store.on(fn)        change events: fn({ type }) with type one of
-//                       'tabs' | 'plan' | 'selection' | 'results' | 'scrub' | 'save'
+//                       'tabs' | 'plan' | 'goals' | 'selection' | 'results' |
+//                       'scrub' | 'save' | 'workspace'
 //   Store.edit(fn)      THE way to change the active plan. Snapshots it for
 //                       undo, runs fn(plan) to mutate it, re-simulates on the
 //                       next frame and schedules a save.
+//   Store.editGoals(fn) the same for the goal list every plan shares.
+//   Store.setWorkspace  'plans' (the builder), 'goals', 'analyze' or 'compare'.
+//                       A preference of this browser, not part of any plan.
+//
+// Undo follows the workspace: in Goals it steps through goal edits, anywhere
+// else through the active plan's.
 //
 // Editing is local-first: the plan in memory is the truth while the app is
 // open, and the backend gets the whole plan 500 ms after the last change (and
@@ -21,12 +29,20 @@
     const P = window.CitrinePlan;
     const Engine = window.CitrineEngine;
 
+    const WORKSPACE_KEY = 'workspace';
+    const WORKSPACES = ['plans', 'goals', 'analyze', 'compare'];
+    // The goal list's key in the dirty set and the undo history. Plan ids
+    // cannot contain a colon, so it never meets one.
+    const GOALS = ':goals';
+
     const state = {
         status: null,
+        workspace: WORKSPACES.includes(Prefs.get(WORKSPACE_KEY)) ? Prefs.get(WORKSPACE_KEY) : 'plans',
+        goals: [],              // shared by every plan (plan.js, validateGoals)
         tabs: [],               // plan ids in tab order
         activeId: null,
         plan: null,
-        selection: null,        // { kind: 'node' | 'link', id }
+        selection: null,        // { kind: 'node' | 'link', id }, in the builder
         preview: null,          // preset id shown in the inspector before it is added
         previewIcon: null,      // icon picked for the previewed preset; the module is added wearing it
         results: null,
@@ -95,8 +111,8 @@
         return JSON.stringify(rest);
     }
 
-    function pushUndo(snap) {
-        const h = hist(state.activeId);
+    function pushUndo(snap, id = state.activeId) {
+        const h = hist(id);
         h.undo.push(snap);
         if (h.undo.length > MAX_UNDO) h.undo.shift();
         h.redo.length = 0;
@@ -111,6 +127,8 @@
         const before = merge || gesture ? null : snapshot();
         const result = fn(state.plan);
         if (result === false) return result;
+        // The plan starts with its earliest person, so moving theirs moves it.
+        P.syncStart(state.plan);
         if (before !== null && before !== snapshot()) pushUndo(before);
         coalesce = { key, at: now };
         changed();
@@ -123,6 +141,26 @@
         markDirty(state.activeId);
         queueSimulation();
         emit('plan');
+    }
+
+    /** Mutate the shared goal list, as edit() does the plan: `fn(goals)`
+     *  returning false cancels, `key` merges a run of edits to one field. */
+    function editGoals(fn, { key = null } = {}) {
+        const now = performance.now();
+        const merge = key !== null && key === coalesce.key && now - coalesce.at < COALESCE_MS;
+        const before = merge ? null : JSON.stringify(state.goals);
+        const result = fn(state.goals);
+        if (result === false) return result;
+        if (before !== null && before !== JSON.stringify(state.goals)) pushUndo(before, GOALS);
+        coalesce = { key, at: now };
+        goalsChanged();
+        return result;
+    }
+
+    function goalsChanged() {
+        pruneSelection();
+        markDirty(GOALS);
+        emit('goals');
     }
 
     /** A drag: many moves, one undo step, no re-simulation while it runs
@@ -158,24 +196,36 @@
         changed();
     }
 
+    function restoreGoals(snap) {
+        state.goals = JSON.parse(snap);
+        coalesce = { key: null, at: 0 };
+        goalsChanged();
+    }
+
+    /** The history undo works on now, with how to snapshot and restore it. */
+    function undoTarget() {
+        if (state.workspace === 'goals') return { h: hist(GOALS), snap: () => JSON.stringify(state.goals), put: restoreGoals };
+        return state.plan ? { h: hist(state.activeId), snap: snapshot, put: restore } : null;
+    }
+
     function undo() {
-        const h = state.plan && hist(state.activeId);
-        if (!h || !h.undo.length) return false;
-        h.redo.push(snapshot());
-        restore(h.undo.pop());
+        const t = undoTarget();
+        if (!t || !t.h.undo.length) return false;
+        t.h.redo.push(t.snap());
+        t.put(t.h.undo.pop());
         return true;
     }
 
     function redo() {
-        const h = state.plan && hist(state.activeId);
-        if (!h || !h.redo.length) return false;
-        h.undo.push(snapshot());
-        restore(h.redo.pop());
+        const t = undoTarget();
+        if (!t || !t.h.redo.length) return false;
+        t.h.undo.push(t.snap());
+        t.put(t.h.redo.pop());
         return true;
     }
 
-    const canUndo = () => !!state.plan && hist(state.activeId).undo.length > 0;
-    const canRedo = () => !!state.plan && hist(state.activeId).redo.length > 0;
+    const canUndo = () => { const t = undoTarget(); return !!t && t.h.undo.length > 0; };
+    const canRedo = () => { const t = undoTarget(); return !!t && t.h.redo.length > 0; };
 
     // ── Selection, scrub, camera ───────────────────────────────────────────
 
@@ -213,11 +263,24 @@
     function pruneSelection() {
         const s = state.selection;
         if (!s) return;
-        const list = s.kind === 'node' ? state.plan.nodes : state.plan.links;
+        const list = !state.plan ? [] : s.kind === 'node' ? state.plan.nodes : state.plan.links;
         if (!list.some((x) => x.id === s.id)) {
             state.selection = null;
             emit('selection');
         }
+    }
+
+    /** Switch workspace. A selection belongs to the builder (a module, a link
+     *  or a library preview), so leaving it lets the selection go. */
+    function setWorkspace(w) {
+        const next = WORKSPACES.includes(w) ? w : 'plans';
+        if (state.workspace === next) return;
+        state.workspace = next;
+        Prefs.set(WORKSPACE_KEY, next);
+        coalesce = { key: null, at: 0 };
+        setScrub(null);
+        emit('workspace');
+        if (next !== 'plans' && (state.selection || state.preview)) select(null);
     }
 
     function setScrub(k) {
@@ -262,10 +325,10 @@
             setSave('saving');
             let ok = true;
             for (const id of [...dirty]) {
-                const doc = plans.get(id);
+                const req = saveRequest(id);
                 dirty.delete(id);
-                if (!doc) continue;
-                const r = await api('PUT', `/api/plans/${encodeURIComponent(id)}`, { plan: doc });
+                if (!req) continue;
+                const r = await api('PUT', req.url, req.body);
                 if (r.ok) continue;
                 ok = false;
                 dirty.add(id);
@@ -286,13 +349,20 @@
         }
     }
 
+    /** What saving `id` (a plan id, or GOALS) sends: { url, body }, or null. */
+    function saveRequest(id) {
+        if (id === GOALS) return { url: '/api/goals', body: { goals: state.goals } };
+        const doc = plans.get(id);
+        return doc ? { url: `/api/plans/${encodeURIComponent(id)}`, body: { plan: doc } } : null;
+    }
+
     // On unload there is no awaiting a reply. The request still reaches the
     // backend, which starts the write whether or not anyone is listening.
     window.addEventListener('beforeunload', () => {
         if (!dirty.size || !window.citrineApi) return;
         for (const id of dirty) {
-            const doc = plans.get(id);
-            if (doc) window.citrineApi.request('PUT', `/api/plans/${encodeURIComponent(id)}`, { plan: doc });
+            const req = saveRequest(id);
+            if (req) window.citrineApi.request('PUT', req.url, req.body);
         }
     });
 
@@ -404,17 +474,22 @@
         persistTabs();
     }
 
+    /** Import a plan file the user picks, and open it. Resolves to the plan,
+     *  or null when nothing was imported (cancelled, or refused). */
     async function importPlan() {
         const r = await api('POST', '/api/plans/import');
         if (!r.ok) {
             UI.toast(r.body.error ? `Not imported: ${r.body.error}.` : 'The plan could not be imported.', { type: 'error' });
-            return;
+            return null;
         }
-        if (r.body.canceled) return;
+        if (r.body.canceled) return null;
         plans.set(r.body.plan.id, r.body.plan);
         state.tabs.push(r.body.plan.id);
         await openPlan(r.body.plan.id);
+        // An older plan file may have brought goals of its own into the shared list.
+        await loadGoals().catch((e) => console.error('[store] goals could not be reloaded', e));
         UI.toast(`Imported ${r.body.plan.name}.`, { type: 'success' });
+        return r.body.plan;
     }
 
     async function exportPlan(id) {
@@ -434,9 +509,9 @@
         const r = await api('GET', '/api/plans');
         if (!r.ok) throw new Error(r.body.error || 'plans could not be listed');
         state.tabs = r.body.order.slice();
-        // Plans are small; loading every one up front gives the tab strip its
-        // names and makes switching tabs instant.
-        await Promise.all(state.tabs.map(loadPlan));
+        // Plans are small; loading every one up front gives the navigation its
+        // names, makes switching plans instant and lets Compare run them all.
+        await Promise.all([...state.tabs.map(loadPlan), loadGoals()]);
         if (!state.tabs.length) {
             await newPlan();
         } else {
@@ -576,11 +651,55 @@
         edit((plan) => { plan.links = plan.links.filter((l) => l.id !== id); });
     }
 
+    // ── Goals ──────────────────────────────────────────────────────────────
+    // One list, shared by every plan. Edited in the Goals workspace; each plan
+    // is measured against it in Analyze.
+
+    const goal = (id) => state.goals.find((g) => g.id === id);
+
+    /** Add a goal: one of CitrineGoals.PRESETS's rules, or with no preset a
+     *  custom goal to write. Returns it, or null at the limit. */
+    function addGoal(presetId = null) {
+        const preset = presetId ? window.CitrineGoals.PRESETS.find((p) => p.id === presetId) : null;
+        if (presetId && !preset) return null;
+        let created = null;
+        editGoals((goals) => {
+            if (goals.length >= P.LIMITS.goals) {
+                UI.toast(`You can set at most ${P.LIMITS.goals} goals.`, { type: 'error' });
+                return false;
+            }
+            const { id: _id, label: _label, ...fields } = preset || {};
+            // Each new goal takes the next colour no other goal wears (then they repeat).
+            const free = P.GOAL_COLORS.filter((c) => !goals.some((g) => g.color === c));
+            const color = free[0] || P.GOAL_COLORS[goals.length % P.GOAL_COLORS.length];
+            created = P.createGoal({ ...fields, color });
+            goals.push(created);
+            return true;
+        });
+        return created;
+    }
+
+    function removeGoal(id) {
+        editGoals((goals) => {
+            const at = goals.findIndex((g) => g.id === id);
+            if (at < 0) return false;
+            goals.splice(at, 1);
+            return true;
+        });
+    }
+
+    async function loadGoals() {
+        const r = await api('GET', '/api/goals');
+        if (!r.ok) throw new Error(r.body.error || 'goals could not be loaded');
+        state.goals = r.body.goals;
+        emit('goals');
+    }
+
     window.Store = {
         state, on, edit, beginGesture, gestureMove, endGesture, undo, redo, canUndo, canRedo,
         select, setScrub, setView, flush, boot, openPlan, newPlan, addPlan, duplicatePlan,
         renamePlan, deletePlan, reorderTabs, importPlan, exportPlan, planName, getPlan,
         node, link, previewPreset, setPreviewIcon, addNode, duplicateNode, copyNodes, pasteNodes, removeNode, removeNodes,
-        connect, reconnect, removeLink,
+        connect, reconnect, removeLink, goal, editGoals, addGoal, removeGoal, setWorkspace,
     };
 }());

@@ -1,0 +1,97 @@
+/* ============================================================================
+   compare.css — the Compare workspace (compare.js): every plan in a row, with
+   its net worth at the end, the taxes it pays and what it leaves behind. Each
+   column is a heat map by rank: one accent hue, strongest on the best figure,
+   lighter on the runners-up. Each shaded cell also names its place (Best,
+   2nd, 3rd), so rank never rests on colour alone. The page frame is
+   goals.css's.
+   ============================================================================ */
+
+.compare-wrap { max-width: 960px; overflow-x: auto; }
+
+.compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--size-small);
+    font-variant-numeric: tabular-nums;
+}
+.compare-table th,
+.compare-table td {
+    padding: var(--space-12) var(--space-16);
+    border-bottom: var(--border-width) solid var(--stroke-divider);
+    text-align: right;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+.compare-table thead th {
+    color: var(--text-tertiary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--track-widest);
+    text-transform: uppercase;
+    vertical-align: bottom;
+}
+.compare-table thead th > span { display: block; }
+.compare-col-note {
+    margin-top: 2px;
+    font-weight: var(--weight-medium);
+    letter-spacing: 0;
+    text-transform: none;
+}
+.compare-table th:first-child { text-align: left; }
+.compare-table tbody th { font-weight: var(--weight-regular); }
+/* Rules between the columns, matching the ones between the rows. */
+.compare-table th + th,
+.compare-table th + td,
+.compare-table td + td { border-left: var(--border-width) solid var(--stroke-divider); }
+
+/* --heat runs 0..1 (compare.js sets it per place). Values keep the text
+   colours. */
+.compare-table td.is-heat { background: color-mix(in srgb, var(--accent-primary) calc(var(--heat) * 38%), transparent); }
+
+.compare-plan {
+    display: block;
+    max-width: 280px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-primary);
+    font-size: var(--size-body);
+    font-weight: var(--weight-semibold);
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+.compare-plan:hover { text-decoration: underline; text-underline-offset: 3px; }
+.compare-plan:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; border-radius: var(--radius-sm); }
+.compare-span { display: block; margin-top: 2px; color: var(--text-tertiary); font-size: var(--size-micro); }
+
+.compare-value { color: var(--text-primary); font-size: var(--size-body); font-weight: var(--weight-semibold); }
+.compare-table td.is-negative .compare-value { color: var(--accent-negative); }
+.compare-table td.is-missing { color: var(--text-tertiary); }
+/* The place sits before the figure, so the figures keep one right edge. */
+.compare-best,
+.compare-place {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-right: var(--space-8);
+    padding: 2px 6px;
+    border-radius: var(--radius-pill);
+    color: var(--text-primary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-semibold);
+    vertical-align: 1px;
+}
+.compare-best { background: var(--surface1); }
+.compare-best .icon { width: 12px; height: 12px; color: var(--accent-ink); }
+.compare-place { color: var(--text-secondary); }
+
+.compare-note {
+    max-width: 640px;
+    margin: var(--space-16) 0 0;
+    color: var(--text-tertiary);
+    font-size: var(--size-micro);
+    line-height: var(--lh-normal);
+}

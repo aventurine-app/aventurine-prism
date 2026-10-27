@@ -1,63 +1,76 @@
 'use strict';
 
 // ─── outlook.js ─────────────────────────────────────────────────────────────
-// The results panel under the canvas: how the plan's money changes over its
-// horizon.
+// The Analyze workspace: how one plan's money changes over its horizon. The
+// plan is the open one; the dropdown in the header row opens another.
 //
-//   Net worth   accounts stacked above zero, debts below, net worth on top
+//   Net worth   bars of accounts stacked above zero, debts below, net worth
+//               on top (monthly on short plans, thinning to yearly)
 //   Cash flow   money in against money out, per year (per month under 3 years)
+//   Sankey      where one year's money (or the whole plan's) came from and
+//               where it went: into spending, taxes, debts and accounts,
+//               then module by module (sankey.js)
 //   Table       year-end balances, and every link's total
 //
-// The headline figures follow the cursor: hovering a chart scrubs the plan to
-// that month (Store.setScrub), which the canvas and inspector follow too.
-// "Adjust for inflation" shows every figure in money of the plan's first
-// month, deflated at the plan's inflation rate.
+// The Net worth chart flags each goal (set in the Goals workspace) the plan
+// reaches.
+//
+// Hovering a chart scrubs the plan to that month (Store.setScrub), which the
+// canvas and inspector follow. The Net worth chart has no legend row: its
+// tooltip names every band. Money is
+// shown as of its own month (Compare's "Leave behind" is the place that
+// reckons in today's money).
 
 (function () {
     const C = window.CitrineCatalog;
     const D = window.Describe;
     const P = window.CitrinePlan;
+    const G = window.CitrineGoals;
 
     const root = document.getElementById('outlook');
     if (!root) return;
 
-    const PREFS = { view: 'outlook-view', height: 'outlook-height', collapsed: 'outlook-collapsed', real: 'outlook-real' };
+    const PREFS = { view: 'outlook-view' };
 
+    const VIEWS = [['worth', 'chart-line', 'Net worth'], ['flow', 'chart-bar', 'Cash flow'], ['sankey', 'flow-arrow', 'Sankey'],
+        ['table', 'table', 'Table']];
     let view = Prefs.get(PREFS.view, 'worth');
-    let real = Prefs.get(PREFS.real) === '1';
-    let collapsed = Prefs.get(PREFS.collapsed) === '1';
-    // The plan whose net worth is drawn beside this one, per active plan.
-    const compareWith = new Map();
-    const compareCache = new Map();   // plan id → { updatedAt, results }
-    const LENGTHS = [1, 3, 5, 10, 20, 30];
+    if (!VIEWS.some(([v]) => v === view)) view = 'worth';
+    const LENGTHS = [1, 3, 5, 10, 20, 30, 40];
     // Net worth bands: at most this many per family before the rest fold
     // into "Other". Each band wears its module's role colour (style.css).
     const ACCOUNT_BANDS = 6;
     const DEBT_BANDS = 4;
     const SHADES = 6;   // --chart-<role>-1..6
+    // The Sankey's span: a plan year (0-based), or -1 for the whole plan.
+    let sankeyYear = 0;
+    const SANKEY_IN = [1, 2, 3, 4, 5, 6].map((i) => `--chart-inflow-${i}`);
+    const SANKEY_OUT = [1, 2, 3, 4, 5].map((i) => `--chart-outflow-${i}`);
+    const SANKEY_FEES = [1, 2, 3, 4].map((i) => `--chart-fee-${i}`);
+    const SANKEY_DEBTS = [1, 2, 3, 4, 5, 6].map((i) => `--chart-debt-${i}`);
+    const SANKEY_ACCOUNTS = [1, 2, 3, 4, 5, 6].map((i) => `--chart-account-${i}`);
 
     root.innerHTML = `
-        <div class="outlook-grip" aria-hidden="true"></div>
-        <div class="kpis scroll-y" aria-live="polite"></div>
         <div class="outlook-main">
             <div class="outlook-head">
-                <div class="segctl segctl--rules" role="tablist" aria-label="Outlook view">
-                    ${[['worth', 'chart-line', 'Net worth'], ['flow', 'chart-bar', 'Cash flow'], ['table', 'table', 'Table']].map(([v, icon, name]) =>
+                <div class="segctl outlook-views" role="tablist" aria-label="Analyze view">
+                    ${VIEWS.map(([v, icon, name]) =>
                         `<button class="segctl-btn" type="button" role="tab" data-view="${v}" aria-label="${name}" title="${name}">${iconSvg(icon)}<span>${name}</span></button>`).join('')}
                 </div>
-                <span class="outlook-spacer"></span>
-                <span class="outlook-label">Over</span>
-                <div class="segctl segctl--chips" role="group" aria-label="Plan length">
-                    ${LENGTHS.map((y) => `<button class="segctl-btn" type="button" data-years="${y}">${y}Y</button>`).join('')}
+                <button class="field-select plan-pick" type="button" data-act="plan" aria-haspopup="menu" aria-expanded="false" title="Analyze another plan">
+                    ${iconSvg('file')}<span class="plan-pick-name"></span>${iconSvg('caret-down', { cls: 'plan-pick-caret' })}</button>
+                <div class="outlook-length">
+                    <span class="outlook-label">Over</span>
+                    <div class="segctl segctl--chips" role="group" aria-label="Plan length">
+                        ${LENGTHS.map((y) => `<button class="segctl-btn" type="button" data-years="${y}">${y}Y</button>`).join('')}
+                    </div>
                 </div>
-                <button class="button-icon" type="button" data-act="collapse" aria-label="Collapse outlook" title="Collapse">${iconSvg('caret-down')}</button>
             </div>
             <div class="outlook-body">
                 <div class="chart-pane">
                     <div class="chart-top">
+                        <button class="button-ghost span-btn" type="button" data-act="span" aria-haspopup="menu" hidden>${iconSvg('calendar-blank')}<span></span>${iconSvg('caret-down')}</button>
                         <div class="chart-legend"></div>
-                        <button class="button-ghost compare-btn" type="button" data-act="compare" aria-haspopup="menu" aria-pressed="false">${iconSvg('chart-line')}<span>Compare</span></button>
-                        <button class="toggle" type="button" data-act="real" aria-pressed="false"><span class="toggle-track" aria-hidden="true"></span>Adjust for inflation</button>
                     </div>
                     <div class="chart-box"></div>
                 </div>
@@ -65,25 +78,23 @@
             </div>
         </div>`;
 
-    const kpisEl = root.querySelector('.kpis');
+    const planBtn = root.querySelector('[data-act="plan"]');
     const pane = root.querySelector('.chart-pane');
     const legendEl = root.querySelector('.chart-legend');
     const box = root.querySelector('.chart-box');
     const tableWrap = root.querySelector('.outlook-table-wrap');
-    const realBtn = root.querySelector('[data-act="real"]');
-    const compareBtn = root.querySelector('[data-act="compare"]');
-    const collapseBtn = root.querySelector('[data-act="collapse"]');
-    let collapseDrawn = null;   // the `collapsed` the collapse button shows
+    const chartTop = root.querySelector('.chart-top');
+    const spanBtn = root.querySelector('[data-act="span"]');
+
+    // Analyze draws only while it is the open workspace.
+    const showing = () => Store.state.workspace === 'analyze';
 
     // ── Values ─────────────────────────────────────────────────────────────
 
-    /** Deflators at the plan's inflation, by balance point k (0..months). */
-    function deflator(plan, months) {
-        const d = new Float64Array(months + 1);
-        const i = real ? (plan.settings.inflation || 0) / 100 : 0;
-        for (let k = 0; k <= months; k++) d[k] = i ? Math.pow(1 + i, -k / 12) : 1;
-        return d;
-    }
+    /** The factor each balance point's money is shown at: 1 throughout, as
+     *  Analyze shows money as of its own month. Every figure reads through
+     *  these, so a way to show today's money would go here. */
+    const deflator = (plan, months) => G.deflator(plan, months, false);
 
     const balances = (arr, def) => Float64Array.from(arr, (v, k) => v * def[k]);
     // A month's flow lands at the end of that month: balance point m + 1.
@@ -130,122 +141,90 @@
         return bands;
     }
 
-    /** Ticks along the bottom: Januaries, thinned to at most ~8 labels. */
-    function yearTicks(plan, count, offset = 0) {
-        const startMonth = P.ymParse(plan.settings.start).m;
-        const years = [];
-        for (let k = 0; k < count; k++) {
-            const cal = ((startMonth - 1 + k + offset) % 12) + 1;
-            if (cal === 1) years.push({ i: k, label: String(P.ymParse(P.ymAdd(plan.settings.start, k + offset)).y) });
-        }
-        const step = Math.ceil(years.length / 8);
-        return years.filter((_, i) => i % step === 0);
-    }
-
-    // ── Headline figures ───────────────────────────────────────────────────
-
-    function renderKpis(plan, res, def) {
-        const scrub = Store.state.scrub;
-        const k = scrub == null ? res.months : scrub;
-        const sumTo = (arr) => { let s = 0; for (let m = 0; m < k; m++) s += arr[m] * def[m + 1]; return s; };
-        const F = res.flows;
-        const worth = res.netWorth[k] * def[k];
-        const delta = worth - res.netWorth[0];
-        const keep = ([, v], i) => i < 1 || Math.abs(v) >= 0.5;
-        const income = [
-            ['Take-home income', sumTo(F.earned) - sumTo(F.withheld)],
-            ['Growth', sumTo(F.growth)],
-            ['Cash back and match', sumTo(F.cashback) + sumTo(F.match)],
-        ].filter(keep);
-        const expenses = [
-            ['Spent', sumTo(F.spent)],
-            ['Interest paid', sumTo(F.interest)],
-            ['Taxes and fees', sumTo(F.skimmed)],
-        ].filter(keep);
-        const unassigned = res.unassigned[k] * def[k];
-        const group = (title, rows) => `
-            <section class="kpi-group">
-                <h3 class="kpi-head">${title}</h3>
-                <dl class="kpi-list">${rows.map(([name, v]) => `
-                    <div class="kpi-row"><dt>${escapeHtml(name)}</dt><dd>${escapeHtml(Fmt.money(v))}</dd></div>`).join('')}
-                </dl>
-            </section>`;
-        kpisEl.innerHTML = `
-            <div class="kpi-hero">
-                <p class="eyebrow">Net worth</p>
-                <div class="kpi-hero-value">${escapeHtml(Fmt.money(worth))}</div>
-                <div class="kpi-hero-delta ${delta >= 0 ? 'is-up' : 'is-down'}">${escapeHtml(Fmt.money(delta, { sign: true }))}</div>
-                <div class="kpi-hero-range">${escapeHtml(label(plan, 0))} to ${escapeHtml(label(plan, k))}</div>
-            </div>
-            ${group('Income', income)}
-            ${group('Expenses', expenses)}
-            ${Math.abs(unassigned) >= 0.5 ? group('Unallocated', [['Unassigned', unassigned]]) : ''}`;
-    }
-
     // ── Charts ─────────────────────────────────────────────────────────────
 
     function legend(items) {
-        legendEl.innerHTML = items.map((it) => `<span class="chart-legend-item"><i class="${it.line ? 'is-line' : it.dashed ? 'is-dashed' : ''}" style="--swatch: var(${it.color})"></i>${escapeHtml(it.label)}</span>`).join('');
+        legendEl.innerHTML = items.map((it) => `<span class="chart-legend-item"><i class="${it.line ? 'is-line' : ''}" style="--swatch: var(${it.color})"></i>${escapeHtml(it.label)}</span>`).join('');
     }
 
-    /** Another plan's results, simulated once per version of it. */
-    function resultsFor(other) {
-        const hit = compareCache.get(other.id);
-        if (hit && hit.updatedAt === other.updatedAt) return hit.results;
-        const results = CitrineEngine.simulate(other);
-        compareCache.set(other.id, { updatedAt: other.updatedAt, results });
-        return results;
+    /** Month indices the net worth bars sample: every month on short plans,
+     *  thinning to quarterly, half-yearly or yearly so there are at most
+     *  ~40 bars. Always ends on the plan's last month. */
+    function worthSamples(months) {
+        const step = [1, 3, 6, 12].find((s) => Math.ceil(months / s) + 1 <= 40) || 12;
+        const idx = [];
+        for (let k = 0; k < months; k += step) idx.push(k);
+        idx.push(months);
+        return idx;
     }
 
-    /** The compared plan's net worth on this plan's months (NaN outside its
-     *  own span), deflated the same way. */
-    function compareSeries(plan, res, def) {
-        const id = compareWith.get(plan.id);
-        const other = id && Store.getPlan(id);
-        if (!other) return null;
-        const r = resultsFor(other);
-        const offset = P.ymDiff(other.settings.start, plan.settings.start);
-        const values = new Float64Array(res.months + 1);
-        for (let k = 0; k <= res.months; k++) {
-            const j = k + offset;
-            values[k] = j >= 0 && j <= r.months ? r.netWorth[j] * def[k] : NaN;
-        }
-        return { label: other.name, color: '--text-primary', values };
+    /** Bar ticks: each sample that starts a new calendar year (the first only
+     *  if it is a January), thinned to at most ~8 labels. */
+    function sampleTicks(plan, idx) {
+        const ticks = [];
+        let prev = null;
+        idx.forEach((k, i) => {
+            const { y, m } = P.ymParse(P.ymAdd(plan.settings.start, k));
+            if (i === 0 ? m === 1 : y !== prev) ticks.push({ i, label: String(y) });
+            prev = y;
+        });
+        const step = Math.ceil(ticks.length / 8);
+        return ticks.filter((_, i) => i % step === 0);
+    }
+
+    /** A flag for each goal the plan meets after its start, on the first bar
+     *  that shows it met: its badge in the goal's card colour, whose white
+     *  text it is made for, its rule in the chart shade of it. Goals met from
+     *  the start are not events; one met after its deadline says so. */
+    function goalMarkers(plan, res, idx) {
+        const goals = Store.state.goals;
+        if (!goals.length) return [];
+        const evs = G.evaluate(plan, res, goals);
+        const out = [];
+        goals.forEach((g, n) => {
+            const ev = evs[n];
+            if (!ev.month) return;
+            const late = ev.status === 'late';
+            out.push({
+                i: idx.findIndex((k) => k >= ev.month), month: ev.month, name: g.name, late,
+                label: late ? `${g.name} (late)` : g.name,
+                color: `--goal-${g.color}-mark`,
+                fill: `--goal-${g.color}`,
+            });
+        });
+        return out;
     }
 
     function drawWorth(plan, res, def) {
-        const bands = worthBands(plan, res, def);
-        const worth = balances(res.netWorth, def);
-        const ghost = compareSeries(plan, res, def);
+        const idx = worthSamples(res.months);
+        const pick = (values) => Float64Array.from(idx, (k) => values[k]);
+        const bands = worthBands(plan, res, def).map((b) => ({ ...b, values: pick(b.values) }));
+        const worth = pick(balances(res.netWorth, def));
+        const markers = goalMarkers(plan, res, idx);
         const listed = topDown(bands);
-        legend([
-            { label: 'Net worth', color: '--chart-worth-line', line: true },
-            ...(ghost ? [{ label: ghost.label, color: ghost.color, dashed: true }] : []),
-            ...listed,
-        ]);
         Chart.draw(box, {
-            kind: 'area',
+            kind: 'bars',
             label: 'Net worth over time',
-            count: res.months + 1,
-            xTicks: yearTicks(plan, res.months + 1),
-            bands,
+            count: idx.length,
+            xTicks: sampleTicks(plan, idx),
+            bars: bands,
+            gap: 0,
             line: { label: 'Net worth', color: '--chart-worth-line', values: worth },
-            ghost,
+            markers,
             format: (v) => Fmt.money(v, { compact: true }),
             tooltip: (k) => ({
-                title: label(plan, k),
+                title: label(plan, idx[k]),
                 rows: [
                     ...listed.filter((b) => b.values[k] > 0.5).map((b) => ({
                         label: b.label, color: b.color, value: Fmt.money(b.sign < 0 ? -b.values[k] : b.values[k]),
                     })),
                     { label: 'Net worth', color: '--chart-worth-line', value: Fmt.money(worth[k]), total: true },
-                    ...(ghost && Number.isFinite(ghost.values[k]) ? [
-                        { label: ghost.label, color: ghost.color, value: Fmt.money(ghost.values[k]) },
-                        { label: 'Difference', color: null, value: Fmt.money(worth[k] - ghost.values[k], { sign: true }) },
-                    ] : []),
+                    ...markers.filter((mk) => mk.i === k).map((mk) => ({
+                        label: `${mk.name} met${mk.late ? ' late' : ''}`, color: mk.color, value: label(plan, mk.month),
+                    })),
                 ],
             }),
-            onHover: (k) => Store.setScrub(k),
+            onHover: (k) => Store.setScrub(k == null ? null : idx[k]),
         });
     }
 
@@ -294,6 +273,129 @@
                 ],
             }),
             onHover: (i) => Store.setScrub(i == null ? null : Math.min(months, (i + 1) * size)),
+        });
+    }
+
+    // ── Sankey ─────────────────────────────────────────────────────────────
+
+    /** The spans the Sankey offers: each plan year, then the whole plan. */
+    function sankeySpans(plan, months) {
+        const spans = [];
+        for (let from = 0; from < months; from += 12) {
+            const to = Math.min(months, from + 12);
+            spans.push({ year: spans.length, from, to, label: `${label(plan, from)} to ${label(plan, to - 1)}` });
+        }
+        if (spans.length > 1) spans.push({ year: -1, from: 0, to: months, label: `All ${spans.length} years` });
+        return spans;
+    }
+
+    /** The chosen span; a year past a shortened plan (or the whole of a
+     *  one-year plan) falls back to its last year. */
+    function currentSpan(plan, months) {
+        const spans = sankeySpans(plan, months);
+        const years = spans.filter((s) => s.year >= 0);
+        return spans.find((s) => s.year === sankeyYear) || years[years.length - 1];
+    }
+
+    /** Where the money in months [from, to) came from and where it went.
+     *
+     *  In: gross income, match, cash back and account growth, plus money drawn
+     *  back out of an account or borrowed on a debt over the span.
+     *  Out, in groups: spending, taxes and fees (withholding included),
+     *  debts (interest, fees and principal paid down), what each account
+     *  kept, and losses.
+     *
+     *  A balance's part is its change over the span, so the two sides agree
+     *  to the cent: net worth is accounts + Unassigned - debts, and the
+     *  engine's conservation rule makes the flows explain its change. Each
+     *  month's step is deflated like that month's flows, which keeps the
+     *  identity whatever factor the money is shown at. */
+    function sankeyFlows(plan, res, def, from, to) {
+        const total = (arr) => {
+            let s = 0;
+            if (arr) for (let m = from; m < to; m++) s += arr[m] * def[m + 1];
+            return s;
+        };
+        const change = (bal) => {
+            let s = 0;
+            for (let m = from; m < to; m++) s += (bal[m + 1] - bal[m]) * def[m + 1];
+            return s;
+        };
+        const left = [];
+        const group = (name, color, ramp) => ({ label: name, color, ramp, items: [] });
+        const spending = group('Spending', '--chart-outflow-1', SANKEY_OUT);
+        const fees = group('Taxes and fees', '--chart-fee-1', SANKEY_FEES);
+        const debts = group('Debts', '--chart-debt-1', SANKEY_DEBTS);
+        const losses = group('Losses', '--chart-interest', SANKEY_DEBTS);
+        const accounts = group('Accounts', '--chart-account-1', SANKEY_ACCOUNTS);
+        const add = (list, name, value, id, extra) => { if (value > 0.005) list.push({ label: name, value, id, ...extra }); };
+        const money = (v) => Fmt.money(v);
+
+        for (const n of plan.nodes) {
+            const r = res.nodes[n.id];
+            if (!r) continue;
+            switch (D.roleOf(n)) {
+                case 'source': {
+                    // Gross pay in; what is withheld goes out again as a tax.
+                    const gross = total(r.gross);
+                    const withheld = gross - total(r.produced);
+                    add(left, n.name, gross, n.id, withheld > 0.5 ? { note: `Withheld ${money(withheld)}` } : null);
+                    add(fees.items, `${n.name} withholding`, withheld, n.id);
+                    break;
+                }
+                case 'expense':
+                    add(spending.items, n.name, total(r.consumed), n.id);
+                    break;
+                case 'modifier':
+                    // What a budget group keeps is spending; a skim's cut is a tax or fee.
+                    add((r.kind === 'group' ? spending : fees).items, n.name, total(r.consumed), n.id);
+                    break;
+                case 'account': {
+                    add(left, `${n.name} match`, total(r.matched), n.id);
+                    const growth = total(r.earnings);
+                    if (growth >= 0) add(left, `${n.name} growth`, growth, n.id);
+                    else add(losses.items, n.name, -growth, n.id);
+                    const kept = change(r.balance);
+                    if (kept >= 0) add(accounts.items, n.name, kept, n.id);
+                    else add(left, `From ${n.name}`, -kept, n.id, { color: '--chart-account-1', pinned: true });
+                    break;
+                }
+                case 'debt': {
+                    add(left, `${n.name} cash back`, total(r.cashback), n.id);
+                    const interest = total(r.interest);
+                    const fee = total(r.fees);
+                    const paidDown = -change(r.balance);
+                    const note = [['Interest', interest], ['Fees', fee], ['Paid down', paidDown]]
+                        .filter(([, v]) => v > 0.5).map(([k, v]) => `${k} ${money(v)}`).join(', ');
+                    add(debts.items, n.name, interest + fee + Math.max(0, paidDown), n.id, { note });
+                    if (paidDown < 0) add(left, `Borrowed on ${n.name}`, -paidDown, n.id, { color: '--chart-debt-1', pinned: true });
+                    break;
+                }
+            }
+        }
+        const pool = change(res.unassigned);
+        if (pool >= 0) add(accounts.items, 'Unassigned', pool, null, { color: '--chart-unassigned' });
+        else add(left, 'From Unassigned', -pool, null, { color: '--chart-unassigned', pinned: true });
+
+        return { left, groups: [spending, fees, debts, losses, accounts] };
+    }
+
+    function drawSankey(plan, res, def) {
+        const span = currentSpan(plan, res.months);
+        spanBtn.querySelector('span').textContent = span.label;
+        legend([]);
+        const { left, groups } = sankeyFlows(plan, res, def, span.from, span.to);
+        Sankey.draw(box, {
+            label: `Where the money came from and went, ${span.label}`,
+            left,
+            groups,
+            inRamp: SANKEY_IN,
+            hubLabel: 'Money in',
+            hubColor: '--chart-net',
+            otherLabel: 'Other',
+            format: (v) => Fmt.money(v),
+            empty: 'Add income and spending to see where the money goes.',
+            onSelect: (id) => Store.select({ kind: 'node', id }),
         });
     }
 
@@ -346,44 +448,35 @@
 
     function renderHead() {
         const plan = Store.state.plan;
-        root.querySelectorAll('[data-view]').forEach((b) => { b.setAttribute('aria-selected', String(!collapsed && b.dataset.view === view)); b.disabled = collapsed; });
+        const { activeId } = Store.state;
+        const name = activeId ? Store.planName(activeId) : '';
+        planBtn.querySelector('.plan-pick-name').textContent = name;
+        planBtn.setAttribute('aria-label', `Plan: ${name}`);
+        root.querySelectorAll('[data-view]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === view)));
         root.querySelectorAll('[data-years]').forEach((b) => b.setAttribute('aria-pressed', String(!!plan && Number(b.dataset.years) === plan.settings.years)));
-        realBtn.setAttribute('aria-pressed', String(real));
-        const others = plan ? Store.state.tabs.filter((id) => id !== plan.id) : [];
-        compareBtn.hidden = view !== 'worth' || !others.length;
-        const on = !!(plan && compareWith.get(plan.id) && Store.getPlan(compareWith.get(plan.id)));
-        compareBtn.setAttribute('aria-pressed', String(on));
-        compareBtn.querySelector('span').textContent = on ? `vs ${Store.planName(compareWith.get(plan.id))}` : 'Compare';
-        root.classList.toggle('is-collapsed', collapsed);
-        // This runs on every plan edit, drags included; the icon changes only on a toggle.
-        if (collapseDrawn !== collapsed) {
-            collapseDrawn = collapsed;
-            collapseBtn.innerHTML = iconSvg(collapsed ? 'caret-up' : 'caret-down');
-            collapseBtn.setAttribute('aria-label', collapsed ? 'Expand outlook' : 'Collapse outlook');
-        }
+        // The Net worth chart needs no row above it: its tooltip names every band.
+        chartTop.hidden = view === 'worth';
+        spanBtn.hidden = view !== 'sankey';
+        pane.classList.toggle('is-sankey', view === 'sankey');
     }
 
     function render() {
+        if (!showing()) return;
         renderHead();
         const plan = Store.state.plan;
         const res = Store.state.results;
         if (!plan || !res) return;
+        // A redraw (a resize) can land in the frame between an edit that adds a
+        // module and its run; the run that follows draws it.
+        if (plan.nodes.some((n) => !res.nodes[n.id])) return;
         const def = deflator(plan, res.months);
-        renderKpis(plan, res, def);
-        if (collapsed) return;
         const isTable = view === 'table';
         pane.hidden = isTable;
         tableWrap.hidden = !isTable;
         if (isTable) renderTables(plan, res, def);
         else if (view === 'flow') drawFlow(plan, res, def);
+        else if (view === 'sankey') drawSankey(plan, res, def);
         else drawWorth(plan, res, def);
-    }
-
-    function renderKpisOnly() {
-        const plan = Store.state.plan;
-        const res = Store.state.results;
-        if (!plan || !res) return;
-        renderKpis(plan, res, deflator(plan, res.months));
     }
 
     // ── Input ──────────────────────────────────────────────────────────────
@@ -405,61 +498,35 @@
         }
         const act = e.target.closest('[data-act]');
         if (!act) return;
-        if (act.dataset.act === 'compare') {
-            const plan = Store.state.plan;
-            const current = compareWith.get(plan.id);
-            const items = Store.state.tabs.filter((id) => id !== plan.id).map((id) => ({
-                label: Store.planName(id),
-                icon: id === current ? 'check' : 'chart-line',
-                onSelect: () => { compareWith.set(plan.id, id); render(); },
-            }));
-            if (current) items.push('sep', { label: 'Stop comparing', icon: 'x', onSelect: () => { compareWith.delete(plan.id); render(); } });
-            UI.menu(act, items, { align: 'right' });
-            return;
-        }
-        if (act.dataset.act === 'real') {
-            real = !real;
-            Prefs.set(PREFS.real, real ? '1' : '0');
-            render();
-        } else if (act.dataset.act === 'collapse') {
-            collapsed = !collapsed;
-            Prefs.set(PREFS.collapsed, collapsed ? '1' : '0');
-            Store.setScrub(null);
-            render();
+        switch (act.dataset.act) {
+            case 'plan': {
+                const { tabs, activeId } = Store.state;
+                UI.menu(act, tabs.map((id) => ({
+                    label: Store.planName(id),
+                    icon: id === activeId ? 'check' : 'file',
+                    onSelect: () => Store.openPlan(id),
+                })));
+                return;
+            }
+            case 'span': {
+                const plan = Store.state.plan;
+                const res = Store.state.results;
+                if (!plan || !res) return;
+                const current = currentSpan(plan, res.months);
+                const items = sankeySpans(plan, res.months).map((s) => ({
+                    label: s.label,
+                    icon: s.year === current.year ? 'check' : 'calendar-blank',
+                    onSelect: () => { sankeyYear = s.year; render(); },
+                }));
+                if (items.length > 1) items.splice(items.length - 1, 0, 'sep');
+                UI.menu(act, items);
+                return;
+            }
         }
     });
 
-    // Drag the top edge to resize.
-    const grip = root.querySelector('.outlook-grip');
-    const savedH = Number(Prefs.get(PREFS.height, '0'));
-    if (savedH) root.style.setProperty('--outlook-h', `${savedH}px`);
-    grip.addEventListener('pointerdown', (e) => {
-        if (e.button !== 0) return;
-        e.preventDefault();
-        grip.setPointerCapture(e.pointerId);
-        root.classList.add('is-resizing');
-        const y0 = e.clientY;
-        const h0 = root.getBoundingClientRect().height;
-        const move = (ev) => {
-            const max = Math.max(220, window.innerHeight * 0.7);
-            const h = Math.min(max, Math.max(200, h0 - (ev.clientY - y0)));
-            root.style.setProperty('--outlook-h', `${Math.round(h)}px`);
-        };
-        // A cancelled pointer (the window losing it mid-drag) ends the drag too.
-        const end = () => {
-            grip.removeEventListener('pointermove', move);
-            grip.removeEventListener('pointerup', end);
-            grip.removeEventListener('pointercancel', end);
-            root.classList.remove('is-resizing');
-            Prefs.set(PREFS.height, String(Math.round(root.getBoundingClientRect().height)));
-        };
-        grip.addEventListener('pointermove', move);
-        grip.addEventListener('pointerup', end);
-        grip.addEventListener('pointercancel', end);
-    });
-
-    // Redraw when the chart's box changes size (window resize, panel drag,
-    // inspector toggle). Coalesced to one draw per frame.
+    // Redraw when the chart's box changes size (window resize, the navigation
+    // or inspector toggled). Coalesced to one draw per frame.
     let resizeQueued = false;
     new ResizeObserver(() => {
         if (resizeQueued) return;
@@ -470,9 +537,10 @@
         });
     }).observe(box);
 
+    // Goals redraw the Net worth chart, which flags the ones reached.
     Store.on((c) => {
-        if (c.type === 'results') render();
-        else if (c.type === 'scrub') renderKpisOnly();
+        if (c.type === 'results' || c.type === 'goals' || c.type === 'workspace') render();
+        else if (!showing()) return;
         else if (c.type === 'plan' || c.type === 'tabs') renderHead();
     });
 

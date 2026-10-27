@@ -4,9 +4,21 @@ A private financial outlook simulator that runs in your browser, from the makers
 of Aventurine.
 
 Build a plan on a canvas: drop in modules for income, accounts, spending, debts
-and the things that change money on the way through (an employer match, a
+and the things that change money on the way through (a budget group, a
 tax), link them together, pick a time horizon, and see where the money ends up
 month by month.
+
+The navigation on the left holds four workspaces:
+
+- **Plans** lists every plan; opening one shows the builder, with the modules
+  across the top and a net worth scrubber under the canvas.
+- **Goals** sets the goals every plan is measured against. Each is a rule built
+  word by word ("Net worth is at least 25 × yearly expenses by age 65"), from
+  scratch or from a preset.
+- **Analyze** charts one plan: net worth (flagging each goal it reaches), cash
+  flow, a Sankey and tables.
+- **Compare** lines every plan up: net worth at the end, taxes paid, and what
+  it leaves behind in today's money.
 
 Your plans stay in your browser. They are stored on your own device and never
 sent to a server, and Prism does not connect to your bank. Export a plan to a

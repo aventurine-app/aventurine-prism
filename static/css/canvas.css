@@ -13,6 +13,15 @@
     flex-direction: column;
 }
 
+/* The plan builder: the module library across the top (library.css), the
+   canvas, and the net worth scrubber under it. */
+.builder {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
 .stage {
     position: relative;
     flex: 1;
@@ -100,6 +109,10 @@
 .link.is-active .link-path { stroke-width: 6px; stroke-opacity: 1; }
 .link-flow.is-active { stroke-width: 2.5px; }
 .link.is-dim .link-path { stroke-opacity: 0.18; }
+/* A person's link moves no money: a dotted grey line, no running dots. */
+.link.is-person .link-path { stroke: var(--role-person); stroke-dasharray: 1 7; }
+.link-flow.is-person,
+.link-label[hidden] { display: none; }
 
 .link-ghost {
     fill: none;
@@ -141,6 +154,9 @@
     border-radius: 50%;
     background: var(--link-line);
 }
+/* The rule beside a link's dollars ('(20%)') reads as secondary to them. */
+.link-rule { font-weight: var(--weight-medium); }
+.link-rule[hidden] { display: none; }
 .link-label:hover { border-color: var(--stroke-strong); color: var(--text-primary); }
 .link-label.is-selected { border-color: var(--accent-gray); color: var(--text-primary); }
 .link-label.is-short { border-color: var(--warning); }
@@ -375,6 +391,23 @@ html[data-theme="dark"] { --node-tint: 14%; --node-edge: 30%; }
 .node-port--out:hover { transform: scale(1.35); }
 .node.is-target .node-port { background: var(--accent-ring); border-color: var(--accent-ring); transform: scale(1.4); }
 
+/* A person's card is white in both themes. Its contents keep the light
+   theme's dark ink, so they read on white in dark mode too. */
+.node[data-role="person"] {
+    --tile: var(--role-person-ink);
+    --text-primary: var(--color-base-900);
+    --text-secondary: var(--color-base-700);
+    --text-tertiary: var(--color-base-600);
+    --node-active-ring: #000;
+}
+/* :where keeps this at the base card's weight, so hover and selection still
+   restyle the edge. */
+.node:where([data-role="person"]) {
+    background: var(--role-person-card);
+    border-color: var(--color-base-300);
+}
+.node[data-role="person"] .node-bar { display: none; }
+
 /* A debt's input port is where a payment link lands. */
 .node[data-role="debt"] .node-port--in { cursor: pointer; }
 .node[data-role="debt"] .node-port--in::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; }
@@ -475,3 +508,100 @@ html[data-theme="dark"] { --node-tint: 14%; --node-edge: 30%; }
     .link-flow { animation: none; display: none; }
     .node, .node-port, .link-path, .link-label { transition: none; }
 }
+
+/* ── Net worth scrubber (scrubber.js) ────────────────────────────────────────
+   The slim bar under the canvas: the plan's net worth over its run, drawn
+   small, with the figure at the point looked at. Moving along it scrubs the
+   plan; the cards follow. */
+.scrubber {
+    display: flex;
+    align-items: center;
+    gap: var(--space-24);
+    height: 56px;
+    flex-shrink: 0;
+    padding: 0 var(--space-16);
+    background: var(--surface1);
+    border-top: var(--border-width) solid var(--stroke-divider);
+}
+.scrub-read {
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-areas: "label label" "value when";
+    align-items: baseline;
+    column-gap: var(--space-8);
+    min-width: 220px;
+}
+.scrub-label {
+    grid-area: label;
+    color: var(--text-tertiary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--track-wide);
+    text-transform: uppercase;
+}
+.scrub-value {
+    grid-area: value;
+    color: var(--text-primary);
+    font-family: var(--font-numeric);
+    font-size: var(--size-h2);
+    font-weight: var(--weight-semibold);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--track-tighter);
+}
+.scrub-value.is-negative { color: var(--accent-negative); }
+.scrub-when {
+    grid-area: when;
+    color: var(--text-tertiary);
+    font-size: var(--size-small);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.scrub-track {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    align-self: stretch;
+    cursor: crosshair;
+    touch-action: none;
+    border-radius: var(--radius-sm);
+    outline: none;
+}
+.scrub-track:focus-visible { box-shadow: 0 0 0 2px var(--accent-ring); }
+/* The plot leaves the bottom strip to the start and end dates. */
+.scrub-plot { position: absolute; inset: var(--space-8) 0 18px; }
+.scrub-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.scrub-area { fill: color-mix(in srgb, var(--chart-worth-line) 7%, transparent); stroke: none; }
+.scrub-line { fill: none; stroke: var(--chart-worth-line); stroke-width: 1.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.scrub-zero { stroke: var(--stroke-strong); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.scrub-cursor {
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    width: 1px;
+    background: var(--text-tertiary);
+    opacity: 0;
+    pointer-events: none;
+}
+.scrubber.is-scrubbing .scrub-cursor { opacity: 1; }
+.scrub-dot {
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    border: 2px solid var(--surface1);
+    border-radius: 50%;
+    background: var(--chart-worth-line);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+.scrub-dot.is-negative { background: var(--accent-negative); }
+.scrub-edge {
+    position: absolute;
+    bottom: 2px;
+    color: var(--text-tertiary);
+    font-size: var(--size-micro);
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+}
+.scrub-edge--start { left: 0; }
+.scrub-edge--end { right: 0; }

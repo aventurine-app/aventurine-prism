@@ -209,6 +209,12 @@
 }
 .stat-value.is-up { color: var(--accent-positive); }
 .stat-value.is-down { color: var(--accent-negative); }
+.stat-value.is-warn { color: var(--warning); }
+.stat-wide { grid-column: 1 / -1; }
+
+/* A goal's outlook: the solver's answer follows the figures. */
+.insp-stats + .sentence { margin-top: var(--space-12); }
+.sentence.is-pending { color: var(--text-tertiary); }
 
 .spark { display: block; width: 100%; height: 64px; overflow: visible; }
 .spark-area { fill: var(--accent-gray); fill-opacity: 0.14; }

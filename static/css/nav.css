@@ -1,0 +1,195 @@
+/* ============================================================================
+   nav.css — the navigation on the left (Plans with its list of plans, Goals,
+   Analyze, Compare; Settings at the foot, and under it the toggle that
+   collapses the pane), and the rule that shows only the workspace it has
+   open. Collapsed, it is a rail of icons (html.has-rail narrows --sidebar-width).
+   ============================================================================ */
+
+:root.has-rail { --sidebar-width: 56px; }
+
+/* ── Workspaces: #app[data-workspace] (nav.js) shows one ────────────────── */
+#app:not([data-workspace="plans"]) .builder,
+#app:not([data-workspace="goals"]) .goals-board,
+#app:not([data-workspace="analyze"]) .outlook,
+#app:not([data-workspace="compare"]) .compare { display: none; }
+/* The inspector belongs to the builder; the other workspaces take the whole width. */
+#app:not([data-workspace="plans"]) .inspector { display: none; }
+
+/* ── The pane ───────────────────────────────────────────────────────────── */
+.nav {
+    width: var(--sidebar-width);
+    transition: width 0.18s ease;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background-color: var(--surface1);
+    border-right: var(--border-width) solid var(--stroke-divider);
+}
+
+.nav-scroll {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-12) var(--space-8) var(--space-16);
+    overflow-x: hidden;
+}
+
+/* A row of the navigation: an icon, its name, and maybe a count. Its icon
+   centre sits on the rail's icon column (28px). */
+.nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    width: 100%;
+    min-width: 0;
+    height: 36px;
+    padding: 0 var(--space-8) 0 10px;
+    border: 0;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--size-body);
+    font-weight: var(--weight-medium);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+.nav-item .icon { width: 20px; height: 20px; flex: none; }
+/* Hover and the current page take the neutral frost tints, not the accent:
+   the lighter step under the pointer, the stronger one where you are. */
+.nav-item:hover { background: var(--frost-2); color: var(--text-primary); }
+.nav-item:active { background: var(--frost-3); }
+.nav-item:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
+.nav-item[aria-current="page"] { background: var(--frost-3); color: var(--text-primary); font-weight: var(--weight-semibold); }
+.nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-count {
+    color: var(--text-tertiary);
+    font-size: var(--size-small);
+    font-weight: var(--weight-semibold);
+    font-variant-numeric: tabular-nums;
+}
+.nav-caret { width: 14px !important; height: 14px !important; color: var(--text-tertiary); transition: transform 0.2s ease; }
+.nav-item[aria-expanded="false"] .nav-caret { transform: rotate(-90deg); }
+
+/* ── Plans: the heading and what it opens (the list, then Add plan) ─────── */
+.nav-group,
+.nav-plans-panel { display: flex; flex-direction: column; gap: 2px; }
+.nav-plans-panel { margin-bottom: var(--space-8); }
+
+.nav-plans {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+/* A plan, under Plans: a page icon on the navigation's icon column, and its
+   name lined up with the names of the rows around it. */
+.nav-plan {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    height: 32px;
+    padding: 0 var(--space-4) 0 10px;
+    border-radius: var(--radius-control);
+    color: var(--text-secondary);
+    font-size: var(--size-small);
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+.nav-plan:hover { background: var(--frost-2); color: var(--text-primary); }
+.nav-plan:active { background: var(--frost-3); }
+.nav-plan:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
+.nav-plan[aria-current="page"] { background: var(--frost-3); color: var(--text-primary); font-weight: var(--weight-semibold); }
+/* 16px, centred in the 20px a row's icon takes, so the icons and names align. */
+.nav-plan-icon { width: 16px; height: 16px; flex: none; margin: 0 2px; }
+.nav-plan[aria-current="page"] .nav-plan-icon { color: var(--text-primary); }
+.nav-plan-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-plan-menu {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    flex: none;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-tertiary);
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+.nav-plan-menu .icon { width: 16px; height: 16px; }
+.nav-plan:hover .nav-plan-menu,
+.nav-plan:focus-within .nav-plan-menu,
+.nav-plan[aria-current="page"] .nav-plan-menu,
+.nav-plan-menu[aria-expanded="true"] { opacity: 1; }
+.nav-plan-menu:hover { background: var(--frost-3); color: var(--text-primary); }
+.nav-rename {
+    flex: 1;
+    min-width: 0;
+    height: 24px;
+    padding: 0 var(--space-4);
+    border: var(--border-width) solid var(--accent-ring);
+    border-radius: var(--radius-sm);
+    background: var(--surface2);
+    color: var(--text-primary);
+    font-size: var(--size-small);
+    outline: none;
+}
+.nav-plan.is-dragging { opacity: 0.5; }
+.nav-plan.is-drop-before { box-shadow: inset 0 2px 0 var(--accent-primary); }
+.nav-plan.is-drop-after  { box-shadow: inset 0 -2px 0 var(--accent-primary); }
+
+/* Add plan: the last row of the list, shaped like a plan but quieter. */
+.nav-add {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    width: 100%;
+    height: 32px;
+    padding: 0 var(--space-4) 0 10px;
+    border: 0;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text-tertiary);
+    font-size: var(--size-small);
+    font-weight: var(--weight-medium);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+.nav-add:hover,
+.nav-add[aria-expanded="true"] { background: var(--frost-2); color: var(--text-primary); }
+.nav-add:active { background: var(--frost-3); }
+.nav-add:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
+
+/* ── Foot: Settings, then the toggle that collapses the pane ─────────────── */
+.nav-foot {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-8) var(--space-8) var(--space-12);
+    border-top: var(--border-width) solid var(--stroke-divider);
+}
+
+/* ── Collapsed: a rail of icons ─────────────────────────────────────────── */
+.nav.is-rail .nav-label,
+.nav.is-rail .nav-count,
+.nav.is-rail .nav-caret,
+.nav.is-rail .nav-plans-panel { display: none; }
+.nav.is-rail .nav-item { width: 40px; padding: 0; justify-content: center; }
+/* In the rail, Plans stands for the builder it opens. */
+.nav.is-rail .nav-item.is-current { background: var(--frost-3); color: var(--text-primary); }
+
+@media (prefers-reduced-motion: reduce) {
+    .nav, .nav-caret, .nav-item, .nav-plan, .nav-plan-menu, .nav-add { transition: none; }
+}

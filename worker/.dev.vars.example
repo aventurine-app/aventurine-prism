@@ -1,7 +1,8 @@
 # Copy to worker/.dev.vars (ignored by git) for `npm run worker:dev`.
 # These override the [vars] in wrangler.toml for local runs only.
 APP_ORIGIN=http://127.0.0.1:8787
-PADDLE_API_BASE=https://sandbox-api.paddle.com
+# Paddle's customer portal link (sandbox or live), for the billing button.
+PADDLE_PORTAL_URL=https://sandbox-customer-portal.paddle.com/cpl_replace_me
 # Any value: signs the webhooks you send yourself with curl.
 PADDLE_WEBHOOK_SECRET=pdl_ntfset_local_dev
 # Sign in as this address with no purchase. With no RESEND_API_KEY set, the

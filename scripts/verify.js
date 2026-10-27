@@ -5,7 +5,8 @@
 // bridge (so it behaves as it will in a user's browser), and every assertion
 // runs from inside the page. Covers storage in IndexedDB, a reload, a save made
 // as the page closes, the one-editing-tab rule, export and import, and the
-// Storage preferences. Exits 0 on PASS.
+// Storage preferences, and the navigation's workspaces with the goals they
+// share. Exits 0 on PASS.
 //
 //   npm run verify
 
@@ -100,13 +101,39 @@ async function main(url) {
     const file = exported && JSON.parse(exported.text);
     check('that file is the plan, in the readable format', file && file.format === 'citrine-plan' && file.plan.nodes.length === 6);
 
-    // Import reads a file the user picked; hand it that text.
+    // Import reads a file the user picked; hand it that text. It is offered by
+    // Add plan, under the list of plans (its only place), so go through that menu.
     await js(`PrismWeb.fileDialogs.open = async () => ${JSON.stringify(exported && exported.text)}; true`);
-    await js('Store.importPlan()');
-    check('import adds the plan as a new tab',
+    await js(`document.querySelector('.nav-add').click();
+        [...document.querySelectorAll('.menu-pop .menu-item')].find((b) => b.textContent.trim() === 'Import plan…').click(); true`);
+    check('import, from Add plan, adds the plan',
         await until(js, 'Store.state.tabs.length === 2 && Store.state.plan.nodes.length === 6'));
     check('with its own id', await js('new Set(Store.state.tabs).size === 2'));
     await js('Store.flush()');
+
+    // The navigation: each workspace opens on its own, and goals are kept once,
+    // for every plan, beside the plans in IndexedDB.
+    const showsOnly = (cls) => `[...document.querySelectorAll('.workbench > section')]
+        .every((s) => (getComputedStyle(s).display !== 'none') === s.classList.contains('${cls}'))`;
+    for (const [go, cls] of [['goals', 'goals-board'], ['analyze', 'outlook'], ['compare', 'compare']]) {
+        await js(`document.querySelector('.nav-item[data-go="${go}"]').click()`);
+        check(`the navigation opens ${go}`, await until(js, showsOnly(cls)));
+    }
+    check('Compare lists every plan', await until(js, `document.querySelectorAll('.compare-table tbody tr').length === 2`));
+    await js(`document.querySelector('.nav-item[data-go="goals"]').click(); document.querySelector('[data-preset="retire"]').click(); true`);
+    await js('Store.flush()');
+    const goals = JSON.parse(await js(`new Promise((resolve, reject) => {
+        const open = indexedDB.open('aventurine-prism');
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+            const req = open.result.transaction('meta').objectStore('meta').get('goals');
+            req.onsuccess = () => resolve(JSON.stringify(req.result || []));
+        };
+    })`));
+    check('a goal is stored once, for every plan, as its rule',
+        goals.length === 1 && goals[0].metric === 'net-worth' && goals[0].unit === 'times' && goals[0].due === 'age');
+    await js(`document.querySelector('.nav-plan').click()`);
+    check('pressing a plan opens it in the builder', await until(js, showsOnly('builder') + ` && Store.state.workspace === 'plans'`));
 
     // Preferences → Storage speaks of the browser, not a file.
     await js('Settings.open("storage")');

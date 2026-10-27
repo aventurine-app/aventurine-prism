@@ -430,20 +430,33 @@ test('a 401(k) contribution comes out of gross pay, before withholding', () => {
     close(r.nodes[salary.id].totals.pretax, 6000);
 });
 
-test('an employer match adds to a pre-tax contribution without taking from pay', () => {
+test("a 401(k)'s employer match adds to the contribution without taking from pay", () => {
     const plan = mkPlan('2026-01', 1);
     const salary = node(plan, 'salary', { amount: 100000, per: 'year', tax: 20 });
-    const match = node(plan, 'employer-match', { rate: 50 });
-    const k = node(plan, 'pretax-account');
+    const k = node(plan, '401k', { match: 50 });
     link(plan, salary, k, { mode: 'percent', value: 6 });
-    link(plan, salary, match, { mode: 'percent', value: 6 });   // the pay being matched
-    link(plan, match, k, { mode: 'rest' });
     link(plan, salary, node(plan, 'expense'), { mode: 'rest' });
     const r = run(plan);
     close(last(r.nodes[k.id].balance), 9000);                    // 6,000 contributed + 3,000 matched
     close(r.totals.withheld, 94000 * 0.2);                        // only the contribution is pre-tax
     close(r.totals.match, 3000);
+    close(r.nodes[k.id].totals.matched, 3000);
+    close(r.nodes[k.id].totals.in, 6000);                         // deposits are the contribution alone
     close(r.nodes[salary.id].totals.pretax, 6000);
+});
+
+test('a 401(k) matches only pay, not transfers, and only on a 401(k)', () => {
+    const plan = mkPlan('2026-01', 1);
+    const savings = node(plan, 'bank-account', { balance: 12000 });
+    const k = node(plan, '401k', { match: 100 });
+    const ira = node(plan, 'pretax-account', { match: 100 });    // hidden setting: ignored
+    const pay = node(plan, 'paycheck', { amount: 1000, per: 'month' });
+    link(plan, savings, k, { basis: 'balance', mode: 'fixed', value: 500 });
+    link(plan, pay, ira, { mode: 'rest' });
+    const r = run(plan);
+    close(last(r.nodes[k.id].balance), 6000);
+    close(last(r.nodes[ira.id].balance), 12000);
+    close(r.totals.match, 0);
 });
 
 test('a Roth IRA is paid from take-home pay', () => {
@@ -460,20 +473,48 @@ test('a Roth IRA is paid from take-home pay', () => {
 test('an employer match stops at its yearly limit and restarts in January', () => {
     const plan = mkPlan('2026-01', 2);
     const pay = node(plan, 'paycheck', { amount: 10000, per: 'month' });
-    const match = node(plan, 'employer-match', { rate: 50, capYearly: 3000 });
-    const k401 = node(plan, 'pretax-account', { balance: 0, rate: 0 });
+    const k401 = node(plan, '401k', { match: 50, matchLimit: 3000 });
     link(plan, pay, k401, { mode: 'fixed', value: 1000 });
-    link(plan, pay, match, { mode: 'fixed', value: 1000 });   // the pay being matched
     link(plan, pay, node(plan, 'expense'));
-    link(plan, match, k401);
     const r = run(plan);
-    const added = r.nodes[match.id].produced;
+    const added = r.nodes[k401.id].matched;
     close(added[0], 500);
     close(added[5], 500);
     assert.equal(added[6], 0);
     close(added[12], 500);
     close(r.totals.match, 6000);
     close(r.nodes[k401.id].balance[12], 15000);
+});
+
+test('a match does not count toward the yearly contribution limit, and matches only what fits', () => {
+    const plan = mkPlan('2026-01', 1);
+    const pay = node(plan, 'paycheck', { amount: 2000, per: 'month' });
+    const k401 = node(plan, '401k', { match: 100, capYearly: 6000 });
+    link(plan, pay, k401, { mode: 'fixed', value: 1000 });
+    link(plan, pay, node(plan, 'expense'));
+    const r = run(plan);
+    close(r.nodes[k401.id].totals.in, 6000);       // six months fill the limit
+    close(r.totals.match, 6000);                   // each accepted deposit matched, none past it
+    close(last(r.nodes[k401.id].balance), 12000);
+    assert.ok(codes(r).includes('cap'));
+});
+
+test("a person's net worth is the accounts less the debts their money reaches", () => {
+    const plan = mkPlan('2026-01', 1);
+    const me = node(plan, 'person', { age: 30, planStart: '2026-01' });
+    const pay = node(plan, 'paycheck', { amount: 1000, per: 'month' });
+    const savings = node(plan, 'bank-account', { balance: 500 });
+    const card = node(plan, 'credit-card', { balance: 2000 });
+    const theirs = node(plan, 'bank-account', { balance: 9000 });   // not reached: not counted
+    link(plan, me, pay, { basis: 'person' });
+    link(plan, pay, card, { mode: 'fixed', value: 100 });
+    link(plan, pay, savings, { mode: 'rest' });
+    const r = run(plan);
+    const worth = r.nodes[me.id].worth;
+    close(worth[0], 500 - 2000);
+    close(worth[12], 500 + 900 * 12 - (2000 - 1200));
+    close(r.nodes[theirs.id].balance[12], 9000);
+    assert.equal(r.links[plan.links[0].id], undefined, "a person's link moves no money");
 });
 
 test('a tax modifier takes its cut and passes the rest on', () => {

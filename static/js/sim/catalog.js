@@ -5,17 +5,22 @@
 // ("roles") they are all built from.
 //
 // THE STANDARD. A module's role decides what it does to money, and nothing else
-// does. There are five:
+// does. There are five, plus the person the plan is for:
 //
+//   person    Person     Who the plan is for: their age and when the plan
+//                        starts. Moves no money. Its links point at the
+//                        modules that are theirs, and it shows the net worth
+//                        of every account and debt those modules' money
+//                        reaches.
 //   source    Income     Makes money on a schedule. Output only.
 //   account   Account    Holds a balance that grows at a rate. Counts toward
 //                        net worth.
 //   expense   Spending   Money that arrives here leaves the plan.
 //   debt      Debt       Holds what is owed. Interest adds to it; money that
 //                        arrives pays it down.
-//   modifier  Modifier   Money passes through and changes on the way: cash back,
-//                        an employer match, a tax or a fee. A budget group is
-//                        the one that changes nothing: it only splits.
+//   modifier  Modifier   Money passes through and changes on the way: a tax or
+//                        a fee. A budget group is the one that changes
+//                        nothing: it only splits.
 //
 // Every preset below (a couple of dozen of them) is one of those five roles with a
 // name, an icon, the fields it shows and starting values. Learning the five
@@ -41,18 +46,21 @@
     // output port depends on its bases: plan.js, basesFor). `holds` marks the
     // two roles that carry a balance from month to month.
     const ROLES = {
+        person:   { id: 'person',   label: 'Person',   hasIn: false, holds: false },
         source:   { id: 'source',   label: 'Income',   hasIn: false, holds: false },
         account:  { id: 'account',  label: 'Account',  hasIn: true,  holds: true },
         expense:  { id: 'expense',  label: 'Spending', hasIn: true,  holds: false },
         debt:     { id: 'debt',     label: 'Debt',     hasIn: true,  holds: true },
         modifier: { id: 'modifier', label: 'Modifier', hasIn: true,  holds: false },
     };
-    const ROLE_ORDER = ['source', 'account', 'expense', 'debt', 'modifier'];
+    const ROLE_ORDER = ['person', 'source', 'account', 'expense', 'debt', 'modifier'];
 
     // Which roles a link may run into, by the role it leaves. Nothing links
-    // into a source (income has no input). Spending sends nothing on. A credit
+    // into a source (income has no input) except a person, whose links move no
+    // money. Nothing links into a person. Spending sends nothing on. A credit
     // card pays for spending: its links out to spending are purchases charged to the card.
     const LINK_TARGETS = {
+        person:   ['source', 'account', 'expense', 'debt', 'modifier'],
         source:   ['account', 'expense', 'debt', 'modifier'],
         account:  ['account', 'expense', 'debt', 'modifier'],
         expense:  ['expense'],
@@ -90,6 +98,10 @@
         cashBackTo: { type: 'account',   label: 'Cash back to',     optional: true },
         annualFee:  { type: 'money',     label: 'Annual fee',       min: 0,    max: 1e10, optional: true },
         limit:      { type: 'money',     label: 'Credit limit',     min: 0,    max: 1e10, optional: true },
+        match:      { type: 'percent',   label: 'Employer match',   min: 0,    max: 200 },
+        age:        { type: 'number',    label: 'Current age',      min: 0,    max: 120,  optional: true, suffix: 'yrs' },
+        planStart:  { type: 'yearmonth', label: 'Plan starts' },
+        matchLimit: { type: 'money',     label: 'Yearly match limit', min: 0, max: 1e10, optional: true },
     };
 
     // How many of each `per` period fall in a month. A yearly amount and a
@@ -97,19 +109,21 @@
     const PER_MONTH = { week: 52 / 12, biweek: 26 / 12, month: 1 };
 
     const ROLE_FIELDS = {
+        person:   ['age', 'planStart'],
         source:   ['amount', 'per', 'payMonth', 'growth', 'tax', 'start', 'end'],
-        account:  ['balance', 'rate', 'lockUntil', 'capYearly'],
+        account:  ['balance', 'rate', 'lockUntil', 'capYearly', 'match', 'matchLimit'],
         expense:  [],
         debt:     ['balance', 'rate', 'term', 'start', 'cashBack', 'cashBackTo', 'annualFee', 'limit'],
-        modifier: ['rate', 'capYearly'],
+        modifier: ['rate'],
     };
 
     const ROLE_DEFAULTS = {
+        person:   { age: null, planStart: null },   // createNode dates it from the plan
         source:   { amount: 0, per: 'month', payMonth: 0, growth: 0, tax: 0, start: null, end: null },
-        account:  { balance: 0, rate: 0, lockUntil: null, capYearly: null },
+        account:  { balance: 0, rate: 0, lockUntil: null, capYearly: null, match: 0, matchLimit: null },
         expense:  {},
         debt:     { balance: 0, rate: 0, term: null, start: null, cashBack: 0, cashBackTo: null, annualFee: null, limit: null },
-        modifier: { rate: 0, capYearly: null },
+        modifier: { rate: 0 },
     };
 
     // ── Categories ─────────────────────────────────────────────────────────
@@ -120,6 +134,10 @@
     // its preset's icon (the user picks one in the inspector). Every preset's
     // own icon is offered too (see iconChoices).
     const CATEGORIES = [
+        { id: 'people',     name: 'People',     icon: 'user',
+          icons: ['user', 'user-circle', 'users', 'person', 'person-simple', 'person-simple-walk', 'person-arms-spread',
+                  'smiley', 'hand-waving', 'baby', 'student', 'graduation-cap', 'briefcase', 'heart', 'star', 'crown',
+                  'sun', 'flower', 'tree', 'house-line', 'cake', 'dog', 'cat'] },
         { id: 'income',     name: 'Income',     icon: 'briefcase',
           icons: ['briefcase', 'money', 'arrow-u-up-left', 'laptop', 'coins', 'hand-coins', 'storefront',
                   'receipt', 'handshake', 'chalkboard-teacher', 'hammer', 'paint-brush', 'camera', 'pen-nib',
@@ -163,11 +181,13 @@
     // defaults    starting values merged over ROLE_DEFAULTS. Amounts, rates and
     //             dates always start empty; only a cadence (Every, Paid in) is set
     // fixed       values the preset pins and hides (a windfall is always 'once')
-    // kind        modifiers: 'match' | 'skim' | 'group' (a budget group: it
-    //             passes everything on, split by its links). Debts: 'card'
-    //             (a credit card).
+    // kind        modifiers: 'skim' | 'group' (a budget group: it passes
+    //             everything on, split by its links). Debts: 'card' (a credit
+    //             card).
     // pretax      accounts paid from gross pay: income sent here is taken before
     //             withholding (see engine.js, pre-tax contributions)
+    // employerMatch  accounts whose Employer match setting adds to what pay puts
+    //             in (see engine.js, employer match)
     // inLink      the rule a new link INTO this module starts with
     // keywords    extra search terms
     // Installment loans are repaid over a term, so their payment is worked out
@@ -179,6 +199,10 @@
     const monthly = () => ({ mode: 'fixed', value: 0, when: 'monthly' });
 
     const PRESETS = [
+        // People
+        P('people', 'person', 'person', 'Person', 'user', {
+            keywords: 'me myself partner spouse household age birthday owner retirement who' }),
+
         // Income
         // Only a one-time income takes a date; the rest run for the whole plan.
         P('income', 'source', 'salary', 'Salary', 'briefcase', {
@@ -219,11 +243,20 @@
         // expected return, so one module covers stocks, funds, bonds, crypto and
         // gold. What sets the retirement accounts apart is when tax is paid:
         // before the money goes in (pre-tax) or already paid (tax-free growth).
+        // A 401(k) is the pre-tax account an employer adds to.
+        P('accounts', 'account', '401k', '401(k)', 'piggy-bank', {
+            pretax: true,
+            employerMatch: true,
+            fields: ['balance', 'rate', 'lockUntil', 'capYearly', 'match', 'matchLimit'],
+            labels: { rate: 'Expected return', capYearly: 'Yearly contribution limit' },
+            keywords: '401k 403b 457 tsp workplace retirement employer match pre-tax free money' }),
         P('accounts', 'account', 'pretax-account', 'Pre-tax account', 'plant', {
             pretax: true,
+            fields: ['balance', 'rate', 'lockUntil', 'capYearly'],
             labels: { rate: 'Expected return' },
-            keywords: '401k 403b traditional ira hsa health savings account workplace retirement' }),
+            keywords: 'traditional ira hsa health savings account retirement' }),
         P('accounts', 'account', 'tax-free-account', 'Tax-free account', 'tree-evergreen', {
+            fields: ['balance', 'rate', 'lockUntil', 'capYearly'],
             labels: { rate: 'Expected return' },
             keywords: 'roth ira 529 plan college education savings retirement' }),
         P('accounts', 'account', 'investment', 'Investment', 'chart-line-up', {
@@ -250,10 +283,6 @@
             keywords: 'mortgage student car auto personal home equity heloc medical bnpl buy now pay later installment borrow' }),
 
         // Modifiers
-        P('modifiers', 'modifier', 'employer-match', 'Match', 'hand-coins', {
-            kind: 'match',
-            labels: { rate: 'Match', capYearly: 'Yearly match limit' },
-            keywords: 'employer 401k match contribution free money' }),
         P('modifiers', 'modifier', 'living', 'Budget Group', 'folder', {
             kind: 'group',
             fields: [],
@@ -269,7 +298,7 @@
     for (const p of PRESETS) {
         if (PRESET_BY_ID[p.id]) throw new Error(`duplicate preset id ${p.id}`);
         if (!ROLES[p.role]) throw new Error(`preset ${p.id}: unknown role ${p.role}`);
-        if (p.role === 'modifier' && !['match', 'skim', 'group'].includes(p.kind)) {
+        if (p.role === 'modifier' && !['skim', 'group'].includes(p.kind)) {
             throw new Error(`preset ${p.id}: modifier needs a kind`);
         }
         PRESET_BY_ID[p.id] = p;

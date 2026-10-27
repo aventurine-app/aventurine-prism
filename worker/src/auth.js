@@ -1,11 +1,14 @@
 // ─── auth.js ────────────────────────────────────────────────────────────────
-// Signing in without a password. The person types their email; if it belongs to
-// a Prism customer we email a one-time link; opening it starts a session.
+// Signing in without a password. The person types their email; if it has access
+// to Prism (the same rule as access.js) we email a one-time link; opening it
+// starts a session.
 //
 // Choices that matter:
 //   • The answer to "send me a link" is the same whether or not the email is a
 //     customer, so the form cannot be used to find out who subscribes. It also
-//     only emails real customers, so it cannot be used to spam strangers.
+//     only emails addresses with a subscription that grants access, so it cannot
+//     be used to spam strangers, and nobody is sent a link they cannot use: not
+//     someone who left checkout before paying, nor a lapsed subscriber.
 //   • The link carries its token after a #, which a browser never sends to a
 //     server and which mail scanners that only fetch the URL never see. The page
 //     it opens asks for one click before using the token, so a scanner that
@@ -17,11 +20,12 @@
 //   • The session cookie is a random 256-bit value, HttpOnly, SameSite=Lax and
 //     (over https) Secure with the __Host- prefix.
 
+import { hasAccess } from './access.js';
 import { randomToken, sha256Hex } from './crypto.js';
 import { normalizeEmail } from './email-address.js';
 import { HttpError, readCookie } from './http.js';
 import {
-    consumeLoginToken, countLoginTokens, createLoginToken, createSession, deleteSession, findSession, hasCustomer,
+    consumeLoginToken, countLoginTokens, createLoginToken, createSession, deleteSession, findSession, subscriptionsFor,
 } from './store.js';
 
 const MINUTE = 60 * 1000;
@@ -44,8 +48,8 @@ export async function requestLogin(deps, rawEmail, ip) {
     if (!(await deps.rateLimit(`login:${ip}`))) throw new HttpError(429, 'rate_limited');
 
     const now = deps.now();
-    const known = deps.config.complimentary.has(email) || await hasCustomer(deps.db, email);
-    if (!known) return;
+    const subscriptions = await subscriptionsFor(deps.db, email);
+    if (!hasAccess({ email, subscriptions, complimentary: deps.config.complimentary })) return;
     // A fourth request inside the window gets no email and no error, so an
     // attacker cannot fill someone's inbox and cannot see that they were stopped.
     if (await countLoginTokens(deps.db, { email, since: now - LINK_TTL_MS }) >= MAX_LINKS_PER_WINDOW) return;
