@@ -16,7 +16,7 @@
     scrollbar-width: thin;
     scrollbar-color: var(--surface4) transparent;
     background: var(--surface1);
-    border-bottom: var(--border-width) solid var(--stroke-divider);
+    border-bottom: var(--border-width) solid var(--border);
 }
 
 .lib-group {
@@ -42,20 +42,20 @@
     width: 40px;
     height: 40px;
     padding: 0;
-    border: var(--border-width) solid transparent;
+    border: 0;
     border-radius: var(--radius-card);
     background: transparent;
     cursor: grab;
-    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
-.lib-tile .role-tile { width: 32px; height: 32px; border-radius: 9px; }
+.lib-tile .role-tile { width: 32px; height: 32px; border-radius: 9px; transition: transform 0.15s ease; }
 .lib-tile .role-tile .icon { width: 20px; height: 20px; }
-.lib-tile:hover { background: var(--frost-2); border-color: var(--stroke-divider); transform: translateY(-1px); }
-.lib-tile:active { cursor: grabbing; transform: translateY(0); }
-.lib-tile[aria-pressed="true"] { background: var(--frost-3); border-color: var(--accent-ring); }
+.lib-tile:hover .role-tile { transform: scale(1.12); }
+.lib-tile:active { cursor: grabbing; }
+.lib-tile:active .role-tile { transform: scale(1.04); }
+.lib-tile[aria-pressed="true"] .role-tile { box-shadow: inset 0 0 0 2px var(--node-active-ring); }
 .lib-tile:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
 
 @media (prefers-reduced-motion: reduce) {
-    .lib-tile { transition: none; }
-    .lib-tile:hover { transform: none; }
+    .lib-tile .role-tile { transition: none; }
+    .lib-tile:hover .role-tile, .lib-tile:active .role-tile { transform: none; }
 }

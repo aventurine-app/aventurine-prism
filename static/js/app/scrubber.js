@@ -2,37 +2,51 @@
 
 // ─── scrubber.js ────────────────────────────────────────────────────────────
 // The slim bar under the plan builder's canvas: the plan's net worth over its
-// whole run, drawn small, with the figure at the point being looked at.
-// Moving along it (pointer, or arrow keys once focused) scrubs the plan to
-// that month (Store.setScrub), and the module cards follow. Leaving it goes
+// whole run, drawn small. Moving along it (pointer, or arrow keys once
+// focused) scrubs the plan to that month (Store.setScrub), and the module
+// cards follow; the canvas's time island names the month. Leaving it goes
 // back to the plan's end. The full charts are in Analyze.
+//
+// Pins mark where the plan's issues start and where its debts are paid off:
+// one per month, coloured as its worst issue (green when it holds only
+// payoffs). Pointing at one lists what happens then, while the scrub follows
+// the pointer; focusing one scrubs to its month; pressing it selects what the
+// first item is about. Issues that
+// belong to no month (a loop, money with no link) have no pin: the inspector
+// lists every issue. On the bar's right, the plan's length, as the chips Analyze shows.
 
 (function () {
     const root = document.getElementById('scrubber');
     if (!root) return;
 
+    // The lengths on offer: the same as Analyze's (LENGTHS in outlook.js).
+    const LENGTHS = [1, 3, 5, 10, 20, 30, 40];
+
     root.innerHTML = `
-        <div class="scrub-read" aria-hidden="true">
-            <span class="scrub-label">Net worth</span>
-            <span class="scrub-value"></span>
-            <span class="scrub-when"></span>
-        </div>
-        <div class="scrub-track" role="slider" tabindex="0" aria-label="Net worth over time" aria-valuemin="0">
-            <div class="scrub-plot" aria-hidden="true">
-                <svg class="scrub-svg" preserveAspectRatio="none">
-                    <line class="scrub-zero"></line>
-                    <path class="scrub-area"></path>
-                    <path class="scrub-line"></path>
-                </svg>
-                <span class="scrub-cursor"></span>
-                <span class="scrub-dot"></span>
+        <div class="scrub-lane">
+            <div class="scrub-track" role="slider" tabindex="0" aria-label="Net worth over time" aria-valuemin="0">
+                <div class="scrub-plot" aria-hidden="true">
+                    <svg class="scrub-svg" preserveAspectRatio="none">
+                        <line class="scrub-zero"></line>
+                        <path class="scrub-area"></path>
+                        <path class="scrub-line"></path>
+                    </svg>
+                    <span class="scrub-cursor"></span>
+                    <span class="scrub-dot"></span>
+                </div>
+                <span class="scrub-edge scrub-edge--start" aria-hidden="true"></span>
+                <span class="scrub-edge scrub-edge--end" aria-hidden="true"></span>
             </div>
-            <span class="scrub-edge scrub-edge--start" aria-hidden="true"></span>
-            <span class="scrub-edge scrub-edge--end" aria-hidden="true"></span>
+            <div class="scrub-pins" role="group" aria-label="Issues and payoffs by month"></div>
+            <div class="scrub-tip" aria-hidden="true" hidden></div>
+        </div>
+        <div class="scrub-length">
+            <span class="scrub-label" aria-hidden="true">Over</span>
+            <div class="segctl segctl--chips" role="group" aria-label="Plan length">
+                ${LENGTHS.map((y) => `<button class="segctl-btn" type="button" data-years="${y}">${y}Y</button>`).join('')}
+            </div>
         </div>`;
 
-    const valueEl = root.querySelector('.scrub-value');
-    const whenEl = root.querySelector('.scrub-when');
     const track = root.querySelector('.scrub-track');
     const svg = root.querySelector('.scrub-svg');
     const area = root.querySelector('.scrub-area');
@@ -42,6 +56,9 @@
     const dot = root.querySelector('.scrub-dot');
     const startEl = root.querySelector('.scrub-edge--start');
     const endEl = root.querySelector('.scrub-edge--end');
+    const lengthBtns = root.querySelectorAll('[data-years]');
+    const pinsEl = root.querySelector('.scrub-pins');
+    const tip = root.querySelector('.scrub-tip');
 
     // The drawn run: its net worth series and the value range drawn.
     let drawn = null;
@@ -77,13 +94,107 @@
         zero.setAttribute('y2', y(0));
         zero.style.display = lo < 0 ? '' : 'none';
         drawn = { worth, n, lo, hi };
+        // The first and last months, as the cards name them at either end.
         startEl.textContent = window.Describe.monthLabel(plan, 0);
-        endEl.textContent = window.Describe.monthLabel(plan, n);
+        endEl.textContent = window.Describe.monthLabel(plan, n - 1);
         track.setAttribute('aria-valuemax', String(n));
+        lengthBtns.forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.years) === plan.settings.years)));
+        drawPins(plan, res);
         place();
     }
 
-    /** Put the cursor and the figure at the scrubbed point, or the end. */
+    // ── Pins ───────────────────────────────────────────────────────────────
+
+    // A payoff ('done') is good news, so any issue in its month outranks it.
+    const LEVEL_RANK = { warn: 2, notice: 1, info: 0, done: -1 };
+    const TIP_ICON = { warn: 'warning', notice: 'info', info: 'info', done: 'check' };
+    let pins = [];      // [{ k, month, level, items: [{ level, text, select }] }], by k
+
+    /** One pin per balance point that an issue starts or a debt is paid off
+     *  at. A month's money lands at its end, so what happens in month m shows
+     *  at point m + 1, where the cards show that month. A month's issues are
+     *  listed before its payoffs. */
+    function drawPins(plan, res) {
+        const D = window.Describe;
+        const byK = new Map();
+        const add = (month, d) => {
+            const k = Math.min(res.months, month + 1);
+            if (!byK.has(k)) byK.set(k, { k, month, level: d.level, items: [] });
+            const pin = byK.get(k);
+            pin.items.push(d);
+            if (LEVEL_RANK[d.level] > LEVEL_RANK[pin.level]) pin.level = d.level;
+        };
+        for (const w of res.warnings) {
+            if (w.month != null && w.month >= 0) add(w.month, D.warning(w, plan));
+        }
+        // Only a debt owed going into its payoff month: a card paid in full as
+        // it is charged clears in its first month but was never carried.
+        for (const ms of res.milestones) {
+            if (ms.code === 'paid-off' && res.nodes[ms.nodeId].balance[ms.month] > 0.005) add(ms.month, D.payoff(ms, plan));
+        }
+        pins = [...byK.values()].sort((a, b) => a.k - b.k);
+        const n = res.months;
+        pinsEl.innerHTML = pins.map((p, i) => {
+            const label = `${D.monthLabel(plan, p.month)}: ${p.items.map((d) => d.text).join(' ')}`;
+            return `<button class="scrub-pin" type="button" data-pin="${i}" data-level="${p.level}"
+                style="left:${n ? (p.k / n) * 100 : 0}%" aria-label="${escapeHtml(label)}"></button>`;
+        }).join('');
+        hideTip();
+    }
+
+    /** List a pin's issues over it. Focus scrubs to the pin's point; a
+     *  pointer keeps scrubbing to where it is (the pins lie over the track,
+     *  and snapping to them left the months under each one out of reach). */
+    function showTip(btn, snap) {
+        const p = pins[Number(btn.dataset.pin)];
+        if (!p) return;
+        tip.innerHTML = p.items.map((d) => `<p class="scrub-tip-row" data-level="${d.level}">${
+            iconSvg(TIP_ICON[d.level])}<span>${escapeHtml(d.text)}</span></p>`).join('');
+        tip.hidden = false;
+        // Centred over the pin, kept inside the lane.
+        const lane = tip.parentElement.getBoundingClientRect();
+        const b = btn.getBoundingClientRect();
+        const half = tip.offsetWidth / 2;
+        const x = Math.max(half, Math.min(lane.width - half, b.left + b.width / 2 - lane.left));
+        tip.style.left = `${x}px`;
+        if (snap) Store.setScrub(p.k);
+    }
+
+    function hideTip() {
+        tip.hidden = true;
+    }
+
+    pinsEl.addEventListener('pointerover', (e) => {
+        const btn = e.target.closest('.scrub-pin');
+        if (btn) showTip(btn, false);
+    });
+    pinsEl.addEventListener('pointermove', (e) => {
+        if (drawn && !dragging) Store.setScrub(pointAt(e.clientX));
+    });
+    pinsEl.addEventListener('pointerout', (e) => {
+        const btn = e.target.closest('.scrub-pin');
+        if (!btn || btn.contains(e.relatedTarget)) return;
+        hideTip();
+        // Onto the track (or the next pin), the scrub carries on from there.
+        if (document.activeElement !== btn && !track.contains(e.relatedTarget)
+            && !pinsEl.contains(e.relatedTarget)) Store.setScrub(null);
+    });
+    pinsEl.addEventListener('focusin', (e) => {
+        const btn = e.target.closest('.scrub-pin');
+        if (btn) showTip(btn, true);
+    });
+    pinsEl.addEventListener('focusout', () => {
+        hideTip();
+        Store.setScrub(null);
+    });
+    pinsEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('.scrub-pin');
+        const p = btn && pins[Number(btn.dataset.pin)];
+        const target = p && p.items.find((d) => d.select);
+        if (target) Store.select(target.select);
+    });
+
+    /** Put the cursor and the dot at the scrubbed point, or the end. */
     function place() {
         if (!drawn) return;
         const plan = Store.state.plan;
@@ -98,13 +209,9 @@
         dot.style.top = `${yPct}%`;
         root.classList.toggle('is-scrubbing', scrub != null);
         dot.classList.toggle('is-negative', v < 0);
-        const money = Fmt.money(v);
-        const when = window.Describe.monthLabel(plan, k);
-        valueEl.textContent = money;
-        valueEl.classList.toggle('is-negative', v < -0.005);
-        whenEl.textContent = scrub == null ? `at the end, ${when}` : when;
         track.setAttribute('aria-valuenow', String(k));
-        track.setAttribute('aria-valuetext', `${when}: ${money}`);
+        // Point k is the end of month k - 1, which is the month the cards show.
+        track.setAttribute('aria-valuetext', `${window.Describe.monthLabel(plan, Math.max(0, k - 1))}: ${Fmt.money(v)}`);
     }
 
     /** The balance point under a pointer at clientX. */
@@ -126,7 +233,9 @@
     const release = () => { dragging = false; };
     track.addEventListener('pointerup', release);
     track.addEventListener('pointercancel', release);
-    track.addEventListener('pointerleave', () => {
+    track.addEventListener('pointerleave', (e) => {
+        // Onto a pin, which lies over the track, the scrub goes on following.
+        if (pinsEl.contains(e.relatedTarget)) return;
         if (!dragging && document.activeElement !== track) Store.setScrub(null);
     });
     track.addEventListener('blur', () => Store.setScrub(null));
@@ -148,10 +257,16 @@
         Store.setScrub(next);
     });
 
+    root.querySelector('.scrub-length').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-years]');
+        if (b) Store.edit((plan) => { plan.settings.years = Number(b.dataset.years); });
+    });
+
     Store.on((c) => {
         if (c.type === 'results') draw();
         else if (c.type === 'scrub') place();
     });
-    // A Format change (Preferences) rewrites the figure.
-    window.addEventListener('citrine:format', place);
+    // A Format change (Preferences) rewrites the amounts in the issues and
+    // the slider's spoken value.
+    window.addEventListener('citrine:format', draw);
 }());

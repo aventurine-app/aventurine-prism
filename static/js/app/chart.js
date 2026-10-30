@@ -67,6 +67,8 @@
      *   opts.xTicks     [{ i, label }]
      *   opts.bands      area: [{ label, color, values, sign }]   sign -1 stacks below zero
      *   opts.bars       bars: [{ label, color, values, sign }]   sign -1 stacks below zero
+     *                   (a negative value flips its side too: an overdrawn
+     *                   account stacks below zero with the debts)
      *   opts.gap        bars: px of surface between stacked segments (default 2;
      *                   0 butts them together with no seam)
      *   opts.line       { label, color, values }
@@ -79,7 +81,9 @@
      *                   overlap another badge is left off, leaving the target's
      *                   square; the tooltip still names every marker.
      *   opts.format     value → axis label
-     *   opts.tooltip    index → { title, rows: [{ label, color, value, total }] }
+     *   opts.tooltip    index → { people, title, rows: [{ label, color, value, total }] }
+     *                   people: optional [{ name, age }] shown above the title;
+     *                   age is text ('Age 42') or '' when it is not known
      *   opts.onHover    index | null
      */
     function draw(box, opts) {
@@ -101,10 +105,16 @@
         const up = new Float64Array(n);
         const down = new Float64Array(n);
         const layers = (opts.kind === 'area' ? opts.bands : opts.bars) || [];
+        // Where a layer's value at i sits: above zero (positive) or below.
+        // Less than half a cent is nothing, so float dust picks no side.
+        const signed = (s, i) => {
+            const v = (s.sign < 0 ? -1 : 1) * (s.values[i] || 0);
+            return Math.abs(v) < 0.005 ? 0 : v;
+        };
         for (const s of layers) {
             for (let i = 0; i < n; i++) {
-                const v = Math.max(0, s.values[i] || 0);
-                if (s.sign < 0) down[i] += v; else up[i] += v;
+                const v = signed(s, i);
+                if (v < 0) down[i] -= v; else up[i] += v;
             }
         }
         for (let i = 0; i < n; i++) { hi = Math.max(hi, up[i]); lo = Math.min(lo, -down[i]); }
@@ -138,12 +148,13 @@
             const accUp = new Float64Array(n);
             const accDown = new Float64Array(n);
             for (const s of layers) {
-                const below = s.sign < 0;
-                const acc = below ? accDown : accUp;
                 let top = '';
                 let bottom = '';
                 for (let i = 0; i < n; i++) {
-                    const v = Math.max(0, s.values[i] || 0);
+                    const sv = signed(s, i);
+                    const below = sv < 0;
+                    const acc = below ? accDown : accUp;
+                    const v = Math.abs(sv);
                     const a = acc[i];
                     const b = a + v;
                     acc[i] = b;
@@ -166,9 +177,10 @@
             const accUp = new Float64Array(n);
             const accDown = new Float64Array(n);
             layers.forEach((s, li) => {
-                const below = s.sign < 0;
                 for (let i = 0; i < n; i++) {
-                    const v = Math.max(0, s.values[i] || 0);
+                    const sv = signed(s, i);
+                    const below = sv < 0;
+                    const v = Math.abs(sv);
                     const acc = below ? accDown : accUp;
                     const a = acc[i];
                     const b = a + v;
@@ -184,7 +196,8 @@
                     // Is anything stacked beyond this segment at this index?
                     let outer = true;
                     for (let k = li + 1; k < layers.length; k++) {
-                        if ((layers[k].sign < 0) === below && (layers[k].values[i] || 0) > 0) { outer = false; break; }
+                        const other = signed(layers[k], i);
+                        if (other !== 0 && (other < 0) === below) { outer = false; break; }
                     }
                     const rr = outer ? Math.min(r, h) : 0;
                     const d = below
@@ -263,7 +276,9 @@
                 dot.setAttribute('visibility', 'visible');
             }
             const t = opts.tooltip(i);
-            tip.innerHTML = `<div class="chart-tip-title">${escapeHtml(t.title)}</div>${t.rows.map((r) => `
+            const people = (t.people || []).map((p) => `
+                <div class="chart-tip-person"><span>${escapeHtml(p.name)}</span>${p.age ? `<b>${escapeHtml(p.age)}</b>` : ''}</div>`).join('');
+            tip.innerHTML = `${people ? `<div class="chart-tip-people">${people}</div>` : ''}<div class="chart-tip-title">${escapeHtml(t.title)}</div>${t.rows.map((r) => `
                 <div class="chart-tip-row${r.total ? ' is-total' : ''}"><i style="--swatch: var(${r.color || '--chart-grid'})"></i>
                     <span>${escapeHtml(r.label)}</span><b>${escapeHtml(r.value)}</b></div>`).join('')}`;
             tip.hidden = false;

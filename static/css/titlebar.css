@@ -1,7 +1,7 @@
 /* ============================================================================
-   titlebar.css — the bar across the top of the app: the logo, where the user
-   is (the workspace and its plan) and the signed-in user. Pure black in both
-   themes, 40px.
+   titlebar.css — the bar across the top of the app: the app's name, where
+   the user is (the workspace and its plan) and the signed-in user. Pure black
+   in both themes, 40px.
    ============================================================================ */
 
 /* The bar is black in both themes, so what sits on it uses light inks of its
@@ -24,17 +24,6 @@
     color: var(--titlebar-ink);
     user-select: none;
 }
-/* The gray rule along the bar's bottom edge. */
-.titlebar::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 1px;
-    background: var(--stroke-divider);
-}
-
 /* As wide as the navigation below, so the title starts where the workspace does. */
 .titlebar-lead {
     display: flex;
@@ -46,14 +35,16 @@
     transition: width 0.18s ease;
 }
 
-.titlebar-icon {
-    width: 22px;
-    height: 22px;
-    /* Centred on the navigation's icon column (28px), expanded or collapsed. */
-    margin: 0 var(--space-8) 0 calc(28px - 11px);
-    flex: none;
-    pointer-events: none;
+/* Starts where the navigation's icons do (its padding plus an item's). The
+   collapsed rail has no room for it. */
+.titlebar-name {
+    padding-left: calc(var(--space-8) + 10px);
+    color: var(--titlebar-ink-strong);
+    font-size: var(--size-small);
+    font-weight: var(--weight-bold);
+    transition: opacity 0.18s ease;
 }
+:root.has-rail .titlebar-name { opacity: 0; }
 
 .titlebar-drag {
     flex: 1;

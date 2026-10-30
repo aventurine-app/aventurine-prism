@@ -657,22 +657,18 @@
 
     const goal = (id) => state.goals.find((g) => g.id === id);
 
-    /** Add a goal: one of CitrineGoals.PRESETS's rules, or with no preset a
-     *  custom goal to write. Returns it, or null at the limit. */
-    function addGoal(presetId = null) {
-        const preset = presetId ? window.CitrineGoals.PRESETS.find((p) => p.id === presetId) : null;
-        if (presetId && !preset) return null;
+    /** Add a goal to write. Returns it, or null at the limit. */
+    function addGoal() {
         let created = null;
         editGoals((goals) => {
             if (goals.length >= P.LIMITS.goals) {
                 UI.toast(`You can set at most ${P.LIMITS.goals} goals.`, { type: 'error' });
                 return false;
             }
-            const { id: _id, label: _label, ...fields } = preset || {};
             // Each new goal takes the next colour no other goal wears (then they repeat).
             const free = P.GOAL_COLORS.filter((c) => !goals.some((g) => g.color === c));
             const color = free[0] || P.GOAL_COLORS[goals.length % P.GOAL_COLORS.length];
-            created = P.createGoal({ ...fields, color });
+            created = P.createGoal({ color });
             goals.push(created);
             return true;
         });

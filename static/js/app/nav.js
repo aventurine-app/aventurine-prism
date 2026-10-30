@@ -41,7 +41,7 @@
         <div class="nav-scroll scroll-y">
             <div class="nav-group">
                 <button class="nav-item" type="button" data-act="plans" aria-expanded="${plansOpen}" aria-controls="nav-plans" title="Plans">
-                    ${iconSvg('files')}<span class="nav-label">Plans</span><span class="nav-count" data-count="plans"></span>
+                    ${iconSvg('files')}<span class="nav-label">Plans</span>
                     ${iconSvg('caret-down', { cls: 'nav-caret' })}
                 </button>
                 <div class="nav-plans-panel" id="nav-plans">
@@ -52,7 +52,7 @@
             </div>
             ${WORKSPACES.map(([id, icon, name]) => `
             <button class="nav-item" type="button" data-go="${id}" title="${name}">
-                ${iconSvg(icon)}<span class="nav-label">${name}</span>${id === 'goals' ? '<span class="nav-count" data-count="goals"></span>' : ''}
+                ${iconSvg(icon)}<span class="nav-label">${name}</span>
             </button>`).join('')}
         </div>
         <div class="nav-foot">
@@ -65,7 +65,6 @@
     const list = root.querySelector('.nav-plans');
     const plansBtn = root.querySelector('[data-act="plans"]');
     const railBtn = root.querySelector('[data-act="rail"]');
-    const count = (what) => root.querySelector(`[data-count="${what}"]`);
 
     // ── The plan list ──────────────────────────────────────────────────────
 
@@ -87,7 +86,6 @@
                 <button class="nav-plan-menu" type="button" tabindex="-1" aria-label="Plan options" aria-haspopup="menu">${iconSvg('dots-three')}</button>
             </div></li>`;
         }).join('');
-        count('plans').textContent = tabs.length || '';
     }
 
     function setPlansOpen(open) {
@@ -260,10 +258,6 @@
         renderPlans();
     }
 
-    function renderGoalCount() {
-        count('goals').textContent = Store.state.goals.length || '';
-    }
-
     // ── Rail ───────────────────────────────────────────────────────────────
 
     function setRail(on) {
@@ -343,13 +337,11 @@
     Store.on((c) => {
         if (c.type === 'tabs' || c.type === 'plan') renderPlans();
         else if (c.type === 'workspace') renderWorkspace();
-        else if (c.type === 'goals') renderGoalCount();
     });
 
     setPlansOpen(plansOpen);
     if (railOn) setRail(true);
     renderWorkspace();
-    renderGoalCount();
 
     window.Nav = { toggleRail: () => setRail(!railOn) };
 }());

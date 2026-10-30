@@ -29,7 +29,7 @@ const UI_ICONS = [
     'files', 'file', 'target', 'scales',
     // A goal's rule: its comparison and deadline (the measures wear module icons),
     // and its card's colour.
-    'greater-than-or-equal', 'less-than-or-equal', 'infinity', 'palette',
+    'greater-than-or-equal', 'less-than-or-equal', 'palette',
 ];
 
 // Each asset is one <svg> of <path d="…"/> elements. Anything

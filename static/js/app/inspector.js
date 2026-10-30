@@ -7,7 +7,7 @@
 //              money goes and comes from, its outlook and its issues
 //   a link     its rule, as a sentence and as controls: from what, how much,
 //              when, and an optional window
-//   nothing    the plan: name, start, length, inflation, outlook, issues
+//   nothing    the plan: name, start, issues, module counts
 //
 // It shows only in the plan builder (the Plans workspace); the others have
 // the room to themselves.
@@ -189,29 +189,6 @@
         if (focusKey) root.querySelector(`[data-bind="${CSS.escape(focusKey)}"]`)?.focus();
     }
 
-    // ── Sparkline ──────────────────────────────────────────────────────────
-
-    function spark(values, marker) {
-        const n = values.length;
-        if (n < 2) return '';
-        let lo = 0; let hi = 0;
-        for (const v of values) { if (v < lo) lo = v; if (v > hi) hi = v; }
-        if (hi - lo < 1e-9) hi = lo + 1;
-        const W = 280; const H = 64;
-        const x = (i) => (i / (n - 1)) * W;
-        const y = (v) => H - ((v - lo) / (hi - lo)) * (H - 4) - 2;
-        let line = '';
-        for (let i = 0; i < n; i++) line += `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(values[i]).toFixed(1)}`;
-        const area = `${line}L${W},${y(Math.max(lo, 0)).toFixed(1)}L0,${y(Math.max(lo, 0)).toFixed(1)}Z`;
-        const zero = lo < 0 ? `<line class="spark-zero" x1="0" x2="${W}" y1="${y(0)}" y2="${y(0)}" vector-effect="non-scaling-stroke"/>` : '';
-        const mark = marker != null
-            ? `<line class="spark-zero" x1="${x(marker)}" x2="${x(marker)}" y1="0" y2="${H}" vector-effect="non-scaling-stroke"/>`
-            : '';
-        return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
-            <path class="spark-area" d="${area}"/>${zero}${mark}
-            <path class="spark-line" d="${line}" vector-effect="non-scaling-stroke"/></svg>`;
-    }
-
     /** A labelled figure. `dir` colours it: 'up', 'down' or 'warn'. A wide one
      *  takes the whole row. */
     function stat(label, value, dir = '', { wide = false } = {}) {
@@ -254,20 +231,10 @@
         const settings = `<div class="insp-fields">
             ${row('Starts', `<span class="insp-static" title="${people.length ? 'Set on the earliest Person' : 'Add a Person to set when the plan starts'}">${
                 esc(P.ymLabel(plan().settings.start))}</span>`)}
-            ${field('Length', 'plan.years', {
-                type: 'number', min: 1, max: P.LIMITS.years, suffix: 'yrs',
-                get: () => plan().settings.years,
-                set: (pl, v) => { pl.settings.years = v; },
-            })}
-            ${field('Inflation', 'plan.inflation', {
-                type: 'percent', min: -20, max: 50, suffix: '/yr',
-                get: () => plan().settings.inflation,
-                set: (pl, v) => { pl.settings.inflation = v; },
-            })}
         </div>`;
         return `
             <div class="insp-header">
-                <span class="role-tile role-tile--lg role-tile--accent">${iconSvg('sparkle')}</span>
+                ${iconSvg('file', { cls: 'insp-plan-icon' })}
                 <div class="insp-titles">${nameB.html}
                 </div>
             </div>
@@ -279,27 +246,11 @@
         const p = plan();
         const r = results();
         if (!r) return '';
-        const T = r.totals;
-        const delta = T.endNetWorth - T.startNetWorth;
         const counts = C.ROLE_ORDER.map((role) => {
             const n = p.nodes.filter((x) => D.roleOf(x) === role).length;
             return n ? `<span class="role-count" data-role="${role}"><span class="role-tile">${iconSvg(ROLE_ICON[role])}</span>${n} ${esc(C.ROLES[role].label)}</span>` : '';
         }).join('');
-        const outlook = `
-            <div class="worth-line"><span class="worth-from">${money(T.startNetWorth, { compact: true })} →</span>
-                <span class="worth-to">${money(T.endNetWorth)}</span></div>
-            ${spark(Array.from(r.netWorth), Store.state.scrub)}
-            <div class="insp-stats">
-                ${stat('Change', money(delta, { sign: true }), delta >= 0 ? 'up' : 'down')}
-                ${stat('Earned', money(T.earned - T.withheld))}
-                ${stat('Spent', money(T.spent))}
-                ${stat('Growth', money(T.growth))}
-                ${T.interest > 0.5 ? stat('Interest paid', money(T.interest)) : ''}
-                ${T.cashback + T.match > 0.5 ? stat('Cash back and match', money(T.cashback + T.match)) : ''}
-                ${T.unassigned > 0.5 ? stat('Unassigned', money(T.unassigned)) : ''}
-            </div>`;
-        return section('Net worth', outlook)
-            + issuesHtml(r.warnings)
+        return issuesHtml(r.warnings)
             + (counts ? section('Modules', `<div class="role-counts">${counts}</div>`) : '');
     }
 
@@ -382,7 +333,7 @@
         return section('Settings', `<div class="insp-fields">${fields}</div>`);
     }
 
-    /** One row in Outgoing / Incoming Flows: the module at the other end, the
+    /** One row in Outflows / Inflows: the module at the other end, the
      *  money moving along the link, and the link's rule. */
     function linkRow(l, other) {
         const r = results() && results().links[l.id];
@@ -409,13 +360,14 @@
             fallback: () => p.name,
         });
 
+        // A person's links carry no money, so they are listed on neither end.
         const outs = plan().links.filter((l) => l.from === id);
-        const ins = plan().links.filter((l) => l.to === id);
-        const sends = P.basesFor(node).length ? section(role === 'person' ? 'Theirs' : 'Outgoing Flows',
+        const ins = plan().links.filter((l) => l.to === id && l.basis !== 'person');
+        const sends = P.basesFor(node).length && role !== 'person' ? section('Outflows',
             outs.length
                 ? `<ul class="insp-links">${outs.map((l) => linkRow(l, Store.node(l.to))).join('')}</ul>`
                 : '<p class="insp-none">No links yet</p>') : '';
-        const receives = C.ROLES[role].hasIn ? section('Incoming Flows',
+        const receives = C.ROLES[role].hasIn ? section('Inflows',
             ins.length
                 ? `<ul class="insp-links">${ins.map((l) => linkRow(l, Store.node(l.from))).join('')}</ul>`
                 : '<p class="insp-none">Nothing links here yet</p>') : '';
@@ -462,15 +414,12 @@
         if (role === 'person') {
             const end = nr.worth[m];
             const age = P.ageAt(node, P.ymAdd(plan().settings.start, m));
-            const counted = [...P.personReach(plan(), node.id)].map((id) => Store.node(id))
-                .filter((n) => n && C.ROLES[D.roleOf(n)].holds);
             stats = stat('Net worth at end', money(end), end < 0 ? 'down' : '')
                 + stat('Change', money(end - nr.worth[0], { sign: true }), end >= nr.worth[0] ? 'up' : 'down')
-                + (age != null ? stat('Age at end', String(age)) : '')
-                + stat('Counted', counted.length ? counted.map((n) => n.name).join(', ') : 'Nothing yet');
+                + (age != null ? stat('Age at end', String(age)) : '');
         } else if (role === 'account') {
             const end = nr.balance[m];
-            stats = stat('Balance at end', money(end))
+            stats = stat('Balance at end', money(end), end < -0.005 ? 'down' : '')
                 + stat('Change', money(end - nr.balance[0], { sign: true }), end >= nr.balance[0] ? 'up' : 'down')
                 + stat('Deposits', money(nr.totals.in))
                 + (nr.totals.matched > 0.5 ? stat('Employer match', money(nr.totals.matched), 'up') : '')
@@ -480,7 +429,7 @@
             const paidOff = r.milestones.find((x) => x.code === 'paid-off' && x.nodeId === node.id);
             stats = (nr.payment ? stat('Payment', `${money(nr.payment)}/mo`) : '')
                 + stat('Owed at end', money(nr.balance[m]), nr.balance[m] > 0.5 ? 'down' : '')
-                + stat('Paid off', paidOff ? D.monthLabel(plan(), paidOff.month + 1) : 'Not in this plan')
+                + stat('Paid off', paidOff ? D.monthLabel(plan(), paidOff.month) : 'Not in this plan')
                 + stat('Paid', money(nr.totals.paid))
                 + stat('Interest', money(nr.totals.interest));
             if (kind === 'card') {
@@ -617,15 +566,8 @@
             <div data-stats></div>`;
     }
 
-    /** A person's link has no rule to set: it says what it means. */
-    /** The two ends of a link, each a button that selects its module. */
-    function linkEnds(from, to) {
-        const end = (n) => `<button class="link-end" type="button" data-select="node:${esc(n.id)}">
-            <span class="role-tile" data-role="${D.roleOf(n)}">${iconSvg(P.iconOf(n))}</span><span>${esc(n.name)}</span></button>`;
-        return `<div class="link-ends">${end(from)}
-            <span class="link-ends-arrow" aria-hidden="true">${iconSvg('arrow-right')}</span>${end(to)}</div>`;
-    }
-
+    /** A person's link moves no money, so it has nothing to set: its ends,
+     *  what it means, and a way to remove it. */
     function personLinkPanel(link, from, to) {
         return `
             <div class="insp-card insp-card--link">
@@ -634,7 +576,17 @@
                 <button class="button-icon" type="button" data-act="link-delete" aria-label="Delete link" title="Delete link">${iconSvg('trash')}</button>
             </div>
             <section class="insp-section"><p class="sentence" data-sentence>${D.linkSentence(link, from, to)}</p></section>
-            </div>`;
+            </div>
+            <div data-issues></div>
+            <div data-stats></div>`;
+    }
+
+    /** The two ends of a link, each a button that selects its module. */
+    function linkEnds(from, to) {
+        const end = (n) => `<button class="link-end" type="button" data-select="node:${esc(n.id)}">
+            <span class="role-tile" data-role="${D.roleOf(n)}">${iconSvg(P.iconOf(n))}</span><span>${esc(n.name)}</span></button>`;
+        return `<div class="link-ends">${end(from)}
+            <span class="link-ends-arrow" aria-hidden="true">${iconSvg('arrow-right')}</span>${end(to)}</div>`;
     }
 
     function linkIssues(link) {
@@ -654,7 +606,8 @@
     }
 
     function renderStats() {
-        if (!statsEl || !plan()) return;
+        // Nothing is built while the panel is closed (toggle clears `built`).
+        if (!statsEl || !plan() || !built) return;
         const key = built;
         let html = '';
         if (key === 'plan') html = planStats();

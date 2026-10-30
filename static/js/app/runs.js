@@ -3,39 +3,45 @@
 // ─── runs.js ────────────────────────────────────────────────────────────────
 // Every plan's run of the engine, for the views that look at more than the
 // open plan (Compare, the goal board, the goal inspector). A plan is
-// simulated once per version of it (its updatedAt); the open plan's run is
-// the store's own.
+// simulated once per version of it (its updatedAt) and length; the open
+// plan's run over its own length is the store's own.
 //
-//   Runs.all()      [{ plan, results }] for every plan, in navigation order;
-//                   results is null for a plan the engine failed on
+//   Runs.all()           [{ plan, results }] for every plan, in navigation
+//                        order; results is null for a plan the engine failed on
+//   Runs.all({ years })  the same, every plan run over `years` instead of its
+//                        own length (Compare); the plans are not changed
 
 (function () {
-    const cache = new Map();   // plan id → { updatedAt, results }
+    const cache = new Map();   // `${plan id}|${years}` → { updatedAt, results }
 
-    /** One plan's results, or null if the engine failed on it. */
-    function of(plan) {
-        if (plan === Store.state.plan && Store.state.results) return Store.state.results;
-        const hit = cache.get(plan.id);
+    /** One plan's results over `years`, or null if the engine failed on it. */
+    function of(plan, years) {
+        const own = years === plan.settings.years;
+        if (own && plan === Store.state.plan && Store.state.results) return Store.state.results;
+        const key = `${plan.id}|${years}`;
+        const hit = cache.get(key);
         if (hit && hit.updatedAt === plan.updatedAt) return hit.results;
         let results = null;
         try {
-            results = window.CitrineEngine.simulate(plan);
+            results = window.CitrineEngine.simulate(own ? plan : { ...plan, settings: { ...plan.settings, years } });
         } catch (e) {
             console.error('[runs] simulation failed', plan.id, e);
         }
-        cache.set(plan.id, { updatedAt: plan.updatedAt, results });
+        cache.set(key, { updatedAt: plan.updatedAt, results });
         return results;
     }
 
-    function all() {
+    function all({ years = null } = {}) {
         return Store.state.tabs.map((id) => Store.getPlan(id)).filter(Boolean)
-            .map((plan) => ({ plan, results: of(plan) }));
+            .map((plan) => ({ plan, results: of(plan, years ?? plan.settings.years) }));
     }
 
-    // A deleted plan's run goes with it.
+    // A deleted plan's runs go with it.
     Store.on((c) => {
         if (c.type !== 'tabs') return;
-        for (const id of cache.keys()) if (!Store.state.tabs.includes(id)) cache.delete(id);
+        for (const key of cache.keys()) {
+            if (!Store.state.tabs.includes(key.slice(0, key.lastIndexOf('|')))) cache.delete(key);
+        }
     });
 
     window.Runs = { all };

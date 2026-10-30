@@ -25,13 +25,23 @@
 //
 // Pre-tax contributions. Income sent to a 401(k), an HSA or a Traditional IRA
 // is taken from gross pay before withholding, so only what is left is taxed.
-// Those links split gross pay; every other link from income splits take-home
-// pay.
+// Every percentage from an income is a share of the same paycheck, so they
+// add up together: 10% to a 401(k) and 90% to a bank account is all of it.
+// A pre-tax share goes in whole; any other share is withheld on the way out
+// (90% of gross pay, less withholding). Fixed amounts and the rest are
+// take-home pay, except a fixed amount into a pre-tax account.
 //
 // Employer match. A 401(k)'s Employer match is the share of each contribution
 // the employer adds, up to its yearly match limit. Only pay sent straight from
 // income is matched (not transfers from other accounts), and the match is new
 // money: it does not count toward the account's yearly contribution limit.
+//
+// Overdrawing. A fixed amount out of an account's balance is drawn in full,
+// even past zero: the account goes negative (and earns nothing while it is)
+// rather than the payment falling short, and the plan is flagged `overdrawn`
+// from the first month it ends below zero. The other ways out of a balance
+// (a share of it, everything above an amount, the rest) are measured against
+// what it holds, so they take nothing from an empty or overdrawn account.
 //
 // Paying debts. A payment never exceeds what is owed: once a debt is paid off,
 // the money its links would have sent stays with the payer and falls through
@@ -216,9 +226,10 @@
             totals.match[t] += added;
         }
 
-        /** Split `amount` arriving at `s` across its links on `basis`.
+        /** Split `amount` arriving at `s` across its links on `basis`, a
+         *  percentage taken of `base` (income: see Pre-tax contributions).
          *  Returns what no link took. */
-        function allocate(s, basis, amount) {
+        function allocate(s, basis, amount, base = amount) {
             const list = s.outs[basis];
             if (!list.length || amount <= EPS) return amount;
             let remaining = amount;
@@ -230,7 +241,7 @@
                     if (L.givenMonth !== t) { L.givenMonth = t; L.given = 0; }
                     want = fixedValue(L) - L.given;
                 } else if (L.mode === 'percent') {
-                    want = amount * L.value / 100;
+                    want = base * L.value / 100;
                 } else if (L.mode === 'rest') {
                     want = remaining;
                 } else {
@@ -413,7 +424,10 @@
                     case 'above':   want = Math.max(0, s.bal - L.value); break;
                     default:        want = s.bal;
                 }
-                const give = Math.min(capToDebt(L, want), s.bal);
+                // A fixed amount is drawn in full, past zero if need be (see
+                // Overdrawing above); the rest take only what the balance holds.
+                const held = capToDebt(L, want);
+                const give = L.mode === 'fixed' ? held : Math.min(held, Math.max(0, s.bal));
                 if (L.mode === 'fixed') L.given = give;
                 if (give > EPS) {
                     s.bal -= give;
@@ -495,13 +509,14 @@
                 if (gross <= EPS) continue;
                 const pretax = gross - allocate(s, 'pretax', gross);
                 const taxable = gross - pretax;
-                const net = taxable * (1 - Math.min(95, s.params.tax || 0) / 100);
+                const kept = 1 - Math.min(95, s.params.tax || 0) / 100;
+                const net = taxable * kept;
                 totals.earned[t] += gross;
                 totals.withheld[t] += taxable - net;
                 s.gross[t] = gross;
                 s.pretax[t] = pretax;
                 s.produced[t] = pretax + net;
-                const left = allocate(s, 'inflow', net);
+                const left = allocate(s, 'inflow', net, gross * kept);
                 if (left > EPS) park(s, left);
                 drain();
             }
@@ -725,6 +740,12 @@
             if (out.totals.unplaced > 0.005 && s.role !== 'account') {
                 warnings.push({ code: 'unassigned', nodeId: s.id, amount: out.totals.unplaced });
             }
+            if (s.role === 'account') {
+                const k = s.balance.findIndex((v) => v < -0.005);
+                if (k >= 0) {
+                    warnings.push({ code: 'overdrawn', nodeId: s.id, amount: -Math.min(...s.balance), month: Math.max(0, k - 1) });
+                }
+            }
             if (s.role === 'account' && s.capped > 0.005) {
                 warnings.push({ code: 'cap', nodeId: s.id, amount: s.capped, month: s.cappedFirst });
             }
@@ -745,9 +766,12 @@
             if (s.role === 'account' && s.lockIdx != null && s.lockIdx > 0 && s.lockIdx <= months) {
                 milestones.push({ code: 'unlocks', nodeId: s.id, month: s.lockIdx });
             }
-            // Percentages that add up past 100% cannot all be paid.
+            // Percentages that add up past 100% cannot all be paid. An
+            // income's pre-tax shares are of the same paycheck as the rest.
             for (const [basis, list] of Object.entries(s.outs)) {
-                const pct = list.filter((L) => L.mode === 'percent').reduce((a, L) => a + L.value, 0);
+                if (basis === 'pretax') continue;
+                const shares = basis === 'inflow' && s.role === 'source' ? [...list, ...s.outs.pretax] : list;
+                const pct = shares.filter((L) => L.mode === 'percent').reduce((a, L) => a + L.value, 0);
                 if (pct > 100 + 1e-9) warnings.push({ code: 'over-100', nodeId: s.id, basis, amount: pct });
             }
         }

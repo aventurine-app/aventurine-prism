@@ -25,6 +25,7 @@
     const D = window.Describe;
 
     const stage = document.getElementById('stage');
+    const inspectorEl = document.getElementById('inspector');
     const world = document.getElementById('world');
     const svg = document.getElementById('links');
     const flowLayer = document.getElementById('flows');
@@ -129,8 +130,15 @@
         setCamera({ zoom: z, x: sx - (sx - cam.x) * k, y: sy - (sy - cam.y) * k });
     }
 
-    /** Zoom about the middle of the stage, as the buttons and keys do. */
-    const zoomCenter = (factor) => zoomAt(factor, stage.clientWidth / 2, stage.clientHeight / 2);
+    /** How much of the stage's width the inspector card, floating over its
+     *  right side, leaves uncovered (all of it while the card is hidden). */
+    function openWidth() {
+        if (!inspectorEl || !inspectorEl.offsetWidth) return stage.clientWidth;
+        return Math.max(0, inspectorEl.getBoundingClientRect().left - stage.getBoundingClientRect().left);
+    }
+
+    /** Zoom about the middle of the open stage, as the buttons and keys do. */
+    const zoomCenter = (factor) => zoomAt(factor, openWidth() / 2, stage.clientHeight / 2);
 
     function stagePoint(clientX, clientY) {
         const r = stage.getBoundingClientRect();
@@ -154,7 +162,7 @@
             x1 = Math.max(x1, n.x + NODE_W); y1 = Math.max(y1, n.y + NODE_H);
         }
         const pad = 48;
-        const w = stage.clientWidth - pad * 2;
+        const w = openWidth() - pad * 2;
         const h = stage.clientHeight - pad * 2;
         const zoom = clamp(Math.min(w / (x1 - x0), h / (y1 - y0), 1.1), ZOOM_MIN, ZOOM_MAX);
         setCamera({
@@ -252,6 +260,7 @@
         } else if (role === 'account') {
             const v = nr.balance[vp.k];
             out.value = Fmt.money(v, { compact: v >= 1e6 });
+            out.negative = v < -0.005;     // overdrawn
             // Only what the account has earned, not what flowed in or out of it.
             let d = 0;
             for (let i = 0; i < vp.k && i < nr.earnings.length; i++) d += nr.earnings[i];
@@ -666,7 +675,8 @@
         const vp = frame.vp;
         if (vp && !vp.all) {
             timeIsland.hidden = false;
-            timeLabel.textContent = D.monthLabel(plan, vp.k);
+            // The month the cards show, as the issues and the pins name it.
+            timeLabel.textContent = D.monthLabel(plan, vp.month);
         } else {
             timeIsland.hidden = true;
         }
@@ -721,7 +731,7 @@
 
     function addAtCenter(presetId) {
         const r = stage.getBoundingClientRect();
-        const c = toWorld(r.left + r.width / 2, r.top + r.height / 2);
+        const c = toWorld(r.left + openWidth() / 2, r.top + r.height / 2);
         return addAt(presetId, c.x, c.y);
     }
 
@@ -1124,7 +1134,8 @@
         } else if (linkEl) {
             const id = linkEl.dataset.link;
             Store.select({ kind: 'link', id });
-            UI.menu(at, [{ label: 'Delete flow', icon: 'trash', danger: true, onSelect: () => Store.removeLink(id) }]);
+            const what = Store.link(id)?.basis === 'person' ? 'link' : 'flow';
+            UI.menu(at, [{ label: `Delete ${what}`, icon: 'trash', danger: true, onSelect: () => Store.removeLink(id) }]);
         } else if (!e.target.closest('.island')) {
             UI.menu(at, [
                 { label: 'Add module here…', icon: 'plus', onSelect: () => openAddPicker(e.clientX, e.clientY) },
@@ -1289,7 +1300,7 @@
             case 'zoom-in': zoomCenter(1.2); break;
             case 'zoom-out': zoomCenter(1 / 1.2); break;
             case 'zoom-reset': zoomCenter(1 / cam.zoom); break;
-            case 'add': openAddPicker(r.left + r.width / 2 - 140, r.top + 80); break;
+            case 'add': openAddPicker(r.left + openWidth() / 2 - 140, r.top + 80); break;
             case 'inspector': Inspector.toggle(); btn.setAttribute('aria-pressed', String(Inspector.isOpen())); break;
             case 'example': loadExample(); break;
             case 'dismiss-empty': {

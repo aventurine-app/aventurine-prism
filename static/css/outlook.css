@@ -25,7 +25,7 @@
    row runs short. */
 .outlook-head {
     display: grid;
-    grid-template-columns: 1fr minmax(0, 220px) 1fr;
+    grid-template-columns: 1fr minmax(0, 244px) 1fr;
     align-items: center;
     gap: var(--space-12);
     height: 48px;
@@ -36,12 +36,20 @@
    panel's left edge as far as the plan length is from its right. */
 .outlook-views { justify-self: start; margin-left: var(--space-12); }
 /* The plan dropdown: a field showing the open plan, which opens a menu of
-   every plan (outlook.js). */
-.plan-pick {
+   every plan (outlook.js), with the plan symbol outside it on the left. */
+.plan-pick-field {
     display: flex;
     align-items: center;
     gap: var(--space-8);
-    width: 100%;
+    min-width: 0;
+}
+.plan-pick-field > .icon { width: 16px; height: 16px; flex: none; color: var(--text-secondary); }
+.plan-pick {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--space-8);
+    min-width: 0;
     text-align: left;
 }
 .plan-pick .icon { width: 16px; height: 16px; flex: none; color: var(--text-secondary); }
@@ -134,6 +142,21 @@
     pointer-events: none;
     font-size: var(--size-small);
 }
+.chart-tip-people {
+    margin-bottom: var(--space-8);
+    padding-bottom: var(--space-8);
+    border-bottom: var(--border-width) solid var(--stroke-divider);
+}
+.chart-tip-person {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-8);
+    color: var(--text-primary);
+    font-weight: var(--weight-semibold);
+    line-height: 1.6;
+}
+.chart-tip-person span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chart-tip-person b { color: var(--text-secondary); font-weight: var(--weight-medium); font-variant-numeric: tabular-nums; }
 .chart-tip-title {
     margin-bottom: var(--space-8);
     color: var(--text-primary);

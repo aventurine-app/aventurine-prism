@@ -90,7 +90,7 @@
     text-align: right;
 }
 
-/* Theme swatches: background band, surface, accent strip. */
+/* Theme swatches: background band over the surface. */
 .theme-options { display: flex; flex-wrap: wrap; gap: 10px; }
 .theme-btn {
     display: flex;
@@ -118,13 +118,6 @@
     inset: 0 0 auto 0;
     height: 35%;
     background: var(--background);
-}
-.settings-theme-swatch::after {
-    content: '';
-    position: absolute;
-    inset: auto 0 0 0;
-    height: 7px;
-    background: var(--accent-primary);
 }
 .settings-theme-swatch--system { background: linear-gradient(105deg, #f2f3f2 0 50%, #191a19 50% 100%); }
 .settings-theme-swatch--system::before { display: none; }

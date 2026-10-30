@@ -25,8 +25,10 @@
 //     op,              'gte' (is at least) | 'lte' (is at most)
 //     unit, value, of, the target: 'amount' (value dollars), 'times' (value
 //                      times the `of` measure) or 'percent' (value percent of it)
-//     due, by, age,    the deadline: 'none', 'date' (the month `by`) or 'age'
-//                      (the month the plan's person turns `age`)
+//     due, by, age,    the deadline: 'date' (the month `by`) or 'age' (the
+//                      month the plan's person turns `age`). Every goal has one;
+//                      a goal saved with none ('none') is read as due ten years
+//                      from now
 //     color }          the card's colour (GOAL_COLORS), only for show
 //
 // e.g. "Net worth is at least 25 times yearly expenses by age 65". Every plan
@@ -297,19 +299,29 @@
     const GOAL_METRICS = ['net-worth', 'savings', 'debt', 'expenses', 'income'];
     const GOAL_OPS = ['gte', 'lte'];
     const GOAL_UNITS = ['amount', 'times', 'percent'];
-    const GOAL_DUES = ['none', 'date', 'age'];
+    const GOAL_DUES = ['date', 'age'];
+    // A goal with no deadline given is due this far from now.
+    const GOAL_DUE_MONTHS = 120;
+    const defaultBy = () => ymAdd(ymNow(), GOAL_DUE_MONTHS);
     // How large a target may be, by unit.
     const GOAL_VALUE = { amount: 1e11, times: 1000, percent: 1000 };
     const GOAL_AGE = { min: 1, max: 120 };
-    // The colours a goal's card can be, in the order offered.
-    const GOAL_COLORS = ['teal', 'blue', 'violet', 'rose', 'orange', 'green', 'slate'];
+    // The colours a goal's card can be, in the order offered: Aventurine
+    // Manage's Gemstone palette, in its order.
+    const GOAL_COLORS = ['lapis', 'tourmaline', 'tigers-eye', 'garnet', 'tanzanite', 'amber', 'rhodolite', 'emerald'];
+    // Colours offered before the Gemstone palette, read as the stone nearest them.
+    const OLD_GOAL_COLORS = {
+        teal: 'tourmaline', blue: 'lapis', violet: 'tanzanite', rose: 'garnet',
+        orange: 'amber', green: 'emerald', slate: 'lapis', gold: 'tigers-eye',
+    };
 
-    /** A new goal: "Net worth is at least $100,000", with any of `fields` over it. */
+    /** A new goal: "Net worth is at least $100,000 by" ten years from now, with
+     *  any of `fields` over it. */
     function createGoal(fields = {}) {
         const goal = {
             id: newId('g'), name: 'New goal',
             metric: 'net-worth', op: 'gte', unit: 'amount', value: 100000, of: 'expenses',
-            due: 'none', by: null, age: null, color: GOAL_COLORS[0],
+            due: 'date', by: defaultBy(), age: null, color: GOAL_COLORS[0],
         };
         for (const key of Object.keys(goal)) {
             if (key !== 'id' && fields[key] !== undefined) goal[key] = fields[key];
@@ -739,7 +751,7 @@
      *  and loan payments over its withdrawal rate (4% is 25 times). */
     function ruleOfKind(raw, i) {
         const by = raw.by ?? null;
-        const dated = { due: by ? 'date' : 'none', by };
+        const dated = { due: 'date', by };
         const fi = { metric: 'savings', op: 'gte', unit: 'times', value: 100 / (Number(raw.rate) || 4), of: 'expenses' };
         switch (raw.kind) {
             case 'net-worth': return { metric: 'net-worth', op: 'gte', unit: 'amount', value: raw.target ?? 1000000, ...dated };
@@ -762,7 +774,8 @@
         const src = raw.metric === undefined && raw.kind !== undefined ? { ...raw, ...ruleOfKind(raw, i) } : raw;
         const what = `goal ${i}`;
         const unit = oneOf(GOAL_UNITS, src.unit ?? 'amount', `${what} target`);
-        const due = oneOf(GOAL_DUES, src.due ?? 'none', `${what} deadline`);
+        // A goal saved with no deadline (from when one could have none) is given one.
+        const due = src.due == null || src.due === 'none' ? 'date' : oneOf(GOAL_DUES, src.due, `${what} deadline`);
         const goal = {
             id: cleanId(raw.id, what),
             name: cleanString(raw.name ?? '', LIMITS.name, `${what} name`) || 'Goal',
@@ -775,9 +788,9 @@
             by: cleanYm(src.by, `${what} date`, true),
             age: src.age == null ? null : cleanNumber(src.age, GOAL_AGE.min, GOAL_AGE.max, `${what} age`),
             // Only for show, so a colour this build does not know is not worth refusing the goal over.
-            color: GOAL_COLORS.includes(src.color) ? src.color : GOAL_COLORS[0],
+            color: GOAL_COLORS.includes(src.color) ? src.color : OLD_GOAL_COLORS[src.color] || GOAL_COLORS[0],
         };
-        if (due === 'date' && !goal.by) goal.due = 'none';
+        if (due === 'date' && !goal.by) goal.by = defaultBy();
         if (due === 'age' && goal.age == null) goal.age = 65;
         return goal;
     }

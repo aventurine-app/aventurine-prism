@@ -1,11 +1,38 @@
 /* ============================================================================
    compare.css — the Compare workspace (compare.js): every plan in a row, with
-   its net worth at the end, the taxes it pays and what it leaves behind. Each
+   all run over one length (the Over dropdown): net worth at the end, growth,
+   how soon its debt is paid off and the taxes it pays. Each
    column is a heat map by rank: one accent hue, strongest on the best figure,
    lighter on the runners-up. Each shaded cell also names its place (Best,
    2nd, 3rd), so rank never rests on colour alone. The page frame is
    goals.css's.
    ============================================================================ */
+
+/* The length every plan runs over: a field that opens a menu (compare.js),
+   labelled as the scrubber's and Analyze's lengths are. */
+.compare-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    margin-bottom: var(--space-16);
+}
+.compare-label {
+    color: var(--text-tertiary);
+    font-size: var(--size-micro);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--track-wide);
+    text-transform: uppercase;
+}
+.compare-length {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-width: 140px;
+    text-align: left;
+}
+.compare-length > span { flex: 1; }
+.compare-length .icon { width: 16px; height: 16px; flex: none; color: var(--text-secondary); }
+.compare-length .compare-length-caret { width: 14px; height: 14px; color: var(--text-tertiary); }
 
 .compare-wrap { max-width: 960px; overflow-x: auto; }
 

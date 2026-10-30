@@ -42,8 +42,10 @@
     const ACCOUNT_BANDS = 6;
     const DEBT_BANDS = 4;
     const SHADES = 6;   // --chart-<role>-1..6
-    // The Sankey's span: a plan year (0-based), or -1 for the whole plan.
-    let sankeyYear = 0;
+    // The Sankey's span: a plan year (0-based), or -1 for the whole plan. It
+    // starts on the whole plan and goes back to it when the plan's length
+    // changes, so the length chips always redraw it; the span menu picks a year.
+    let sankeyYear = -1;
     const SANKEY_IN = [1, 2, 3, 4, 5, 6].map((i) => `--chart-inflow-${i}`);
     const SANKEY_OUT = [1, 2, 3, 4, 5].map((i) => `--chart-outflow-${i}`);
     const SANKEY_FEES = [1, 2, 3, 4].map((i) => `--chart-fee-${i}`);
@@ -57,8 +59,11 @@
                     ${VIEWS.map(([v, icon, name]) =>
                         `<button class="segctl-btn" type="button" role="tab" data-view="${v}" aria-label="${name}" title="${name}">${iconSvg(icon)}<span>${name}</span></button>`).join('')}
                 </div>
-                <button class="field-select plan-pick" type="button" data-act="plan" aria-haspopup="menu" aria-expanded="false" title="Analyze another plan">
-                    ${iconSvg('file')}<span class="plan-pick-name"></span>${iconSvg('caret-down', { cls: 'plan-pick-caret' })}</button>
+                <div class="plan-pick-field">
+                    ${iconSvg('file')}
+                    <button class="field-select plan-pick" type="button" data-act="plan" aria-haspopup="menu" aria-expanded="false" title="Analyze another plan">
+                        <span class="plan-pick-name"></span>${iconSvg('caret-down', { cls: 'plan-pick-caret' })}</button>
+                </div>
                 <div class="outlook-length">
                     <span class="outlook-label">Over</span>
                     <div class="segctl segctl--chips" role="group" aria-label="Plan length">
@@ -101,6 +106,17 @@
     const flows = (arr, def) => Float64Array.from(arr, (v, m) => v * def[m + 1]);
 
     const label = (plan, k) => D.monthLabel(plan, k);
+
+    /** The plan's people, each with their age from month `from` to `to`: one
+     *  age, or a range when a birthday falls in between. For the top of a
+     *  chart's tooltip. */
+    function people(plan, from, to = from) {
+        return plan.nodes.filter((n) => D.roleOf(n) === 'person').map((n) => {
+            const a = P.ageAt(n, P.ymAdd(plan.settings.start, from));
+            const b = P.ageAt(n, P.ymAdd(plan.settings.start, to));
+            return { name: n.name, age: a == null ? '' : a === b ? `Age ${a}` : `Age ${a}–${b}` };
+        });
+    }
 
     /** Bands as the chart shows them, top to bottom. They stack away from
      *  zero in array order, so that is the positives reversed, then the debts. */
@@ -213,6 +229,7 @@
             markers,
             format: (v) => Fmt.money(v, { compact: true }),
             tooltip: (k) => ({
+                people: people(plan, idx[k]),
                 title: label(plan, idx[k]),
                 rows: [
                     ...listed.filter((b) => b.values[k] > 0.5).map((b) => ({
@@ -266,6 +283,7 @@
             line: { label: 'Net change', color: '--chart-networth', values: net },
             format: (v) => Fmt.money(v, { compact: true }),
             tooltip: (i) => ({
+                people: people(plan, i * size, Math.min(months, (i + 1) * size) - 1),
                 title: periodLabel(i),
                 rows: [
                     ...bars.map((b) => ({ label: b.label, color: b.color, value: Fmt.money(b.sign < 0 ? -b.values[i] : b.values[i]) })),
@@ -407,7 +425,11 @@
         for (let k = 12; k <= months; k += 12) points.push(k);
         if (points[points.length - 1] !== months) points.push(months);
         const holders = plan.nodes.filter((n) => C.ROLES[D.roleOf(n)].holds);
-        const cell = (v, neg) => `<td class="${neg && v > 0.5 ? 'is-negative' : ''}">${escapeHtml(Fmt.money(neg ? -v : v))}</td>`;
+        // Debts show as negatives; an overdrawn account is one too.
+        const cell = (v, neg) => {
+            const shown = neg ? -v : v;
+            return `<td class="${shown < -0.5 ? 'is-negative' : ''}">${escapeHtml(Fmt.money(shown))}</td>`;
+        };
         const nameCell = (n) => `<td><span class="cell-name"><span class="role-tile role-tile--sm" data-role="${D.roleOf(n)}">${iconSvg(P.iconOf(n))}</span>${escapeHtml(n.name)}</span></td>`;
         let html = `<table class="outlook-table"><caption class="sr-only">Balances</caption><thead><tr><th>Balance</th>${points.map((k) => `<th>${escapeHtml(label(plan, k))}</th>`).join('')}</tr></thead><tbody>`;
         for (const n of holders) {
@@ -493,6 +515,7 @@
         const y = e.target.closest('[data-years]');
         if (y) {
             const years = Number(y.dataset.years);
+            sankeyYear = -1;
             Store.edit((plan) => { plan.settings.years = years; });
             return;
         }

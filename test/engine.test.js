@@ -215,7 +215,7 @@ test('an account keeps what arrives: only its balance moves on', () => {
     close(last(r.nodes[checking.id].balance), 2500 * 12);
 });
 
-test('a fixed link out of a balance pays what the balance holds and says when it falls short', () => {
+test('a fixed link out of a balance keeps paying past zero and says when the account is overdrawn', () => {
     const plan = mkPlan('2026-01', 1);
     const pay = node(plan, 'paycheck', { amount: 1000, per: 'month', end: '2026-02' });
     const checking = node(plan, 'bank-account', { balance: 2000, rate: 0 });
@@ -223,10 +223,33 @@ test('a fixed link out of a balance pays what the balance holds and says when it
     link(plan, pay, checking);
     const l = link(plan, checking, rent, { basis: 'balance', mode: 'fixed', value: 1500 });
     const r = run(plan);
-    close(r.links[l.id].total, 4000);
-    close(last(r.nodes[checking.id].balance), 0);
-    const short = r.warnings.find((w) => w.code === 'short' && w.linkId === l.id);
-    close(short.amount, 500 + 9 * 1500);
+    close(r.links[l.id].total, 12 * 1500);
+    close(last(r.nodes[checking.id].balance), 2000 + 2000 - 12 * 1500);
+    assert.ok(!r.warnings.some((w) => w.code === 'short' && w.linkId === l.id));
+    // 2,000 + 1,000 - 1,500 a month for two months, then -1,500 a month: March ends at -500.
+    const over = r.warnings.find((w) => w.code === 'overdrawn' && w.nodeId === checking.id);
+    assert.equal(over.month, 2);
+    close(over.amount, 14000);
+});
+
+test('an overdrawn account earns nothing, and shares of its balance take nothing from it', () => {
+    const plan = mkPlan('2026-01', 1);
+    const savings = node(plan, 'bank-account', { balance: 1000, rate: 12 });
+    const rent = node(plan, 'expense');
+    const other = node(plan, 'expense');
+    const leftover = node(plan, 'expense');
+    link(plan, savings, rent, { basis: 'balance', mode: 'fixed', value: 2000, when: 'once', date: '2026-01' });
+    const share = link(plan, savings, other, { basis: 'balance', mode: 'percent', value: 10 });
+    const rest = link(plan, savings, leftover, { basis: 'balance', mode: 'rest' });
+    const r = run(plan);
+    // January's growth lands before the draw (step 2, then step 4). Fixed
+    // amounts go first, so the 2,000 overdraws it and the share and the rest
+    // find nothing to take, that month or after; nor does it earn again.
+    const jan = 1000 * (Math.pow(1.12, 1 / 12) - 1);
+    close(r.nodes[savings.id].totals.earnings, jan);
+    close(r.links[share.id].total, 0);
+    close(r.links[rest.id].total, 0);
+    close(last(r.nodes[savings.id].balance), 1000 + jan - 2000);
 });
 
 test('interest stays in the account and compounds', () => {
@@ -428,6 +451,39 @@ test('a 401(k) contribution comes out of gross pay, before withholding', () => {
     close(r.totals.withheld, 94000 * 0.22);
     close(last(r.nodes[savings.id].balance), 94000 * 0.78);
     close(r.nodes[salary.id].totals.pretax, 6000);
+});
+
+test("a 401(k)'s share and take-home shares are of one paycheck, adding up to all of it", () => {
+    const plan = mkPlan('2026-01', 1);
+    const salary = node(plan, 'salary', { amount: 100000, per: 'year', tax: 20 });
+    const k = node(plan, '401k');
+    const spend = node(plan, 'expense');
+    const savings = node(plan, 'bank-account');
+    link(plan, salary, k, { mode: 'percent', value: 10 });
+    link(plan, salary, spend, { mode: 'percent', value: 70 });
+    link(plan, salary, savings, { mode: 'percent', value: 20 });
+    const r = run(plan);
+    close(last(r.nodes[k.id].balance), 10000);
+    close(r.totals.withheld, 90000 * 0.2);
+    close(r.nodes[spend.id].totals.in, 70000 * 0.8);             // 70% of gross, less withholding
+    close(last(r.nodes[savings.id].balance), 20000 * 0.8);
+    close(last(r.unassigned), 0);
+    assert.ok(!codes(r).includes('over-100'));
+});
+
+test("a 401(k)'s share counts against the rest of the paycheck's shares", () => {
+    const plan = mkPlan('2026-01', 1);
+    const salary = node(plan, 'salary', { amount: 100000, per: 'year', tax: 20 });
+    const k = node(plan, '401k');
+    const savings = node(plan, 'bank-account');
+    link(plan, salary, k, { mode: 'percent', value: 10 });
+    const lb = link(plan, salary, savings, { mode: 'percent', value: 100 });
+    const r = run(plan);
+    close(last(r.nodes[k.id].balance), 10000);
+    close(last(r.nodes[savings.id].balance), 90000 * 0.8);       // all the take-home there is
+    assert.ok(codes(r).includes('over-100'));
+    close(r.warnings.find((w) => w.code === 'short').amount, 10000 * 0.8);
+    assert.equal(r.warnings.find((w) => w.code === 'short').linkId, lb.id);
 });
 
 test("a 401(k)'s employer match adds to the contribution without taking from pay", () => {

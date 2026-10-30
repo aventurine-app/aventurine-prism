@@ -231,40 +231,38 @@ test('measured in real money, growth that only keeps up with inflation reaches n
     assert.equal(only(plan, { real: true }).status, 'open');
 });
 
-// ── Presets ──────────────────────────────────────────────────────────────────
-
-test('every preset is a goal the list keeps as it is', () => {
-    for (const p of Goals.PRESETS) {
-        const { id: _id, label: _label, ...fields } = p;
-        const g = Plan.createGoal(fields);
-        assert.deepEqual(Plan.validateGoals([g])[0], g, p.id);
-    }
-});
-
 // ── The goal list ────────────────────────────────────────────────────────────
 
-test('a new goal starts as "net worth is at least $100,000", with any fields given', () => {
+test('a new goal starts as "net worth is at least $100,000" in ten years, with any fields given', () => {
     const g = Plan.createGoal({ name: 'Mine', value: 5, nodeId: 'n_x' });
     assert.deepEqual({ ...g, id: null }, {
         id: null, name: 'Mine', metric: 'net-worth', op: 'gte', unit: 'amount', value: 5, of: 'expenses',
-        due: 'none', by: null, age: null, color: 'teal',
+        due: 'date', by: Plan.ymAdd(Plan.ymNow(), 120), age: null, color: 'lapis',
     });
 });
 
 test('validateGoals normalizes a rule', () => {
     const [g] = Plan.validateGoals([{
         id: 'g_a', name: '  Plenty ', metric: 'savings', op: 'lte', unit: 'percent', value: 5000, of: 'income',
-        due: 'date', by: null, age: 400, color: 'violet', extra: true,
+        due: 'date', by: null, age: 400, color: 'tanzanite', extra: true,
     }]);
     assert.deepEqual(g, {
         id: 'g_a', name: 'Plenty', metric: 'savings', op: 'lte', unit: 'percent', value: Plan.GOAL_VALUE.percent, of: 'income',
-        due: 'none', by: null, age: Plan.GOAL_AGE.max, color: 'violet',
+        due: 'date', by: Plan.ymAdd(Plan.ymNow(), 120), age: Plan.GOAL_AGE.max, color: 'tanzanite',
     });
+    // A goal saved with no deadline is due in ten years.
+    const [none] = Plan.validateGoals([{ id: 'g_n', metric: 'debt', due: 'none', by: null }]);
+    assert.deepEqual([none.due, none.by], ['date', Plan.ymAdd(Plan.ymNow(), 120)]);
     // A colour this build does not know is only for show: the goal keeps, in the first colour.
-    assert.equal(Plan.validateGoals([{ id: 'g_b', metric: 'debt', color: 'chartreuse' }])[0].color, 'teal');
-    // Gold was offered once and has since been taken out.
-    assert.ok(!Plan.GOAL_COLORS.includes('gold'));
-    assert.equal(Plan.validateGoals([{ id: 'g_c', metric: 'debt', color: 'gold' }])[0].color, 'teal');
+    assert.equal(Plan.validateGoals([{ id: 'g_b', metric: 'debt', color: 'chartreuse' }])[0].color, 'lapis');
+    // The colours offered before the Gemstone palette (gold among them, taken
+    // out before that) read as the stone nearest them.
+    const old = { teal: 'tourmaline', blue: 'lapis', violet: 'tanzanite', rose: 'garnet',
+        orange: 'amber', green: 'emerald', slate: 'lapis', gold: 'tigers-eye' };
+    for (const [was, now] of Object.entries(old)) {
+        assert.ok(!Plan.GOAL_COLORS.includes(was), was);
+        assert.equal(Plan.validateGoals([{ id: 'g_c', metric: 'debt', color: was }])[0].color, now, was);
+    }
     assert.deepEqual(Plan.validateGoals(null), []);
 });
 
@@ -278,9 +276,9 @@ test('goals of the kinds from before rules are read as the rules they meant', ()
     ]).map(({ id: _id, name: _name, color: _color, ...rule }) => rule);
     assert.deepEqual(rules, [
         { metric: 'net-worth', op: 'gte', unit: 'amount', value: 1e6, of: 'expenses', due: 'date', by: '2040-01', age: null },
-        { metric: 'savings', op: 'gte', unit: 'amount', value: 500, of: 'expenses', due: 'none', by: null, age: null },
-        { metric: 'debt', op: 'lte', unit: 'amount', value: 0, of: 'expenses', due: 'none', by: null, age: null },
-        { metric: 'savings', op: 'gte', unit: 'times', value: 20, of: 'expenses', due: 'none', by: null, age: null },
+        { metric: 'savings', op: 'gte', unit: 'amount', value: 500, of: 'expenses', due: 'date', by: Plan.ymAdd(Plan.ymNow(), 120), age: null },
+        { metric: 'debt', op: 'lte', unit: 'amount', value: 0, of: 'expenses', due: 'date', by: Plan.ymAdd(Plan.ymNow(), 120), age: null },
+        { metric: 'savings', op: 'gte', unit: 'times', value: 20, of: 'expenses', due: 'date', by: Plan.ymAdd(Plan.ymNow(), 120), age: null },
         { metric: 'savings', op: 'gte', unit: 'times', value: 25, of: 'expenses', due: 'age', by: null, age: 60 },
     ]);
 });

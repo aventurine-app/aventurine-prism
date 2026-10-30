@@ -10,68 +10,39 @@
 // menu of their choices; the target opens a small panel (an amount, a
 // multiple, or a percentage, and its figure), and so does an age deadline.
 // Every change applies at once, and Ctrl+Z steps back through them. A card
-// also holds the goal's name and how every plan does against it. Each card is
-// a solid colour of the user's choosing, with a target drawn faintly at its left.
+// also holds the goal's name. Each card is a solid colour of the user's choosing, with a target drawn faintly at its left.
 //
-// A goal starts from a preset (a rule filled in) or as a custom one to write.
 // Analyze's Net worth chart flags the month a plan meets each.
 //
 // Cards are kept per goal and updated in place, never rebuilt while a goal
 // lives, so a name being typed or a menu's button keeps its focus.
 
 (function () {
-    const G = window.CitrineGoals;
     const P = window.CitrinePlan;
     const D = window.Describe;
     const root = document.getElementById('goals-board');
     if (!root) return;
 
     const esc = escapeHtml;
-    // A status's tone shows in its icon as well as its words.
-    const TONE_ICON = { positive: 'check-circle', warning: 'warning-circle', muted: 'hourglass' };
     // The kinds of target, and the figure each starts at when picked.
     const UNITS = [['amount', 'Amount'], ['times', 'Times'], ['percent', 'Percent']];
     const UNIT_START = { amount: 100000, times: 25, percent: 40 };
 
-    /** A preset's rule, as the goal it would add. */
-    const presetGoal = ({ id: _id, label: _label, ...fields }) => P.createGoal(fields);
-
     root.innerHTML = `
-        <div class="board-head">
-            <div class="board-titles">
-                <h1 class="board-title">Goals</h1>
-                <p class="board-sub">Write each goal as a rule. Every plan is measured against them.</p>
-            </div>
-            <button class="button-primary" type="button" data-act="custom">${iconSvg('plus')}<span>Custom goal</span></button>
-        </div>
         <div class="board-body scroll-y">
+            <div class="board-bar">
+                <button class="button-primary" type="button" data-act="custom">${iconSvg('plus')}<span>Add New Goal</span></button>
+            </div>
             <ul class="board-goals" aria-label="Your goals"></ul>
             <div class="board-empty" hidden>
                 <p class="board-empty-title">No goals yet</p>
-                <p class="board-empty-text">Start from a preset below, or write your own with Custom goal.</p>
+                <p class="board-empty-text">Write one with Add New Goal.</p>
             </div>
-            <section class="board-presets" aria-labelledby="board-presets-title">
-                <h2 class="eyebrow" id="board-presets-title">Start from a preset</h2>
-                <div class="board-preset-grid"></div>
-            </section>
         </div>`;
 
     const list = root.querySelector('.board-goals');
     const emptyEl = root.querySelector('.board-empty');
-    const presetGrid = root.querySelector('.board-preset-grid');
     const showing = () => Store.state.workspace === 'goals';
-
-    /** The presets, each saying the rule it starts with (in the current number format). */
-    function renderPresets() {
-        presetGrid.innerHTML = G.PRESETS.map((p) => `
-            <button class="board-preset" type="button" data-preset="${esc(p.id)}">
-                <span class="role-tile role-tile--accent">${iconSvg(D.GOAL_METRICS[p.metric].icon)}</span>
-                <span class="board-preset-text">
-                    <span class="board-preset-name">${esc(p.label)}</span>
-                    <span class="board-preset-hint">${esc(D.goalSentence(presetGoal(p)))}</span>
-                </span>
-            </button>`).join('');
-    }
 
     // ── Cards ──────────────────────────────────────────────────────────────
 
@@ -91,13 +62,12 @@
                 <button class="goal-tool" type="button" data-act="color" aria-haspopup="dialog" aria-expanded="false" title="Card colour">${iconSvg('palette')}</button>
                 <button class="goal-tool" type="button" data-act="delete" aria-label="Delete goal" title="Delete goal">${iconSvg('trash')}</button>
             </div>
-            <p class="rule">${tok('metric', 'menu')}${tok('op', 'menu')}${tok('value', 'dialog')}<span class="rule-word" data-part="of-word">of</span>${tok('of', 'menu')}${tok('due', 'menu')}</p>
-            <div class="board-plans" data-part="plans"></div>`;
+            <p class="rule">${tok('metric', 'menu')}${tok('op', 'menu')}${tok('value', 'dialog')}<span class="rule-word" data-part="of-word">of</span>${tok('of', 'menu')}${tok('due', 'menu')}</p>`;
         const part = (name) => el.querySelector(`[data-part="${name}"]`);
         const toks = Object.fromEntries([...el.querySelectorAll('[data-tok]')].map((b) => [b.dataset.tok, b]));
         return {
             el, name: el.querySelector('.goal-name'), color: el.querySelector('[data-act="color"]'),
-            ofWord: part('of-word'), plans: part('plans'), toks, drawn: {},
+            ofWord: part('of-word'), toks, drawn: {},
         };
     }
 
@@ -117,19 +87,7 @@
         return g.unit === 'percent' ? `${Fmt.number(g.value, 2)}%` : `${Fmt.number(g.value, 2)} ×`;
     }
 
-    /** How each plan does against `g`, as a row of chips. */
-    function plansHtml(g, runs) {
-        return runs.map(({ plan, results }) => {
-            if (!results) return '';
-            const [ev] = G.evaluate(plan, results, [g]);
-            const status = D.goalStatus(ev, plan, results.months);
-            const full = status.detail ? `${status.text}, ${status.detail}` : status.text;
-            return `<span class="board-plan is-${status.tone}" title="${esc(`${plan.name}: ${full}`)}">
-                ${iconSvg(TONE_ICON[status.tone])}<span class="board-plan-name">${esc(plan.name)}</span><span class="board-plan-when">${esc(status.text)}</span></span>`;
-        }).join('');
-    }
-
-    function fillCard(c, g, runs) {
+    function fillCard(c, g) {
         if (document.activeElement !== c.name && c.name.value !== g.name) c.name.value = g.name;
         if (c.drawn.color !== g.color) {
             c.drawn.color = g.color;
@@ -143,15 +101,11 @@
         c.ofWord.hidden = g.unit !== 'percent';
         setTok(c, 'of', 'Of', D.GOAL_METRICS[g.of].of, !hasOf);
         setTok(c, 'due', 'Deadline', D.goalDue(g));
-        c.toks.due.classList.toggle('is-quiet', g.due === 'none');
-        const plans = plansHtml(g, runs);
-        if (c.drawn.plans !== plans) { c.drawn.plans = plans; c.plans.innerHTML = plans; }
     }
 
     function render() {
         if (!showing()) return;
         const goals = Store.state.goals;
-        const runs = Runs.all();
         emptyEl.hidden = goals.length > 0;
         // Cards of goals that are gone go; the rest follow the list's order.
         for (const [id, c] of cards) {
@@ -161,7 +115,7 @@
             let c = cards.get(g.id);
             if (!c) { c = buildCard(g.id); cards.set(g.id, c); }
             if (list.children[i] !== c.el) list.insertBefore(c.el, list.children[i] || null);
-            fillCard(c, g, runs);
+            fillCard(c, g);
         });
     }
 
@@ -208,7 +162,6 @@
                 break;
             case 'due':
                 UI.menu(btn, [
-                    choice(g.due === 'none', 'Any time', 'infinity', pick((x) => { x.due = 'none'; })),
                     choice(g.due === 'date', 'By a date…', 'calendar-blank', () => pickDate(id, btn)),
                     choice(g.due === 'age', 'By an age…', 'user', () => agePanel(id, btn)),
                 ]);
@@ -325,16 +278,16 @@
 
     // ── Adding and removing ────────────────────────────────────────────────
 
-    /** Add a goal from a preset (or a custom one, with none) and bring it into
-     *  view; a custom goal's name is ready to type. */
-    function add(presetId = null) {
-        const g = Store.addGoal(presetId);
+    /** Add a goal and bring it into view, its name ready to type. */
+    function add() {
+        const g = Store.addGoal();
         const c = g && cards.get(g.id);
         if (!c) return;
         c.el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         c.el.classList.add('is-new');
         setTimeout(() => c.el.classList.remove('is-new'), 1600);
-        if (!presetId) { c.name.focus(); c.name.select(); }
+        c.name.focus();
+        c.name.select();
     }
 
     function remove(id) {
@@ -353,8 +306,6 @@
         if (card && e.target.closest('[data-act="delete"]')) { remove(card.dataset.goal); return; }
         const colorBtn = card && e.target.closest('[data-act="color"]');
         if (colorBtn) { colorPanel(card.dataset.goal, colorBtn); return; }
-        const preset = e.target.closest('[data-preset]');
-        if (preset) { add(preset.dataset.preset); return; }
         if (e.target.closest('[data-act="custom"]')) add();
     });
 
@@ -377,14 +328,12 @@
     });
 
     Store.on((c) => {
-        if (['goals', 'workspace', 'tabs', 'results'].includes(c.type)) render();
+        if (c.type === 'goals' || c.type === 'workspace') render();
     });
     // A Format change (Preferences) rewrites every figure.
     window.addEventListener('citrine:format', () => {
-        renderPresets();
         for (const c of cards.values()) c.drawn = {};
         render();
     });
 
-    renderPresets();
 }());

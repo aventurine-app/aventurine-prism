@@ -11,7 +11,6 @@
 // randomness.
 //
 //   evaluate(plan, results, goals, { real })   one status per goal, read off a run
-//   PRESETS                                    rules to start a goal from
 //
 // The measures, at each balance point k (0..months, the moment month k-1 ends,
 // where the net worth series is recorded):
@@ -47,24 +46,6 @@
 
     // Within half a cent counts as met.
     const EPS = 0.005;
-
-    // Rules to start a goal from, in the order offered. `label` is what the
-    // offer is called; the rest are the new goal's fields (the offer shows
-    // the rule they make).
-    const PRESETS = [
-        { id: 'net-worth', label: 'Reach a net worth',
-            name: 'First million', metric: 'net-worth', op: 'gte', unit: 'amount', value: 1000000 },
-        { id: 'emergency-fund', label: 'Emergency fund',
-            name: 'Emergency fund', metric: 'savings', op: 'gte', unit: 'amount', value: 20000 },
-        { id: 'fi', label: 'Financial independence',
-            name: 'Financial independence', metric: 'net-worth', op: 'gte', unit: 'times', value: 25, of: 'expenses' },
-        { id: 'retire', label: 'Retire by an age',
-            name: 'Retirement', metric: 'net-worth', op: 'gte', unit: 'times', value: 25, of: 'expenses', due: 'age', age: 65 },
-        { id: 'debt-free', label: 'Be debt-free',
-            name: 'Debt-free', metric: 'debt', op: 'lte', unit: 'amount', value: 0 },
-        { id: 'spending', label: 'Spend within your means',
-            name: 'Spending in check', metric: 'expenses', op: 'lte', unit: 'percent', value: 40, of: 'income' },
-    ];
 
     // The measures that are a year's flow rather than a balance.
     const YEARLY = new Set(['expenses', 'income']);
@@ -177,5 +158,5 @@
         return goals.map((goal) => evaluateOne(plan, res, def, goal));
     }
 
-    return { PRESETS, deflator, evaluate };
+    return { deflator, evaluate };
 }));

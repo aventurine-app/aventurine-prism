@@ -1,17 +1,25 @@
 /* ============================================================================
-   inspector.css — the right-hand panel. It edits whatever is selected: a
-   module (its fields, its links, its outlook), a link (its rule, written as a
+   inspector.css — the card floating over the canvas's right side, between the
+   module library and the scrubber. It edits whatever is selected: a module
+   (its fields, its links, its outlook), a link (its rule, written as a
    sentence), or, with nothing selected, the plan itself.
    ============================================================================ */
 
+/* Inset from the canvas's edges as far as the islands are (canvas.css). */
 .inspector {
+    position: relative;
+    z-index: 6;
+    justify-self: end;
     width: var(--inspector-width);
-    flex-shrink: 0;
+    margin: var(--space-16);
     display: flex;
     flex-direction: column;
     min-height: 0;
+    overflow: hidden;
     background: var(--surface1);
-    border-left: var(--border-width) solid var(--stroke-divider);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-card);
 }
 .inspector[data-collapsed="true"] { display: none; }
 
@@ -27,6 +35,8 @@
     gap: var(--space-12);
     padding: var(--space-20) var(--space-20) var(--space-16);
 }
+/* The plan's own header: a bare page icon, as the navigation's plans have. */
+.insp-plan-icon { width: 24px; height: 24px; color: var(--text-primary); }
 
 /* A module's identity and settings, held together at the top of the panel. */
 .insp-card {
@@ -216,11 +226,6 @@
 .insp-stats + .sentence { margin-top: var(--space-12); }
 .sentence.is-pending { color: var(--text-tertiary); }
 
-.spark { display: block; width: 100%; height: 64px; overflow: visible; }
-.spark-area { fill: var(--accent-gray); fill-opacity: 0.14; }
-.spark-line { fill: none; stroke: var(--accent-gray); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.spark-zero { stroke: var(--chart-grid); stroke-dasharray: 3 4; }
-
 /* ── Issues ─────────────────────────────────────────────────────────────── */
 .issues { display: flex; flex-direction: column; gap: var(--space-8); margin: 0; padding: 0; list-style: none; }
 .issue {
@@ -243,16 +248,6 @@
 button.issue { width: 100%; border: 0; text-align: left; cursor: pointer; }
 button.issue:hover { filter: brightness(0.97); }
 button.issue:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 1px; }
-
-/* Plan-level summary card */
-.worth-line {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-8);
-    font-variant-numeric: tabular-nums;
-}
-.worth-from { color: var(--text-tertiary); font-size: var(--size-small); font-weight: var(--weight-semibold); }
-.worth-to { color: var(--text-primary); font-size: var(--size-h1); font-weight: var(--weight-semibold); letter-spacing: var(--track-tight); }
 
 .role-counts { display: flex; flex-wrap: wrap; gap: var(--space-8); }
 .role-count {

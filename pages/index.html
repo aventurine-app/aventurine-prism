@@ -15,16 +15,17 @@
 <body>
     <!-- @include chrome -->
 
-    <!-- The app: the navigation, the workspace it has open, and the inspector.
-         data-workspace (set by nav.js) shows one workspace: the plan builder
-         (Plans), Goals, Analyze or Compare. Hidden until the plans have
-         loaded, so nothing paints half-built. -->
+    <!-- The app: the navigation and the workspace it has open. data-workspace
+         (set by nav.js) shows one workspace: the plan builder (Plans), Goals,
+         Analyze or Compare. Hidden until the plans have loaded, so nothing
+         paints half-built. -->
     <div class="body_container" id="app" data-workspace="plans" hidden>
         <aside class="nav" id="nav" aria-label="Navigation"></aside>
 
         <main class="workbench">
             <!-- Plans: the builder. The modules across the top, the canvas,
-                 and the net worth scrubber under it. -->
+                 the inspector floating over the canvas's right side, and the
+                 net worth scrubber under them. -->
             <section class="builder" aria-label="Plan builder">
                 <div class="library" id="library" role="toolbar" aria-label="Modules"></div>
                 <div class="stage" id="stage" tabindex="0" aria-label="Plan canvas">
@@ -38,14 +39,13 @@
                         <div class="canvas-nodes" id="nodes"></div>
                     </div>
                 </div>
+                <aside class="inspector" id="inspector" aria-label="Inspector"></aside>
                 <div class="scrubber" id="scrubber"></div>
             </section>
             <section class="goals-board" id="goals-board" aria-label="Goals"></section>
             <section class="outlook" id="outlook" aria-label="Analyze"></section>
             <section class="compare" id="compare" aria-label="Compare plans"></section>
         </main>
-
-        <aside class="inspector" id="inspector" aria-label="Inspector"></aside>
     </div>
 
     <div class="lockscreen" id="lockscreen" hidden></div>

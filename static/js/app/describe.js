@@ -135,6 +135,9 @@
         const onArrival = ON_ARRIVAL.has(link.basis) && !(link.basis === 'inflow' && link.mode === 'fixed');
         // A percent or rest already says "of the pay before tax".
         if (pretax && link.mode === 'fixed') parts.push('before tax');
+        // Any other share of a paycheck is withheld on its way out (engine.js).
+        else if (!pretax && link.mode === 'percent' && link.basis === 'inflow' && roleOf(from) === 'source'
+            && from.params.tax > 0) parts.push(`less ${b(`${Fmt.number(from.params.tax, 2)}%`)} withholding`);
         if (!onArrival) parts.push(timingWords(link));
         if (link.mode === 'fixed' && link.growth) parts.push(`growing ${b(`${Fmt.number(link.growth, 2)}%`)} a year`);
         if (link.start && link.end) parts.push(`from ${P.ymLabel(link.start)} to ${P.ymLabel(link.end)}`);
@@ -235,6 +238,8 @@
                 };
             case 'unassigned':
                 return { select: node, text: `${Fmt.money(w.amount, { compact: true })} from ${name} has no link and lands in Unassigned.` };
+            case 'overdrawn':
+                return { select: node, text: `${name} goes below zero in ${m(w.month)}.` };
             case 'cap':
                 return { select: node, text: `${name} reaches its yearly limit in ${m(w.month)}; ${Fmt.money(w.amount, { compact: true })} lands in Unassigned.` };
             case 'no-limit':
@@ -253,6 +258,12 @@
             default:
                 return { select: null, text: w.code };
         }
+    }
+
+    /** A debt's payoff as a sentence, plus the debt to select. Paid off
+     *  during month m, as the plan's issues are dated. */
+    function payoff(ms, plan) {
+        return { level: 'done', select: { kind: 'node', id: ms.nodeId }, text: `${nameOf(plan, ms.nodeId)} is paid off in ${monthLabel(plan, ms.month)}.` };
     }
 
     // ── Goals ──────────────────────────────────────────────────────────────
@@ -277,8 +288,8 @@
     };
     // The names of the colours a goal's card can be (plan.js, GOAL_COLORS).
     const GOAL_COLORS = {
-        teal: 'Teal', blue: 'Blue', violet: 'Violet', rose: 'Rose',
-        orange: 'Orange', green: 'Green', slate: 'Slate',
+        lapis: 'Lapis', tourmaline: 'Tourmaline', 'tigers-eye': 'Tiger\'s eye', garnet: 'Garnet',
+        tanzanite: 'Tanzanite', amber: 'Amber', rhodolite: 'Rhodolite', emerald: 'Emerald',
     };
 
     /** '7 months', '2 years', '1 year 3 months'. */
@@ -301,17 +312,15 @@
         return goal.unit === 'percent' ? `${Fmt.number(goal.value, 2)}% of ${of}` : `${Fmt.number(goal.value, 2)} × ${of}`;
     }
 
-    /** A goal's deadline in words: 'any time', 'by Mar 2040', 'by age 65'. */
+    /** A goal's deadline in words: 'by Mar 2040', 'by age 65'. */
     function goalDue(goal) {
-        if (goal.due === 'date' && goal.by) return `by ${P.ymLabel(goal.by)}`;
         if (goal.due === 'age') return `by age ${Fmt.number(goal.age, 1)}`;
-        return 'any time';
+        return `by ${P.ymLabel(goal.by)}`;
     }
 
     /** A goal's rule as a sentence: 'Net worth is at least 25 × yearly expenses by age 65.' */
     function goalSentence(goal) {
-        const due = goal.due === 'none' ? '' : ` ${goalDue(goal)}`;
-        return `${GOAL_METRICS[goal.metric].label} ${goalOp(goal)} ${goalTarget(goal)}${due}.`;
+        return `${GOAL_METRICS[goal.metric].label} ${goalOp(goal)} ${goalTarget(goal)} ${goalDue(goal)}.`;
     }
 
     // Why a goal cannot be measured in a plan, as what to do about it.
@@ -348,7 +357,7 @@
     }
 
     window.Describe = {
-        CATEGORY_NAME, roleOf, portLabel, linkShort, linkFigure, linkSentence, nodeMeta, monthLabel, warning, warningLevel,
+        CATEGORY_NAME, roleOf, portLabel, linkShort, linkFigure, linkSentence, nodeMeta, monthLabel, warning, warningLevel, payoff,
         GOAL_METRICS, GOAL_OPS, GOAL_COLORS, duration, goalOp, goalTarget, goalDue, goalSentence, goalStatus,
     };
 }());

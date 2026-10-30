@@ -14,13 +14,20 @@
 }
 
 /* The plan builder: the module library across the top (library.css), the
-   canvas, and the net worth scrubber under it. */
+   canvas, and the net worth scrubber under it, each the full width. The
+   inspector (inspector.css) shares the canvas's cell and floats over its
+   right side. */
 .builder {
     flex: 1;
     min-height: 0;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
 }
+.builder > .library  { grid-row: 1; }
+.builder > .stage,
+.builder > .inspector { grid-row: 2; grid-column: 1; }
+.builder > .scrubber { grid-row: 3; }
 
 .stage {
     position: relative;
@@ -506,14 +513,17 @@ html[data-theme="dark"] { --node-tint: 14%; --node-edge: 30%; }
 
 @media (prefers-reduced-motion: reduce) {
     .link-flow { animation: none; display: none; }
-    .node, .node-port, .link-path, .link-label { transition: none; }
+    .node, .node-port, .link-path, .link-label, .scrub-pin::after { transition: none; }
 }
 
 /* ── Net worth scrubber (scrubber.js) ────────────────────────────────────────
    The slim bar under the canvas: the plan's net worth over its run, drawn
-   small, with the figure at the point looked at. Moving along it scrubs the
-   plan; the cards follow. */
+   small, with pins where its issues start and its debts are paid off.
+   Moving along it scrubs the plan; the cards follow. Above the canvas and
+   the inspector, so a pin's tip can rise over them. */
 .scrubber {
+    position: relative;
+    z-index: 7;
     display: flex;
     align-items: center;
     gap: var(--space-24);
@@ -521,42 +531,24 @@ html[data-theme="dark"] { --node-tint: 14%; --node-edge: 30%; }
     flex-shrink: 0;
     padding: 0 var(--space-16);
     background: var(--surface1);
-    border-top: var(--border-width) solid var(--stroke-divider);
-}
-.scrub-read {
-    display: grid;
-    grid-template-columns: auto auto;
-    grid-template-areas: "label label" "value when";
-    align-items: baseline;
-    column-gap: var(--space-8);
-    min-width: 220px;
+    border-top: var(--border-width) solid var(--border);
 }
 .scrub-label {
-    grid-area: label;
     color: var(--text-tertiary);
     font-size: var(--size-micro);
     font-weight: var(--weight-semibold);
     letter-spacing: var(--track-wide);
     text-transform: uppercase;
 }
-.scrub-value {
-    grid-area: value;
-    color: var(--text-primary);
-    font-family: var(--font-numeric);
-    font-size: var(--size-h2);
-    font-weight: var(--weight-semibold);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: var(--track-tighter);
-}
-.scrub-value.is-negative { color: var(--accent-negative); }
-.scrub-when {
-    grid-area: when;
-    color: var(--text-tertiary);
-    font-size: var(--size-small);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-}
 
+/* The track, with the pins laid over it. */
+.scrub-lane {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    align-self: stretch;
+}
 .scrub-track {
     position: relative;
     flex: 1;
@@ -605,3 +597,84 @@ html[data-theme="dark"] { --node-tint: 14%; --node-edge: 30%; }
 }
 .scrub-edge--start { left: 0; }
 .scrub-edge--end { right: 0; }
+
+/* An issue's pin: a stem the plot's height, headed by a dot in the colour of
+   its worst issue. The button is wider than the stem, to be easy to point at. */
+.scrub-pins { position: absolute; inset: var(--space-8) 0 18px; pointer-events: none; }
+.scrub-pin {
+    --pin: var(--flag);
+    position: absolute;
+    top: -4px;
+    bottom: 0;
+    width: 16px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    transform: translateX(-50%);
+    cursor: pointer;
+    pointer-events: auto;
+}
+.scrub-pin[data-level="notice"] { --pin: var(--notice); }
+.scrub-pin[data-level="info"] { --pin: var(--text-tertiary); }
+/* A month that holds only payoffs: green, as a paid-off card's check. */
+.scrub-pin[data-level="done"] { --pin: var(--accent-positive); }
+.scrub-pin::before {
+    content: '';
+    position: absolute;
+    top: 4px;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    background: var(--pin);
+    opacity: 0.6;
+}
+.scrub-pin::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 9px;
+    height: 9px;
+    border: 2px solid var(--surface1);
+    border-radius: 50%;
+    background: var(--pin);
+    transform: translateX(-50%);
+    transition: transform 0.15s ease;
+}
+/* Yellow needs an edge to stand off a light surface. */
+.scrub-pin[data-level="notice"]::after { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--notice-ink) 35%, transparent); }
+.scrub-pin:hover::after,
+.scrub-pin:focus-visible::after { transform: translateX(-50%) scale(1.3); }
+.scrub-pin:focus-visible { outline: none; }
+.scrub-pin:focus-visible::after { box-shadow: 0 0 0 2px var(--accent-ring); }
+
+/* A pin's issues, risen over the canvas above it. */
+.scrub-tip {
+    position: absolute;
+    bottom: calc(100% + var(--space-8));
+    width: max-content;
+    max-width: 300px;
+    padding: var(--space-8) var(--space-12);
+    background: var(--surface1);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-control);
+    box-shadow: var(--shadow-popover);
+    color: var(--text-primary);
+    font-size: var(--size-small);
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+.scrub-tip[hidden] { display: none; }
+.scrub-tip-row { display: flex; gap: var(--space-8); margin: 0; }
+.scrub-tip-row + .scrub-tip-row { margin-top: var(--space-8); }
+.scrub-tip-row .icon { width: 16px; height: 16px; margin-top: 1px; color: var(--flag); }
+.scrub-tip-row[data-level="notice"] .icon { color: var(--notice); }
+.scrub-tip-row[data-level="info"] .icon { color: var(--text-tertiary); }
+.scrub-tip-row[data-level="done"] .icon { color: var(--accent-positive); }
+/* The plan's length, at the bar's right end. */
+.scrub-length {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    flex: none;
+}
