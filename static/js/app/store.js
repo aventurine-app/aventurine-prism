@@ -127,8 +127,6 @@
         const before = merge || gesture ? null : snapshot();
         const result = fn(state.plan);
         if (result === false) return result;
-        // The plan starts with its earliest person, so moving theirs moves it.
-        P.syncStart(state.plan);
         if (before !== null && before !== snapshot()) pushUndo(before);
         coalesce = { key, at: now };
         changed();
@@ -408,7 +406,8 @@
     async function addPlan(doc) {
         const r = await api('POST', '/api/plans', { plan: doc });
         if (!r.ok) {
-            UI.toast(r.body.error === 'at most 100 plans' ? 'A file holds at most 100 plans.' : 'The plan could not be created.', { type: 'error' });
+            const cap = /^at most (\d+) plans$/.exec(r.body.error || '');
+            UI.toast(cap ? `You can have at most ${cap[1]} plans.` : 'The plan could not be created.', { type: 'error' });
             return null;
         }
         plans.set(r.body.plan.id, r.body.plan);
@@ -657,18 +656,23 @@
 
     const goal = (id) => state.goals.find((g) => g.id === id);
 
-    /** Add a goal to write. Returns it, or null at the limit. */
-    function addGoal() {
+    /** The colour a new goal takes: the next one no other goal wears (then they repeat). */
+    function nextGoalColor() {
+        const goals = state.goals;
+        const free = P.GOAL_COLORS.filter((c) => !goals.some((g) => g.color === c));
+        return free[0] || P.GOAL_COLORS[goals.length % P.GOAL_COLORS.length];
+    }
+
+    /** Add a goal, from `fields` (its rule, name and colour; plan.js fills in
+     *  the rest). Returns it, or null at the limit. */
+    function addGoal(fields = {}) {
         let created = null;
         editGoals((goals) => {
             if (goals.length >= P.LIMITS.goals) {
                 UI.toast(`You can set at most ${P.LIMITS.goals} goals.`, { type: 'error' });
                 return false;
             }
-            // Each new goal takes the next colour no other goal wears (then they repeat).
-            const free = P.GOAL_COLORS.filter((c) => !goals.some((g) => g.color === c));
-            const color = free[0] || P.GOAL_COLORS[goals.length % P.GOAL_COLORS.length];
-            created = P.createGoal({ color });
+            created = P.createGoal({ color: nextGoalColor(), ...fields });
             goals.push(created);
             return true;
         });
@@ -696,6 +700,6 @@
         select, setScrub, setView, flush, boot, openPlan, newPlan, addPlan, duplicatePlan,
         renamePlan, deletePlan, reorderTabs, importPlan, exportPlan, planName, getPlan,
         node, link, previewPreset, setPreviewIcon, addNode, duplicateNode, copyNodes, pasteNodes, removeNode, removeNodes,
-        connect, reconnect, removeLink, goal, editGoals, addGoal, removeGoal, setWorkspace,
+        connect, reconnect, removeLink, goal, editGoals, addGoal, nextGoalColor, removeGoal, setWorkspace,
     };
 }());

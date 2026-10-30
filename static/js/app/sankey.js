@@ -70,13 +70,13 @@
     function textWidth(text, size, weight) {
         if (measureCtx === undefined) measureCtx = document.createElement('canvas').getContext('2d');
         if (!measureCtx) return 0;
-        const family = getComputedStyle(document.documentElement).getPropertyValue('--font-ui').trim() || 'sans-serif';
+        const family = getComputedStyle(document.documentElement).getPropertyValue('--font-family').trim() || 'sans-serif';
         measureCtx.font = `${weight} ${size}px ${family}`;
         return measureCtx.measureText(text).width;
     }
-    // .sankey-label: 11px semibold, 0.03em tracking (which measureText does not carry).
-    const nameWidth = (text) => textWidth(text, 11, 600) + text.length * 11 * 0.03;
-    const amountWidth = (text) => textWidth(text, 13, 700);
+    // .sankey-label: 12px regular; .sankey-amount: 13px semibold (outlook.css).
+    const nameWidth = (text) => textWidth(text, 12, 400);
+    const amountWidth = (text) => textWidth(text, 13, 600);
 
     /** `text` cut with an ellipsis to fit `max` px as a band name. */
     function fitName(text, max) {

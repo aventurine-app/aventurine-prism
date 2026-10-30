@@ -12,13 +12,15 @@ The navigation on the left holds four workspaces:
 
 - **Plans** lists every plan; opening one shows the builder, with the modules
   across the top and a net worth scrubber under the canvas.
-- **Goals** sets the goals every plan is measured against. Each is a rule built
-  word by word ("Net worth is at least 25 × yearly expenses by age 65"), from
-  scratch or from a preset.
-- **Analyze** charts one plan: net worth (flagging each goal it reaches), cash
-  flow, a Sankey and tables.
-- **Compare** lines every plan up: net worth at the end, taxes paid, and what
-  it leaves behind in today's money.
+- **Goals** sets the goals every plan is measured against. Each is a rule
+  ("Net worth is at least 25 × yearly expenses by age 65"), written in a goal
+  editor, and the page shows how far toward each one a plan gets by its
+  deadline, and when every plan meets it.
+- **Analyze** charts one plan: its headline figures, net worth (flagging each
+  goal it reaches), cash flow, a Sankey and tables, in each month's money or
+  adjusted for inflation.
+- **Compare** puts two plans side by side (net worth over the run, and what
+  each spends, earns, owes and pays in tax), then ranks every plan.
 
 Your plans stay in your browser. They are stored on your own device and never
 sent to a server, and Prism does not connect to your bank. Export a plan to a
@@ -49,6 +51,8 @@ preferences.
 ## How it fits together
 
 The app is plain HTML, CSS and JavaScript served as written, with no bundler.
+Its design system is Ant Design's (tokens, components, light and dark themes),
+rebuilt in the app's own stylesheets.
 It never asks a server for anything about your plans: everything it reads or
 saves goes through `window.citrineApi.request(method, url, body)`, which
 `static/js/web/` answers from IndexedDB.

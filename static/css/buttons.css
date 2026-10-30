@@ -1,127 +1,145 @@
 /* ============================================================================
-   buttons.css — the button system, as in Aventurine.
+   buttons.css — the button system: Ant Design's Button.
    ============================================================================
-     .button-primary    charcoal fill, white uppercase micro label: the one main action
-     .button-secondary  outlined neutral sibling
-     .button-icon       control-height square with a glyph
-     .button-danger     outlined red, fills on hover: destructive actions
-     .button-ghost      text-only, for low-weight actions inside panels
+     .button-primary    primary: the brand fill, white label. One per view.
+     .button-secondary  default: outlined, turns the primary colour on hover
+     .button-danger     default danger: outlined red; with --solid, filled red
+                        (a confirm dialog's destructive action)
+     .button-ghost      text: no fill until hovered, for low-weight actions
+     .button-link       link: brand-coloured text
+     .button-icon       a 32px square holding a glyph, as a text button
+   Sizes: default 32px; .button-sm 24px; .button-lg 40px.
    ============================================================================ */
 
 .button-primary,
 .button-secondary,
-.button-danger {
+.button-danger,
+.button-ghost,
+.button-link,
+.button-icon {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: var(--space-8);
     height: var(--control-height);
-    padding: 0 var(--space-16);
-    border-radius: var(--radius-control);
-    font-family: var(--font-ui);
-    font-size: var(--size-micro);
-    font-weight: var(--weight-superbold);
-    letter-spacing: var(--track-widest);
-    text-transform: uppercase;
+    padding: 4px 15px;
+    border: var(--line-width) solid transparent;
+    border-radius: var(--border-radius);
+    background: transparent;
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+    font-weight: var(--font-weight-normal);
+    line-height: var(--line-height);
     white-space: nowrap;
+    text-decoration: none;
     cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease,
-                border-color 0.15s ease, transform 0.1s ease;
+    user-select: none;
+    touch-action: manipulation;
+    transition: all var(--motion-duration-mid) var(--motion-ease-in-out);
 }
 .button-primary .icon,
 .button-secondary .icon,
-.button-danger .icon { width: 16px; height: 16px; }
+.button-danger .icon,
+.button-ghost .icon,
+.button-link .icon { width: 16px; height: 16px; }
 
+/* Primary. */
 .button-primary {
-    background: var(--accent-neutral-fill);
-    border: 0;
-    color: var(--button-text);
+    background: var(--color-primary);
+    color: var(--color-text-light-solid);
+    box-shadow: var(--button-primary-shadow);
 }
-.button-primary:not(:disabled):hover { background: var(--accent-gray-hover); }
+.button-primary:not(:disabled):hover { background: var(--color-primary-hover); }
+.button-primary:not(:disabled):active { background: var(--color-primary-active); }
 
+/* Default. */
 .button-secondary {
-    background: transparent;
-    background-clip: padding-box;
-    border: var(--border-width) solid var(--accent-neutral-border);
-    color: var(--accent-neutral);
+    background: var(--color-bg-container);
+    border-color: var(--color-border);
+    color: var(--color-text);
+    box-shadow: var(--button-shadow);
 }
-.button-secondary:not(:disabled):hover {
-    background-color: var(--accent-neutral-fill);
-    color: var(--accent-neutral-text);
-}
-.button-secondary:disabled { color: var(--text-tertiary); border-color: var(--border); }
+.button-secondary:not(:disabled):hover { border-color: var(--color-primary-hover); color: var(--color-primary-hover); }
+.button-secondary:not(:disabled):active { border-color: var(--color-primary-active); color: var(--color-primary-active); }
 
+/* Danger: default (outlined) and solid. */
 .button-danger {
-    background: transparent;
-    border: var(--border-width) solid var(--accent-negative);
-    color: var(--accent-negative);
+    background: var(--color-bg-container);
+    border-color: var(--color-error);
+    color: var(--color-error);
+    box-shadow: var(--button-danger-shadow);
 }
-.button-danger:not(:disabled):hover { background: var(--accent-negative); color: var(--danger-text); }
+.button-danger:not(:disabled):hover { border-color: var(--color-error-hover); color: var(--color-error-hover); }
+.button-danger:not(:disabled):active { border-color: var(--color-error-active); color: var(--color-error-active); }
+.button-danger--solid { background: var(--color-error); color: var(--color-text-light-solid); }
+.button-danger--solid:not(:disabled):hover { background: var(--color-error-hover); color: var(--color-text-light-solid); }
+.button-danger--solid:not(:disabled):active { background: var(--color-error-active); color: var(--color-text-light-solid); }
 
+/* Text. */
+.button-ghost { color: var(--color-text); }
+.button-ghost:not(:disabled):hover { background: var(--color-bg-text-hover); }
+.button-ghost:not(:disabled):active { background: var(--color-bg-text-active); }
+
+/* Link. */
+.button-link { padding-inline: 0; height: auto; color: var(--color-link); }
+.button-link:not(:disabled):hover { color: var(--color-link-hover); }
+.button-link:not(:disabled):active { color: var(--color-link-active); }
+
+/* Icon only: a text button the size of a control. */
 .button-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
     width: var(--control-height);
-    height: var(--control-height);
     padding: 0;
-    border: 0;
-    border-radius: var(--radius-control);
-    background-color: var(--icon-button-fill);
-    color: var(--icon-button-ink);
-    cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+    color: var(--color-text);
 }
-.button-icon .icon { width: 18px; height: 18px; }
+.button-icon .icon { width: 16px; height: 16px; }
 .button-icon:not(:disabled):hover,
-.button-icon[aria-pressed="true"],
-.button-icon[aria-expanded="true"] {
-    background-color: var(--accent-neutral-fill);
-    color: var(--accent-neutral-text);
-}
+.button-icon[aria-expanded="true"] { background: var(--color-bg-text-hover); }
+.button-icon:not(:disabled):active { background: var(--color-bg-text-active); }
+.button-icon[aria-pressed="true"] { background: var(--color-primary-bg); color: var(--color-primary); }
 
-.button-ghost {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-8);
-    height: 28px;
-    padding: 0 var(--space-8);
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: var(--size-small);
-    font-weight: var(--weight-semibold);
-    cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
-}
-.button-ghost .icon { width: 16px; height: 16px; }
-.button-ghost:not(:disabled):hover { background: var(--frost-3); color: var(--text-primary); }
+/* Sizes. */
+.button-sm { height: var(--control-height-sm); padding: 0 7px; border-radius: var(--border-radius-sm); }
+.button-sm.button-icon { width: var(--control-height-sm); padding: 0; }
+.button-lg { height: var(--control-height-lg); padding: 7px 15px; border-radius: var(--border-radius-lg); font-size: var(--font-size-lg); }
+.button-lg.button-icon { width: var(--control-height-lg); padding: 0; }
+.button-block { width: 100%; }
 
 /* Shared states. */
 .button-primary:focus-visible,
 .button-secondary:focus-visible,
-.button-danger:focus-visible,
-.button-icon:focus-visible,
-.button-ghost:focus-visible {
-    outline: 2px solid var(--accent-ring);
-    outline-offset: 2px;
+.button-ghost:focus-visible,
+.button-link:focus-visible,
+.button-icon:focus-visible {
+    outline: 4px solid var(--color-primary-border);
+    outline-offset: 1px;
+    transition: outline-offset 0s, outline 0s;
 }
-
-.button-primary:not(:disabled):active,
-.button-secondary:not(:disabled):active,
-.button-danger:not(:disabled):active,
-.button-icon:not(:disabled):active,
-.button-ghost:not(:disabled):active { transform: translateY(1px); }
+.button-danger:focus-visible {
+    outline: 4px solid var(--color-error-border);
+    outline-offset: 1px;
+    transition: outline-offset 0s, outline 0s;
+}
 
 .button-primary:disabled,
 .button-secondary:disabled,
-.button-danger:disabled,
-.button-icon:disabled,
-.button-ghost:disabled { cursor: not-allowed; opacity: 0.55; }
+.button-danger:disabled {
+    background: var(--color-bg-container-disabled);
+    border-color: var(--color-border);
+    color: var(--color-text-disabled);
+    box-shadow: none;
+    cursor: not-allowed;
+}
+.button-ghost:disabled,
+.button-link:disabled,
+.button-icon:disabled {
+    color: var(--color-text-disabled);
+    cursor: not-allowed;
+}
 
-/* A button busy with an async action: label dimmed, a spinner in front. */
-.is-busy { position: relative; pointer-events: none; }
+/* A button busy with an async action, as Ant's loading button: dimmed, a
+   spinner before its label, and no second press. */
+.is-busy { opacity: 0.65; pointer-events: none; }
 .is-busy::before {
     content: '';
     width: 12px;
@@ -129,11 +147,21 @@
     border-radius: 50%;
     border: 2px solid currentColor;
     border-right-color: transparent;
-    animation: spin 0.7s linear infinite;
+    animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Ant's Space.Compact: buttons joined edge to edge into one group, their
+   inner corners square and their shared borders overlapped. */
+.button-group { display: inline-flex; align-items: stretch; }
+.button-group > * { border-radius: 0; }
+.button-group > * + * { margin-left: calc(-1 * var(--line-width)); }
+.button-group > :first-child { border-start-start-radius: var(--border-radius); border-end-start-radius: var(--border-radius); }
+.button-group > :last-child { border-start-end-radius: var(--border-radius); border-end-end-radius: var(--border-radius); }
+.button-group > :hover,
+.button-group > :focus-visible { position: relative; z-index: 1; }
+
 @media (prefers-reduced-motion: reduce) {
-    .button-primary, .button-secondary, .button-danger, .button-icon, .button-ghost { transition: none; }
+    .button-primary, .button-secondary, .button-danger, .button-ghost, .button-link, .button-icon { transition: none; }
     .is-busy::before { animation-duration: 2s; }
 }

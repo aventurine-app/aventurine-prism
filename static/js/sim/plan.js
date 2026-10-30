@@ -7,13 +7,16 @@
 // A plan is plain JSON:
 //
 //   { id, name, version, createdAt, updatedAt,
-//     settings: { start: 'YYYY-MM', years, inflation },
+//     settings: { start: 'YYYY-MM', years, inflation, age },
 //     view:     { x, y, zoom },            canvas camera, restored on open
 //     nodes:    [{ id, type, name, x, y, params, icon? }],
 //     links:    [{ id, from, to, mode, value, basis, when, month, date,
 //                  start, end, growth }] }
 //
 // `type` is a preset id from catalog.js, which fixes the node's role.
+//
+// `age` is the age of the person the plan is for, at its start (null when not
+// given). It dates a goal's age deadline and labels the charts.
 //
 // GOALS are shared by all of a user's plans, not part of any one: a list kept
 // beside the plans (validateGoals). Each goal is one rule, a sentence of four
@@ -45,7 +48,12 @@
 //   mode   percent  value% of the basis
 //          fixed    value (a currency amount) each time the link fires
 //          rest     whatever is left of the basis after the other links
-//          above    accounts only: the part of the balance over `value`
+//          cost     into spending only: the expense's own cost, when and as
+//                   it falls due (its schedule and inflation, not the link's).
+//                   One link per expense pays its cost.
+//
+// Out of an account, a percent or the rest is of the balance over the
+// account's Keep at least (minBalance), when it has one.
 //
 //   basis  inflow    money arriving at the source. For income that is the
 //                    paycheck; for spending, the spending; for a debt, what is
@@ -86,16 +94,21 @@
     // survivor, wearing the icon the old preset had and keeping the name it
     // was given. A preset that was only a name and icon on another's behaviour
     // (Freelance on Paycheck, Checking on Bank account) is retired this way.
-    const retireInto = (type, icons) => Object.fromEntries(
-        Object.entries(icons).map(([old, icon]) => [old, { type, icon }]));
+    // `params` are settings the old preset stood for, which the survivor now
+    // holds as a setting (Pre-tax account is Tax-advantaged with its
+    // Contributions before tax).
+    const retireInto = (type, icons, params = null) => Object.fromEntries(
+        Object.entries(icons).map(([old, icon]) => [old, { type, icon, params }]));
 
     // Presets removed outright. A saved plan that holds one opens without it:
     // the module and its links are dropped, and a loan that was docked under it
     // stands on its own.
-    const REMOVED_TYPES = new Set(['real-estate', 'rental-property', 'vehicle', 'home', 'land']);
+    // The Person module went too: its age is the plan's now (settings.age).
+    const REMOVED_TYPES = new Set(['real-estate', 'rental-property', 'vehicle', 'home', 'land', 'person']);
 
     const RETIRED_TYPES = {
-        ...retireInto('paycheck', { 'side-hustle': 'laptop', 'freelance': 'laptop', 'other-income': 'coins' }),
+        ...retireInto('paycheck', { 'side-hustle': 'laptop', 'freelance': 'laptop', 'other-income': 'coins',
+            'tax-refund': 'arrow-u-up-left' }),
         ...retireInto('bank-account', {
             'checking': 'wallet', 'savings': 'piggy-bank', 'hysa': 'vault', 'money-market': 'coin-vertical',
             'emergency-fund': 'lifebuoy', 'cash': 'money-wavy' }),
@@ -104,8 +117,8 @@
             'brokerage': 'chart-line-up', 'index-fund': 'chart-pie-slice', 'stocks': 'trend-up',
             'bonds': 'seal-percent', 'treasuries': 'bank', 'crypto': 'currency-btc', 'reit': 'building-office',
             'gold': 'diamond' }),
-        ...retireInto('pretax-account', { 'trad-ira': 'tree', 'hsa': 'heartbeat' }),
-        ...retireInto('tax-free-account', { 'roth-ira': 'tree-evergreen', '529': 'graduation-cap' }),
+        ...retireInto('tax-advantaged-account', { 'pretax-account': 'plant', 'trad-ira': 'tree', 'hsa': 'heartbeat' }, { contributions: 'pre' }),
+        ...retireInto('tax-advantaged-account', { 'tax-free-account': 'tree-evergreen', 'roth-ira': 'tree-evergreen', '529': 'graduation-cap' }),
         ...retireInto('expense', {
             'rent': 'house', 'groceries': 'basket', 'dining': 'fork-knife', 'utilities': 'lightning',
             'transport': 'bus', 'insurance': 'shield-check', 'healthcare': 'first-aid', 'subscriptions': 'repeat',
@@ -118,7 +131,7 @@
         ...retireInto('tax-or-fee', { 'tax': 'percent', 'fee': 'scissors' }),
         ...retireInto('one-time-income', { 'windfall': 'sparkle', 'inheritance': 'scroll' }),
         ...retireInto('expense', {
-            'one-time-expense': 'package', 'big-purchase': 'package', 'new-car': 'package', 'wedding': 'heart',
+            'big-purchase': 'package', 'new-car': 'package', 'wedding': 'heart',
             'dream-trip': 'island', 'emergency': 'siren' }),
     };
 
@@ -199,8 +212,6 @@
     // ── Link rule space ────────────────────────────────────────────────────
     // Which modes each basis offers, per source role. Order is display order.
     const RULES = {
-        // A person's links move no money: they name what is theirs.
-        person:   { person: ['rest'] },
         source:   { inflow: ['percent', 'fixed', 'rest'] },
         expense:  { inflow: ['percent', 'fixed', 'rest'] },
         modifier: { inflow: ['percent', 'fixed', 'rest'] },
@@ -209,16 +220,30 @@
             proceeds: ['percent', 'rest'],
             charges:  ['fixed', 'percent', 'rest'],
         },
-        account:  { balance: ['percent', 'fixed', 'rest', 'above'] },
+        account:  { balance: ['percent', 'fixed', 'rest'] },
     };
+
+    // The bases that can pay an expense's cost: income or a budget group's
+    // money, an account's balance, a card's purchases. (Proceeds are once.)
+    const COST_BASES = new Set(['inflow', 'balance', 'charges']);
+
+    /** Whether a link from `basis` into `to` may pay `to`'s own cost. */
+    function paysCost(to, basis) {
+        return !!to && roleOf(to) === 'expense' && COST_BASES.has(basis);
+    }
+
+    /** The link (other than `exceptId`) already paying expense `toId`'s cost, if any. */
+    function costPayer(plan, toId, exceptId = null) {
+        return plan.links.find((l) => l.to === toId && l.mode === 'cost' && l.id !== exceptId) || null;
+    }
 
     /** The `when` values a rule offers. The first is the default. */
     function timingsFor(basis, mode) {
+        // A cost falls due on the expense's schedule, not the link's.
+        if (mode === 'cost') return ['monthly'];
         if (basis === 'proceeds') return ['once'];
-        if (basis === 'person') return ['monthly'];
         if (basis === 'charges') return ['monthly', 'yearly', 'once'];
         if (basis === 'inflow') return mode === 'fixed' ? ['monthly', 'yearly', 'once'] : ['monthly'];
-        if (mode === 'above') return ['monthly', 'yearly'];
         return ['monthly', 'yearly', 'once'];
     }
 
@@ -236,18 +261,27 @@
         return bases.filter((b) => b !== 'charges' && (b !== 'proceeds' || node.params.start));
     }
 
-    /** The modes a link on `basis` offers. */
-    function modesFor(node, basis) {
+    /** The modes a link on `basis` offers. Into spending (`to`), it may also
+     *  pay the expense's own cost. */
+    function modesFor(node, basis, to = null) {
         const p = Catalog.preset(node.type);
-        return (p && RULES[p.role][basis]) || [];
+        const modes = (p && RULES[p.role][basis]) || [];
+        return paysCost(to, basis) ? [...modes, 'cost'] : modes;
+    }
+
+    /** Whether an account of preset `p` with `params` is paid from gross pay:
+     *  a 401(k), or a tax-advantaged account whose contributions are before tax. */
+    function takesPretax(p, params) {
+        return !!p && (!!p.pretax || (!!p.taxChoice && !!params && params.contributions === 'pre'));
     }
 
     /** Whether income sent along `link` is a pre-tax contribution: it leaves
-     *  an income module for a pre-tax account (401(k), HSA, Traditional IRA). */
+     *  an income module for a pre-tax account (401(k), or an HSA or IRA whose
+     *  contributions are before tax). */
     function isPretax(plan, link) {
         const from = nodeById(plan, link.from);
         const to = nodeById(plan, link.to);
-        return roleOf(from) === 'source' && !!to && !!Catalog.preset(to.type).pretax;
+        return roleOf(from) === 'source' && !!to && takesPretax(Catalog.preset(to.type), to.params);
     }
 
     /** A loan's monthly payment: the level payment that clears `balance` over
@@ -306,10 +340,10 @@
     // How large a target may be, by unit.
     const GOAL_VALUE = { amount: 1e11, times: 1000, percent: 1000 };
     const GOAL_AGE = { min: 1, max: 120 };
-    // The colours a goal's card can be, in the order offered: Aventurine
-    // Manage's Gemstone palette, in its order.
+    // The colours a goal's card can be, in the order offered: eight stone names
+    // over eight Ant Design hues (goals.css).
     const GOAL_COLORS = ['lapis', 'tourmaline', 'tigers-eye', 'garnet', 'tanzanite', 'amber', 'rhodolite', 'emerald'];
-    // Colours offered before the Gemstone palette, read as the stone nearest them.
+    // Colours offered before the stones, read as the stone nearest them.
     const OLD_GOAL_COLORS = {
         teal: 'tourmaline', blue: 'lapis', violet: 'tanzanite', rose: 'garnet',
         orange: 'amber', green: 'emerald', slate: 'lapis', gold: 'tigers-eye',
@@ -329,20 +363,13 @@
         return goal;
     }
 
-    /** Who a goal's age deadline is for in `plan`: its first person. Null when it has none. */
-    function goalPerson(plan) {
-        return plan.nodes.find((n) => roleOf(n) === 'person') || null;
-    }
-
     /** The month a goal is due in `plan` ('YYYY-MM'), or null when it has no
      *  deadline there. An age deadline is the month the plan's person turns
-     *  that age, so it has none in a plan without a person whose age is set. */
+     *  that age, so it has none in a plan whose age is not set. */
     function goalDate(plan, goal) {
         if (goal.due === 'date') return goal.by || null;
-        if (goal.due !== 'age') return null;
-        const person = goalPerson(plan);
-        if (!person || person.params.age == null || !person.params.planStart) return null;
-        return ymAdd(person.params.planStart, Math.round((goal.age - person.params.age) * 12));
+        if (goal.due !== 'age' || plan.settings.age == null) return null;
+        return ymAdd(plan.settings.start, Math.round((goal.age - plan.settings.age) * 12));
     }
 
     // ── Construction ───────────────────────────────────────────────────────
@@ -355,7 +382,7 @@
             version: PLAN_VERSION,
             createdAt: now,
             updatedAt: now,
-            settings: { start, years, inflation: 2.5 },
+            settings: { start, years, inflation: 2.5, age: null },
             view: { x: 0, y: 0, zoom: 1 },
             nodes: [],
             links: [],
@@ -371,52 +398,17 @@
         const p = Catalog.preset(presetId);
         if (!p) throw new Error(`unknown module type: ${presetId}`);
         const params = Catalog.defaultParams(p);
-        // A new person starts with the plan, so placing one moves nothing.
-        if (p.role === 'person') params.planStart = plan.settings.start;
         return { id: newId('n'), type: p.id, name: p.name, x: Math.round(x), y: Math.round(y), params };
     }
 
-    // ── People ─────────────────────────────────────────────────────────────
+    // ── Age ────────────────────────────────────────────────────────────────
 
-    /** The plan starts when its earliest person's plan does. A plan with no
-     *  person keeps the start it has. Call after any edit; returns true when
-     *  the start moved. */
-    function syncStart(plan) {
-        let start = null;
-        for (const n of plan.nodes) {
-            const s = roleOf(n) === 'person' && n.params.planStart;
-            if (s && (!start || ymDiff(s, start) > 0)) start = s;
-        }
-        if (!start || start === plan.settings.start) return false;
-        plan.settings.start = start;
-        return true;
-    }
-
-    /** The modules a person counts: the ones their links point at, and every
-     *  module the money from those reaches along money links. */
-    function personReach(plan, personId) {
-        const next = new Map();
-        for (const l of plan.links) {
-            const list = next.get(l.from);
-            if (list) list.push(l.to); else next.set(l.from, [l.to]);
-        }
-        const seen = new Set();
-        const stack = [...(next.get(personId) || [])];
-        while (stack.length) {
-            const id = stack.pop();
-            if (seen.has(id)) continue;
-            seen.add(id);
-            for (const to of next.get(id) || []) if (!seen.has(to)) stack.push(to);
-        }
-        return seen;
-    }
-
-    /** A person's age in month `ym`, in whole years, from their age when
-     *  their plan starts. Null when no age is set. */
-    function ageAt(person, ym) {
-        const { age, planStart } = person.params;
-        if (age == null || !planStart) return null;
-        return Math.floor(age + ymDiff(planStart, ym) / 12);
+    /** The plan's person's age in month `ym`, in whole years, from their age
+     *  when the plan starts. Null when no age is set. */
+    function ageAt(plan, ym) {
+        const { age, start } = plan.settings;
+        if (age == null) return null;
+        return Math.floor(age + ymDiff(start, ym) / 12);
     }
 
     /** Whether a link from `fromId` to `toId` may be drawn, and why not. Two
@@ -487,25 +479,27 @@
         const existing = plan.links.filter((l) => l.from === from.id && l.basis === basis);
         switch (basis) {
             case 'charges':
-                return Object.assign(rule, priceRule(plan, tp.inLink || { when: 'monthly', value: 100 }));
+                return Object.assign(rule, priceRule(plan, to, tp.inLink || { when: 'monthly', value: 100 }));
             case 'balance': {
                 if (tp.role === 'debt') return Object.assign(rule, paymentRule(to));
-                if (tp.inLink) return Object.assign(rule, priceRule(plan, tp.inLink));
+                if (tp.inLink) return Object.assign(rule, priceRule(plan, to, tp.inLink));
                 return Object.assign(rule, { mode: 'fixed', value: 500 });
             }
             case 'proceeds':
                 return Object.assign(rule, { mode: 'rest', when: 'once' });
             default:
                 if (tp.inLink && modesFor(from, basis).includes('fixed')) {
-                    return Object.assign(rule, priceRule(plan, tp.inLink));
+                    return Object.assign(rule, priceRule(plan, to, tp.inLink));
                 }
                 return existing.some(takesRest) ? Object.assign(rule, { mode: 'percent', value: 25 }) : rule;
         }
     }
 
-    /** Paying a target with a usual price (a preset's `inLink`): that amount,
-     *  on its timing. */
-    function priceRule(plan, buy) {
+    /** Paying a target with a usual price (a preset's `inLink`): its own cost
+     *  when it has one that no other link pays yet, else that amount, on its
+     *  timing. */
+    function priceRule(plan, to, buy) {
+        if (to.params.cost != null && !costPayer(plan, to.id)) return { mode: 'cost', value: 0, when: 'monthly' };
         return { mode: 'fixed', value: buy.value, when: buy.when, month: buy.month || 1,
             date: buy.relDate != null ? ymAdd(plan.settings.start, buy.relDate) : null };
     }
@@ -524,17 +518,15 @@
         const existing = plan.links.filter((l) => l.from === from.id);
         const hasRest = (basis) => existing.some((l) => l.basis === basis && takesRest(l));
 
-        if (fp.role === 'person') return Object.assign(rule, { basis: 'person' });
-
         // A card pays for spending: a purchase, at that spending's usual price.
         if (fp.kind === 'card') {
-            return Object.assign(rule, { basis: 'charges' }, priceRule(plan, tp.inLink || { when: 'monthly', value: 100 }));
+            return Object.assign(rule, { basis: 'charges' }, priceRule(plan, to, tp.inLink || { when: 'monthly', value: 100 }));
         }
 
         if (tp.inLink) {
             const basis = fp.role === 'account' ? 'balance' : 'inflow';
             if (RULES[fp.role][basis] && RULES[fp.role][basis].includes('fixed')) {
-                return Object.assign(rule, { basis }, priceRule(plan, tp.inLink));
+                return Object.assign(rule, { basis }, priceRule(plan, to, tp.inLink));
             }
         }
 
@@ -581,10 +573,10 @@
 
     /** Bring a link's rule back inside the space its source and target allow,
      *  after either or the rule changed. Keeps every field it can. */
-    function fitRule(link, from) {
+    function fitRule(link, from, to) {
         const bases = basesFor(from);
         if (!bases.includes(link.basis)) link.basis = bases[0] || 'inflow';
-        const modes = modesFor(from, link.basis);
+        const modes = modesFor(from, link.basis, to);
         if (!modes.includes(link.mode)) link.mode = modes.includes('percent') ? 'percent' : modes[0];
         const timings = timingsFor(link.basis, link.mode);
         if (!timings.includes(link.when)) link.when = timings[0];
@@ -601,7 +593,7 @@
         if (!from || !to || link.basis === basis || !basesBetween(plan, from, to, link.id).includes(basis)) return false;
         const { start, end, growth } = link;
         Object.assign(link, ruleOnBasis(plan, from, to, basis), { start, end, growth });
-        fitRule(link, from);
+        fitRule(link, from, to);
         return true;
     }
 
@@ -618,7 +610,9 @@
             const keeps = canConnect(plan, link.from, toId, link.basis).ok;
             link.to = toId;
             if (!keeps) changeBasis(plan, link, basesBetween(plan, from, to)[0]);
-            fitRule(link, from);
+            fitRule(link, from, to);
+            // Another link already pays the new target's cost: this one would pay it twice.
+            if (link.mode === 'cost' && costPayer(plan, toId, link.id)) Object.assign(link, { mode: 'fixed', value: 0 });
         }
         if (toSide) link.toSide = toSide; else delete link.toSide;
         return { ok: true };
@@ -702,8 +696,8 @@
         return out;
     }
 
-    const MODES = ['percent', 'fixed', 'rest', 'above'];
-    const BASES = ['inflow', 'balance', 'proceeds', 'charges', 'person'];
+    const MODES = ['percent', 'fixed', 'rest', 'cost'];
+    const BASES = ['inflow', 'balance', 'proceeds', 'charges'];
     const WHENS = ['monthly', 'yearly', 'once'];
     const SIDES = ['t', 'r', 'b', 'l'];
 
@@ -734,7 +728,7 @@
         if (!Catalog.LINK_TARGETS[roleOf(from)].includes(roleOf(to))) {
             fail(`link ${i} joins modules that cannot be linked`);
         }
-        fitRule(link, from);
+        fitRule(link, from, to);
         if (!portTargets(from, link.basis).includes(roleOf(to))) {
             fail(`link ${i} sends ${link.basis} to a module that cannot take it`);
         }
@@ -848,13 +842,16 @@
         const byId = new Map(raw.nodes.filter(isObj).map((n) => [n.id, n]));
         // Saved types may be retired ones, so read them as their survivors.
         const presetOf = (n) => (n && Catalog.preset((RETIRED_TYPES[n.type] || n).type)) || {};
-        const takesPretax = (n) => !!presetOf(n).pretax;
+        const takesPretaxNode = (n) => {
+            const r = n && RETIRED_TYPES[n.type];
+            return takesPretax(presetOf(n), { ...(n && isObj(n.params) ? n.params : {}), ...(r && r.params) });
+        };
         const links = raw.links.filter(isObj);
         const intoK = new Map();   // a 401(k) id -> the node it is saved as
         const moved = new Map();   // a pay link -> the 401(k) id it now feeds
         const dropped = new Set();
         for (const m of raw.nodes.filter(isMatch)) {
-            const out = links.find((l) => l.from === m.id && takesPretax(byId.get(l.to)));
+            const out = links.find((l) => l.from === m.id && takesPretaxNode(byId.get(l.to)));
             const k = out && byId.get(out.to);
             if (k && !intoK.has(k.id)) {
                 const params = isObj(m.params) ? m.params : {};
@@ -898,6 +895,7 @@
                 start: cleanYm(settings.start, 'plan start', false),
                 years: Math.round(cleanNumber(settings.years, 1, LIMITS.years, 'plan length')),
                 inflation: cleanNumber(settings.inflation ?? 0, -20, 50, 'inflation'),
+                age: settings.age == null ? null : cleanNumber(settings.age, 0, GOAL_AGE.max, 'age'),
             },
             view: {
                 x: cleanNumber(Number(view.x) || 0, -1e6, 1e6, 'view x'),
@@ -922,7 +920,7 @@
                 name: cleanString(n.name ?? p.name, LIMITS.name, `module ${i} name`) || p.name,
                 x: Math.round(cleanNumber(n.x, -1e6, 1e6, `module ${i} x`)),
                 y: Math.round(cleanNumber(n.y, -1e6, 1e6, `module ${i} y`)),
-                params: cleanParams(p, n.params),
+                params: cleanParams(p, retired && retired.params ? { ...(isObj(n.params) ? n.params : {}), ...retired.params } : n.params),
             };
             // An icon the category does not offer is dropped, not rejected: the
             // module wears its preset's icon instead.
@@ -932,8 +930,6 @@
             nodesById.set(node.id, node);
             plan.nodes.push(node);
         });
-        syncStart(plan);
-
         // Cash back lands in an account that exists, else it credits the card.
         for (const n of plan.nodes) {
             const to = n.params.cashBackTo && nodesById.get(n.params.cashBackTo);
@@ -1001,10 +997,32 @@
             }
             return out;
         };
+        // "Everything above" an amount was once a link's own rule; what an
+        // account keeps is the account's now. Its first such link (the one that
+        // ran first) sets the minimum, when the account has none, and takes the
+        // rest. Its other above links and its old rest only ever got what that
+        // minimum keeps now, so they send 0%.
+        const sweepers = new Map();
+        for (const l of raw.links) {
+            if (isObj(l) && l.mode === 'above' && l.basis === 'balance' && !sweepers.has(l.from)) sweepers.set(l.from, l);
+        }
+        const retireAbove = (l) => {
+            const sweeper = sweepers.get(l.from);
+            const from = nodesById.get(l.from);
+            if (!sweeper || !from || roleOf(from) !== 'account' || l.basis !== 'balance') return l;
+            if (l === sweeper) {
+                if (from.params.minBalance == null) {
+                    from.params.minBalance = cleanNumber(l.value ?? 0, 0, LIMITS.money, 'minimum balance');
+                }
+                return { ...l, mode: 'rest', value: 0 };
+            }
+            return l.mode === 'above' || l.mode === 'rest' ? { ...l, mode: 'percent', value: 0 } : l;
+        };
         const seenLinks = new Set();
         const seenPairs = new Set();
         raw.links.filter((l) => !sinkLink(l) && !retiredCardLink(l) && !touchesRemoved(l))
-            .map((l) => (isObj(l) ? settleRule(l) : l)).filter(Boolean).forEach((l, i) => {
+            .map((l) => (isObj(l) ? settleRule(l) : l)).filter(Boolean)
+            .map((l) => (isObj(l) ? retireAbove(l) : l)).forEach((l, i) => {
             const link = cleanLink(l, nodesById, i);
             if (seenLinks.has(link.id)) fail(`link id ${link.id} is used twice`);
             const pair = `${link.from}>${link.to}>${link.basis}`;
@@ -1022,6 +1040,15 @@
             const key = `${l.from}:${l.basis}`;
             if (rests.has(key)) l.mode = 'percent';
             rests.add(key);
+        }
+
+        // One link pays an expense's cost: a second would pay it twice, so it
+        // becomes a fixed amount to fill in.
+        const costsPaid = new Set();
+        for (const l of plan.links) {
+            if (l.mode !== 'cost') continue;
+            if (costsPaid.has(l.to)) Object.assign(l, { mode: 'fixed', value: 0 });
+            costsPaid.add(l.to);
         }
         return plan;
     }
@@ -1054,9 +1081,9 @@
     return {
         PLAN_VERSION, LIMITS, GEOM, MONTHS, RULES, PlanError, REMOVED_TYPES, reconnect,
         ymParse, ymFormat, ymNow, ymAdd, ymDiff, ymLabel,
-        newId, roleOf, basesFor, modesFor, timingsFor, portTargets, targetRoles, basesBetween, changeBasis, loanPayment, isPretax,
-        createPlan, createNode, iconOf, syncStart, personReach, ageAt, RETIRED_TYPES, canConnect, createLink, fitRule,
-        GOAL_METRICS, GOAL_OPS, GOAL_UNITS, GOAL_DUES, GOAL_VALUE, GOAL_AGE, GOAL_COLORS, createGoal, goalPerson, goalDate,
+        newId, roleOf, basesFor, modesFor, timingsFor, costPayer, portTargets, targetRoles, basesBetween, changeBasis, loanPayment, isPretax,
+        createPlan, createNode, iconOf, ageAt, RETIRED_TYPES, canConnect, createLink, fitRule,
+        GOAL_METRICS, GOAL_OPS, GOAL_UNITS, GOAL_DUES, GOAL_VALUE, GOAL_AGE, GOAL_COLORS, createGoal, goalDate,
         validateGoals, legacyGoals, mergeGoals, validatePlan, cloneWithNewIds,
     };
 }));

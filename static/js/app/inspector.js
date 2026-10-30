@@ -7,7 +7,7 @@
 //              money goes and comes from, its outlook and its issues
 //   a link     its rule, as a sentence and as controls: from what, how much,
 //              when, and an optional window
-//   nothing    the plan: name, start, issues, module counts
+//   nothing    the plan: name, start, age, issues, module counts
 //
 // It shows only in the plan builder (the Plans workspace); the others have
 // the room to themselves.
@@ -217,7 +217,7 @@
 
     // ── Plan panel ─────────────────────────────────────────────────────────
 
-    const ROLE_ICON = { person: 'user', source: 'briefcase', account: 'piggy-bank', expense: 'shopping-bag', debt: 'cardholder', modifier: 'sliders-horizontal' };
+    const ROLE_ICON = { source: 'briefcase', account: 'piggy-bank', expense: 'shopping-bag', debt: 'cardholder', modifier: 'sliders-horizontal' };
 
     function planPanel() {
         const nameB = bind('plan.name', {
@@ -226,16 +226,25 @@
             set: (pl, v) => { pl.name = v; },
             fallback: () => 'Untitled plan',
         });
-        // The start is set on a Person: the plan starts with the earliest one.
-        const people = plan().nodes.filter((n) => D.roleOf(n) === 'person');
+        // The age is the person the plan is for, at its start: it dates a goal
+        // that is due at an age, and labels the charts.
         const settings = `<div class="insp-fields">
-            ${row('Starts', `<span class="insp-static" title="${people.length ? 'Set on the earliest Person' : 'Add a Person to set when the plan starts'}">${
-                esc(P.ymLabel(plan().settings.start))}</span>`)}
+            ${field('Starts', 'plan.start', {
+                type: 'yearmonth',
+                get: () => plan().settings.start,
+                set: (pl, v) => { if (v) pl.settings.start = v; },
+            })}
+            ${field('Your age', 'plan.age', {
+                type: 'number', min: 0, max: P.GOAL_AGE.max, suffix: 'yrs', decimals: true, optional: true,
+                get: () => plan().settings.age,
+                set: (pl, v) => { pl.settings.age = v; },
+            })}
         </div>`;
         return `
             <div class="insp-header">
-                ${iconSvg('file', { cls: 'insp-plan-icon' })}
+                <span class="insp-plan-tile" aria-hidden="true">${iconSvg('file', { cls: 'insp-plan-icon' })}</span>
                 <div class="insp-titles">${nameB.html}
+                    <div class="insp-tags"><span class="tag tag--processing">Plan</span></div>
                 </div>
             </div>
             ${section('Timeline', settings)}
@@ -259,8 +268,8 @@
     // What a blank date field means, shown in the field itself.
     const EMPTY_MONTH = {
         start: (p) => (p.role === 'debt' ? 'Already owed' : 'Plan start'),
+        end: () => 'No end',
         lockUntil: () => 'Not locked',
-        planStart: () => 'Plan start',
     };
 
     function paramSpec(node, key) {
@@ -302,7 +311,12 @@
     function visibleFields(node) {
         const p = C.preset(node.type);
         const per = node.params.per;
+        // An expense's schedule matters only once it has a cost; a one-off cost
+        // does not inflate.
+        const costless = p.role === 'expense' && node.params.cost == null;
         return C.fieldsFor(p).filter((k) => {
+            if (costless) return k === 'cost';
+            if ((k === 'growth' || k === 'end') && p.role === 'expense') return per !== 'once';
             if (k === 'payMonth') return per === 'year';
             if (k === 'cashBackTo') return node.params.cashBack > 0;
             return true;
@@ -349,6 +363,13 @@
         </button></li>`;
     }
 
+    /** The tags under a module's name: its role, in its colour, and, once the
+     *  module is renamed, the kind of module it is ('Bank account'). */
+    function roleTags(p, name = p.name) {
+        const kind = name !== p.name && p.name !== C.ROLES[p.role].label ? `<span class="tag">${esc(p.name)}</span>` : '';
+        return `<div class="insp-tags"><span class="tag tag--role" data-role="${p.role}">${esc(C.ROLES[p.role].label)}</span>${kind}</div>`;
+    }
+
     function nodePanel(node) {
         const p = C.preset(node.type);
         const role = p.role;
@@ -360,10 +381,9 @@
             fallback: () => p.name,
         });
 
-        // A person's links carry no money, so they are listed on neither end.
         const outs = plan().links.filter((l) => l.from === id);
-        const ins = plan().links.filter((l) => l.to === id && l.basis !== 'person');
-        const sends = P.basesFor(node).length && role !== 'person' ? section('Outflows',
+        const ins = plan().links.filter((l) => l.to === id);
+        const sends = P.basesFor(node).length ? section('Outflows',
             outs.length
                 ? `<ul class="insp-links">${outs.map((l) => linkRow(l, Store.node(l.to))).join('')}</ul>`
                 : '<p class="insp-none">No links yet</p>') : '';
@@ -377,7 +397,7 @@
             <div class="insp-header">
                 <button class="role-tile role-tile--lg role-tile--button" type="button" data-act="node-icon" data-role="${role}"
                     data-icon="${esc(P.iconOf(node))}" aria-haspopup="dialog" aria-label="Change icon" title="Change icon">${iconSvg(P.iconOf(node))}</button>
-                <div class="insp-titles">${nameB.html}</div>
+                <div class="insp-titles">${nameB.html}${roleTags(p, node.name)}</div>
             </div>
             ${settingsSection(node)}
             </div>
@@ -397,7 +417,7 @@
             <div class="insp-header">
                 <button class="role-tile role-tile--lg role-tile--button" type="button" data-act="preview-icon" data-role="${role}"
                     aria-haspopup="dialog" aria-label="Change icon" title="Change icon">${iconSvg(icon)}</button>
-                <div class="insp-titles"><div class="insp-name">${esc(p.name)}</div></div>
+                <div class="insp-titles"><div class="insp-name">${esc(p.name)}</div>${roleTags(p)}</div>
             </div>
             ${settingsSection(node)}
             </div>`;
@@ -411,13 +431,7 @@
         const kind = C.preset(node.type).kind;
         const m = r.months;
         let stats = '';
-        if (role === 'person') {
-            const end = nr.worth[m];
-            const age = P.ageAt(node, P.ymAdd(plan().settings.start, m));
-            stats = stat('Net worth at end', money(end), end < 0 ? 'down' : '')
-                + stat('Change', money(end - nr.worth[0], { sign: true }), end >= nr.worth[0] ? 'up' : 'down')
-                + (age != null ? stat('Age at end', String(age)) : '');
-        } else if (role === 'account') {
+        if (role === 'account') {
             const end = nr.balance[m];
             stats = stat('Balance at end', money(end), end < -0.005 ? 'down' : '')
                 + stat('Change', money(end - nr.balance[0], { sign: true }), end >= nr.balance[0] ? 'up' : 'down')
@@ -473,20 +487,19 @@
 
     // ── Link panel ─────────────────────────────────────────────────────────
 
-    const MODE_LABEL = { percent: '%', fixed: null, rest: 'Rest', above: 'Above' };
+    const MODE_LABEL = { percent: '%', fixed: null, rest: 'Rest', cost: 'Cost' };
     const WHEN_LABEL = { monthly: 'Every month', yearly: 'Every year', once: 'Once' };
 
     function linkPanel(link) {
         const from = Store.node(link.from);
         const to = Store.node(link.to);
-        if (link.basis === 'person') return personLinkPanel(link, from, to);
         const id = link.id;
         const L = () => Store.link(id) || link;
         const ends = (pl, l) => [pl.nodes.find((n) => n.id === l.from), pl.nodes.find((n) => n.id === l.to)];
-        const setL = (fn) => (pl, v) => { const l = pl.links.find((x) => x.id === id); fn(l, v); P.fitRule(l, ends(pl, l)[0]); };
+        const setL = (fn) => (pl, v) => { const l = pl.links.find((x) => x.id === id); fn(l, v); P.fitRule(l, ...ends(pl, l)); };
 
         const bases = P.basesFor(from);
-        const modes = P.modesFor(from, link.basis);
+        const modes = P.modesFor(from, link.basis, to);
         const timings = P.timingsFor(link.basis, link.mode);
         const sym = Fmt.symbolParts().symbol;
 
@@ -512,8 +525,11 @@
                 get: () => L().value,
                 set: setL((l, v) => { l.value = v; }),
             });
-        } else if (link.mode === 'fixed' || link.mode === 'above') {
-            rule += field(link.mode === 'above' ? 'Keep' : 'Amount', 'link.value', {
+        } else if (link.mode === 'cost') {
+            // The cost is the expense's own setting: shown here, edited there.
+            rule += row('Cost', `<span class="insp-static">${esc(D.nodeMeta(to) || 'None set')}</span>`);
+        } else if (link.mode === 'fixed') {
+            rule += field('Amount', 'link.value', {
                 type: 'money', min: 0, max: P.LIMITS.money,
                 get: () => L().value,
                 set: setL((l, v) => { l.value = v; }),
@@ -560,21 +576,6 @@
                 <button class="button-icon" type="button" data-act="link-delete" aria-label="Delete flow" title="Delete flow">${iconSvg('trash')}</button>
             </div>
             ${section('Flow', `<div class="insp-fields">${rule}</div>`)}
-            <section class="insp-section"><p class="sentence" data-sentence>${D.linkSentence(link, from, to)}</p></section>
-            </div>
-            <div data-issues></div>
-            <div data-stats></div>`;
-    }
-
-    /** A person's link moves no money, so it has nothing to set: its ends,
-     *  what it means, and a way to remove it. */
-    function personLinkPanel(link, from, to) {
-        return `
-            <div class="insp-card insp-card--link">
-            <div class="insp-header">
-                <div class="insp-titles">${linkEnds(from, to)}</div>
-                <button class="button-icon" type="button" data-act="link-delete" aria-label="Delete link" title="Delete link">${iconSvg('trash')}</button>
-            </div>
             <section class="insp-section"><p class="sentence" data-sentence>${D.linkSentence(link, from, to)}</p></section>
             </div>
             <div data-issues></div>
@@ -739,11 +740,16 @@
                     UI.toast('Another link already takes the rest.');
                     return false;
                 }
+                // One link pays an expense's cost.
+                if (next === 'cost' && P.costPayer(pl, l.to, id)) {
+                    UI.toast('Another link already pays its cost.');
+                    return false;
+                }
                 if (next === 'percent') l.value = Math.min(l.value || 25, 100) || 25;
-                if (next === 'fixed' && l.mode === 'percent') l.value = 500;
-                if (next === 'above') l.value = 10000;
+                if (next === 'fixed' && (l.mode === 'percent' || l.mode === 'cost')) l.value = 500;
+                if (next === 'cost') l.value = 0;
                 l.mode = next;
-                P.fitRule(l, pl.nodes.find((n) => n.id === l.from));
+                P.fitRule(l, pl.nodes.find((n) => n.id === l.from), pl.nodes.find((n) => n.id === l.to));
                 return true;
             });
             rebuild();
@@ -810,7 +816,9 @@
             // A card's cash back setting lists the plan's accounts.
             const accounts = n && n.params.cashBack != null
                 ? p.nodes.filter((a) => D.roleOf(a) === 'account').map((a) => `${a.id}:${a.name}`).join(',') : '';
-            return `${links.join('|')}#${n ? n.params.per : ''}#${n ? n.params.cashBack > 0 : ''}#${accounts}`;
+            // Which fields show: the schedule, a card's cash back, an expense's cost (visibleFields).
+            const shows = n ? `${n.params.per}#${n.params.cashBack > 0}#${n.params.cost != null}` : '';
+            return `${links.join('|')}#${shows}#${accounts}`;
         }
         if (built.startsWith('link:')) {
             const l = Store.link(built.slice(5));

@@ -111,6 +111,45 @@ test('a deadline makes a goal on time, late, or behind', () => {
     assert.equal(only(plan).status, 'open');
 });
 
+test('progress is how far toward the target the plan gets by the deadline', () => {
+    const due = (by, value = 5000) => {
+        const plan = savingPlan();
+        goal(plan, { metric: 'net-worth', value, due: 'date', by });
+        return only(plan);
+    };
+    const onTime = due('2026-06');
+    close(onTime.progress, 1);
+    // Met in May, but due in April: 3,000 of the 5,000 by then.
+    const late = due('2026-04');
+    assert.equal(late.progressAt, 3);
+    close(late.progress, 0.6);
+    // Never met: read at the deadline, 17 months in.
+    close(due('2027-06', 100000).progress, 0.17);
+    // A deadline past the plan's end reads at the end (24 months).
+    const open = due('2040-01', 100000);
+    assert.equal(open.progressAt, 24);
+    close(open.progress, 0.24);
+});
+
+test('"is at most" progress is the share of the way down from the highest point', () => {
+    const plan = mkPlan('2026-01', 2);
+    const pay = node(plan, 'paycheck', { amount: 500, per: 'month' });
+    const loan = node(plan, 'loan', { balance: 1200, rate: 0 });
+    link(plan, pay, loan, { mode: 'fixed', value: 100 });
+    goal(plan, { metric: 'debt', op: 'lte', value: 0, due: 'date', by: '2026-04' });
+    const ev = only(plan);
+    assert.equal(ev.status, 'late');
+    close(ev.progress, 0.25);   // 1,200 owed at the start, 900 by the deadline
+});
+
+test('a goal that cannot be measured has no progress', () => {
+    const plan = savingPlan();
+    goal(plan, { metric: 'net-worth', value: 5000, due: 'age', age: 65 });
+    const ev = only(plan);
+    assert.equal(ev.blocked, 'no-age');
+    assert.equal(ev.progress, null);
+});
+
 test('a goal met at the plan start is on time even when its deadline has passed', () => {
     const plan = savingPlan(50000);
     goal(plan, { value: 10000, due: 'date', by: '2020-01' });
@@ -199,25 +238,23 @@ test('a rule that reads a year of income or expenses a plan does not have is blo
 
 // ── Deadlines by age ─────────────────────────────────────────────────────────
 
-test('an age deadline is the month the plan\'s person turns it', () => {
+test('an age deadline is the month the plan\'s age reaches it', () => {
     const plan = spendingPlan(200000);
-    node(plan, 'person', { age: 64, planStart: '2026-01' });
+    plan.settings.age = 64;
     const g = goal(plan, { metric: 'savings', unit: 'times', value: 25, of: 'expenses', due: 'age', age: 65 });
     assert.equal(Plan.goalDate(Plan.validatePlan(plan), g), '2027-01');
     const ev = only(plan);
     assert.equal(ev.byIdx, 12);
     assert.equal(ev.status, 'behind');   // 200,000 + 24 × 2,000 never reaches 300,000
-    plan.nodes.find((n) => n.type === 'person').params.age = 64.5;
+    plan.settings.age = 64.5;
     assert.equal(only(plan).byIdx, 6, 'half a year older, the same age comes sooner');
 });
 
-test('an age deadline waits for a person, and for their age', () => {
+test('an age deadline waits for the plan\'s age', () => {
     const plan = spendingPlan();
     goal(plan, { due: 'age', age: 65 });
-    assert.equal(only(plan).blocked, 'no-person');
-    node(plan, 'person', { age: null, planStart: '2026-01' });
     assert.equal(only(plan).blocked, 'no-age');
-    plan.nodes.find((n) => n.type === 'person').params.age = 40;
+    plan.settings.age = 40;
     assert.equal(only(plan).blocked, null);
 });
 

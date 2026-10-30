@@ -1,11 +1,11 @@
 /* ============================================================================
    inspector.css — the card floating over the canvas's right side, between the
-   module library and the scrubber. It edits whatever is selected: a module
-   (its fields, its links, its outlook), a link (its rule, written as a
-   sentence), or, with nothing selected, the plan itself.
+   module library and the scrubber, as an Ant card. It edits whatever is
+   selected: a module (its fields, its links, its outlook), a link (its rule,
+   written as a sentence), or, with nothing selected, the plan itself.
    ============================================================================ */
 
-/* Inset from the canvas's edges as far as the islands are (canvas.css). */
+/* Inset from the canvas's edges as far as the toolbars are (canvas.css). */
 .inspector {
     position: relative;
     z-index: 6;
@@ -16,10 +16,10 @@
     flex-direction: column;
     min-height: 0;
     overflow: hidden;
-    background: var(--surface1);
-    border: var(--border-width) solid var(--border);
-    border-radius: var(--radius-panel);
-    box-shadow: var(--shadow-card);
+    background: var(--color-bg-container);
+    border: var(--line-width) solid var(--color-border-secondary);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--box-shadow-tertiary);
 }
 .inspector[data-collapsed="true"] { display: none; }
 
@@ -31,83 +31,82 @@
 
 .insp-header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--space-12);
-    padding: var(--space-20) var(--space-20) var(--space-16);
+    padding: var(--space-16) var(--space-20);
 }
-/* The plan's own header: a bare page icon, as the navigation's plans have. */
-.insp-plan-icon { width: 24px; height: 24px; color: var(--text-primary); }
+/* The plan's own header: a page icon in a primary avatar. */
+.insp-plan-icon { width: 22px; height: 22px; color: var(--color-primary); }
+.insp-plan-tile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--border-radius-lg);
+    background: var(--color-primary-bg);
+}
 
 /* A module's identity and settings, held together at the top of the panel. */
-.insp-card {
-    margin: var(--space-16);
-    border-radius: var(--radius-panel);
-    background: color-mix(in srgb, var(--tile, var(--role-none)) 16%, transparent);
-    overflow: hidden;
-}
-/* A link's card wears the link line's colour, and its sections run together. */
+.insp-card { overflow: hidden; }
+/* A link's card: its sections run together. */
 .insp-card--link { --tile: var(--link-line); }
-.insp-card--link > .insp-section { border-top: 0; }
-.insp-card--link > .insp-section + .insp-section { padding-top: 0; }
-.insp-card > .insp-header { padding: var(--space-16) var(--space-16) var(--space-12); }
-.insp-card > .insp-section { padding: var(--space-16); }
-/* Issues sit right under the settings card, lined up with its edges. */
-[data-issues] > .insp-section { padding: 0 var(--space-16) var(--space-16); border-top: 0; }
-.insp-card + .insp-section,
-.insp-card + [data-issues]:empty + .insp-section { border-top: 0; }
-.insp-card .field-input,
-.insp-card .field-select,
-.insp-card .field-affix-text { background: var(--surface1); }
+.insp-card--link > .insp-section + .insp-section { border-top: 0; padding-top: 0; }
+/* Issues sit right under the settings, lined up with their edges. */
+[data-issues] > .insp-section { padding-top: 0; border-top: 0; }
 
 .insp-titles {
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--space-4);
 }
+/* The tags under a module's name: its role and its kind. */
+.insp-tags { display: flex; flex-wrap: wrap; gap: var(--space-4); }
 
+/* The name, as an editable title (Ant's Typography editable): plain text
+   that shows a field's edge under the pointer and edits in place. */
 .insp-name {
     width: 100%;
-    height: 30px;
-    margin-left: -6px;
-    padding: 0 6px;
-    border: var(--border-width) solid transparent;
-    border-radius: var(--radius-sm);
+    height: 32px;
+    margin-left: -8px;
+    padding: 0 7px;
+    border: var(--line-width) solid transparent;
+    border-radius: var(--border-radius);
     background: transparent;
-    color: var(--text-primary);
-    font-size: var(--size-h2);
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--track-tight);
+    color: var(--color-text);
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-strong);
     outline: none;
-    transition: box-shadow 0.15s ease, background-color 0.15s ease;
+    transition: border-color var(--motion-duration-mid), background-color var(--motion-duration-mid), box-shadow var(--motion-duration-mid);
 }
-/* Hover and focus wear the same thick coloured ring as the icon button beside
-   it (.role-tile--button), in the module's colour. */
-.insp-name:hover { box-shadow: 0 0 0 2px color-mix(in srgb, var(--tile, var(--role-none)) 40%, transparent); }
-.insp-name:focus { background: var(--surface2); box-shadow: 0 0 0 2px var(--tile, var(--role-none)); }
+.insp-name:hover { border-color: var(--color-border); }
+.insp-name:focus { background: var(--color-bg-container); border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--control-outline); }
+div.insp-name { display: flex; align-items: center; }
+div.insp-name:hover { border-color: transparent; }
 
 .insp-section {
     padding: var(--space-16) var(--space-20);
-    border-top: var(--border-width) solid var(--stroke-divider);
+    border-top: var(--line-width) solid var(--color-split);
 }
 .insp-section > .eyebrow { margin-bottom: var(--space-12); }
 
-/* Label column + control column. */
+/* Label column + control column, as a horizontal Ant form. */
 .insp-fields {
     display: grid;
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr);
     align-items: center;
-    gap: var(--space-12) var(--space-12);
+    gap: var(--space-12);
 }
 .insp-label {
-    color: var(--text-secondary);
-    font-size: var(--size-small);
-    font-weight: var(--weight-medium);
-    line-height: var(--lh-snug);
+    color: var(--color-text);
+    font-size: var(--font-size);
+    line-height: var(--line-height);
 }
 .insp-control { display: flex; gap: var(--space-4); min-width: 0; }
-.insp-static { align-self: center; color: var(--text-primary); font-size: var(--size-small); font-weight: var(--weight-semibold); }
+.insp-static { align-self: center; color: var(--color-text); font-size: var(--font-size); font-weight: var(--font-weight-medium); }
 .insp-control > .field-input,
 .insp-control > .field-select,
 .insp-control > .field-affix { flex: 1; width: 100%; }
@@ -118,35 +117,34 @@
 .insp-control--wide { grid-column: 1 / -1; }
 .insp-label--wide { margin-bottom: calc(var(--space-4) - var(--space-12)); }
 .insp-control--wide > .segctl { flex: 1; min-width: 0; }
-.insp-control--wide .segctl-btn { flex: 1; justify-content: center; padding: 0 var(--space-4); }
+.insp-control > .segctl { flex: 1; min-width: 0; }
+.insp-control > .segctl .segctl-btn { flex: 1; min-width: 0; padding: 0 var(--space-4); }
 
 /* ── The rule sentence (links) ──────────────────────────────────────────── */
-/* A callout: the field colour, which stands apart from the tinted card around
-   it, with a thick side border in the card's colour. */
 .sentence {
     margin: 0;
-    padding: var(--space-16);
-    border-left: 4px solid var(--tile, var(--role-none));
-    border-radius: var(--radius-card);
-    background: var(--surface1);
-    color: var(--text-primary);
-    font-size: var(--size-body);
-    line-height: var(--lh-relaxed);
+    padding: var(--space-12) var(--space-16);
+    border: var(--line-width) solid var(--color-border-secondary);
+    border-radius: var(--border-radius-lg);
+    background: var(--color-fill-alter);
+    color: var(--color-text);
+    font-size: var(--font-size);
+    line-height: var(--line-height);
 }
-.sentence b { color: var(--text-primary); font-weight: var(--weight-bold); }
+.sentence b { color: var(--color-text); font-weight: var(--font-weight-strong); }
 
 .link-ends {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 2px;
+    gap: var(--space-4);
     min-width: 0;
 }
 .link-ends-arrow {
     display: flex;
     width: 28px;
     justify-content: center;
-    color: var(--text-tertiary);
+    color: var(--color-text-quaternary);
 }
 .link-ends-arrow .icon { width: 14px; height: 14px; transform: rotate(90deg); }
 .link-end {
@@ -158,16 +156,17 @@
     padding: 0;
     border: 0;
     background: none;
-    color: var(--text-primary);
-    font-size: var(--size-body);
-    font-weight: var(--weight-semibold);
+    color: var(--color-text);
+    font-size: var(--font-size);
+    font-weight: var(--font-weight-strong);
     cursor: pointer;
 }
 .link-end span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.link-end:hover span:last-child { text-decoration: underline; }
+.link-end:hover span:last-child { color: var(--color-primary-hover); }
+.link-end:focus-visible { outline: 4px solid var(--color-primary-border); outline-offset: 1px; border-radius: var(--border-radius); }
 
-/* ── Link lists (Sends to / Receives from) ──────────────────────────────── */
-.insp-links { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+/* ── Link lists (Inflows / Outflows): Ant's List ─────────────────────────── */
+.insp-links { display: flex; flex-direction: column; gap: 2px; margin: 0 calc(-1 * var(--space-8)); padding: 0; list-style: none; }
 .insp-link {
     display: flex;
     align-items: center;
@@ -176,91 +175,92 @@
     min-height: 44px;
     padding: var(--space-4) var(--space-8);
     border: 0;
-    border-radius: var(--radius-control);
+    border-radius: var(--border-radius);
     background: transparent;
-    color: var(--text-secondary);
-    font-size: var(--size-small);
-    font-weight: var(--weight-semibold);
+    color: var(--color-text);
+    font-size: var(--font-size);
     text-align: left;
     cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    transition: background-color var(--motion-duration-mid);
 }
-.insp-link:hover { background: var(--frost-3); color: var(--text-primary); }
-.insp-link:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
+.insp-link:hover { background: var(--control-item-bg-hover); }
+.insp-link:focus-visible { outline: 4px solid var(--color-primary-border); outline-offset: -4px; }
 .insp-link-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .insp-link-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .insp-link-amount {
-    color: var(--text-tertiary);
-    font-size: var(--size-micro);
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-sm);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
-.insp-link .icon-caret { width: 14px; height: 14px; color: var(--text-tertiary); }
-.insp-none { margin: 0; color: var(--text-tertiary); font-size: var(--size-small); }
+.insp-link .icon-caret { width: 12px; height: 12px; color: var(--color-text-quaternary); }
+.insp-none { margin: 0; color: var(--color-text-tertiary); font-size: var(--font-size); }
 
-/* ── Figures ────────────────────────────────────────────────────────────── */
+/* ── Figures: Ant's vertical Descriptions ───────────────────────────────── */
 .insp-stats {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--space-12) var(--space-16);
-    margin-top: var(--space-12);
 }
 .stat-label {
-    color: var(--text-tertiary);
-    font-size: var(--size-micro);
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--track-wide);
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size);
 }
 .stat-value {
-    color: var(--text-primary);
-    font-size: var(--size-body);
-    font-weight: var(--weight-semibold);
+    color: var(--color-text);
+    font-size: var(--font-size);
+    font-weight: var(--font-weight-medium);
     font-variant-numeric: tabular-nums;
 }
-.stat-value.is-up { color: var(--accent-positive); }
-.stat-value.is-down { color: var(--accent-negative); }
-.stat-value.is-warn { color: var(--warning); }
+.stat-value.is-up { color: var(--color-success-text); }
+.stat-value.is-down { color: var(--color-error-text); }
+.stat-value.is-warn { color: var(--color-warning-text); }
 .stat-wide { grid-column: 1 / -1; }
 
 /* A goal's outlook: the solver's answer follows the figures. */
 .insp-stats + .sentence { margin-top: var(--space-12); }
-.sentence.is-pending { color: var(--text-tertiary); }
+.sentence.is-pending { color: var(--color-text-tertiary); }
 
-/* ── Issues ─────────────────────────────────────────────────────────────── */
+/* ── Issues: Ant's Alert ────────────────────────────────────────────────── */
 .issues { display: flex; flex-direction: column; gap: var(--space-8); margin: 0; padding: 0; list-style: none; }
 .issue {
     display: flex;
     gap: var(--space-8);
     align-items: flex-start;
     padding: var(--space-8) var(--space-12);
-    border-radius: var(--radius-control);
-    background: var(--flag);
-    color: var(--flag-ink);
-    font-size: var(--size-small);
-    font-weight: var(--weight-bold);
-    line-height: var(--lh-snug);
+    border: var(--line-width) solid var(--color-warning-border);
+    border-radius: var(--border-radius-lg);
+    background: var(--color-warning-bg);
+    color: var(--color-text);
+    font-size: var(--font-size);
+    line-height: var(--line-height);
 }
-.issue .icon { width: 16px; height: 16px; margin-top: 1px; color: var(--flag-ink); }
-.issue--info { background: var(--frost-2); color: var(--text-primary); }
-.issue--info .icon { color: var(--text-tertiary); }
-.issue--notice { background: var(--notice); color: var(--notice-ink); }
-.issue--notice .icon { color: var(--notice-ink); }
-button.issue { width: 100%; border: 0; text-align: left; cursor: pointer; }
-button.issue:hover { filter: brightness(0.97); }
-button.issue:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 1px; }
+.issue .icon { width: 16px; height: 16px; margin-top: 3px; flex: none; color: var(--color-warning); }
+.issue--info { background: var(--color-fill-alter); border-color: var(--color-border-secondary); }
+.issue--info .icon { color: var(--color-text-tertiary); }
+.issue--notice { background: var(--color-info-bg); border-color: var(--color-info-border); }
+.issue--notice .icon { color: var(--color-info); }
+button.issue { width: 100%; text-align: left; cursor: pointer; transition: box-shadow var(--motion-duration-mid); }
+button.issue:hover { box-shadow: 0 0 0 2px var(--color-warning-outline); }
+button.issue:focus-visible { outline: 4px solid var(--color-primary-border); outline-offset: 1px; }
 
+/* ── Module counts: role-coloured tags ──────────────────────────────────── */
 .role-counts { display: flex; flex-wrap: wrap; gap: var(--space-8); }
 .role-count {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 26px;
-    padding: 0 var(--space-8) 0 4px;
-    border-radius: var(--radius-pill);
-    background: var(--frost-2);
-    color: var(--text-secondary);
-    font-size: var(--size-micro);
-    font-weight: var(--weight-bold);
+    height: 24px;
+    padding: 0 var(--space-8) 0 3px;
+    border: var(--line-width) solid color-mix(in srgb, var(--tile) 35%, transparent);
+    border-radius: var(--border-radius-sm);
+    background: color-mix(in srgb, var(--tile) 8%, transparent);
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
 }
-.role-count .role-tile { width: 18px; height: 18px; border-radius: 50%; }
-.role-count .role-tile .icon { width: 11px; height: 11px; }
+.role-count .role-tile { width: 18px; height: 18px; border-radius: 3px; background: transparent; }
+.role-count .role-tile .icon { width: 13px; height: 13px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .insp-name, .insp-link, button.issue { transition: none; }
+}

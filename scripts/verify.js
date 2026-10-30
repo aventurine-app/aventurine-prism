@@ -64,7 +64,7 @@ async function main(url) {
 
     // Build something, save it, and look inside IndexedDB itself.
     await js('document.querySelector(\'.canvas-empty [data-act="example"]\').click()');
-    check('the example loads', await until(js, 'Store.state.plan.nodes.length === 6'));
+    check('the example loads', await until(js, 'Store.state.plan.nodes.length === 5'));
     check('Ctrl+S style flush saves', await js('Store.flush()'));
     const stored = JSON.parse(await js(`new Promise((resolve, reject) => {
         const open = indexedDB.open('aventurine-prism');
@@ -77,12 +77,12 @@ async function main(url) {
                 nodes: plans.result.map((p) => p.nodes.length), tabs: tabs.result }));
         };
     })`));
-    check('IndexedDB holds the plan with its six modules', stored.nodes.length === 1 && stored.nodes[0] === 6);
+    check('IndexedDB holds the plan with its five modules', stored.nodes.length === 1 && stored.nodes[0] === 5);
     check('and the tab order', stored.tabs && stored.tabs.order.length === 1 && stored.tabs.active === stored.tabs.order[0]);
 
     // A reload brings it all back.
     await first.win.webContents.reloadIgnoringCache();
-    check('after a reload the plan is back', await until(js, appReady + ' && Store.state.plan.nodes.length === 6'));
+    check('after a reload the plan is back', await until(js, appReady + ' && Store.state.plan.nodes.length === 5'));
 
     // An edit made just before the page closes must still be saved.
     await js('Store.renamePlan(Store.state.activeId, "Edited at the last moment")');
@@ -99,7 +99,7 @@ async function main(url) {
     const exported = JSON.parse(await js('JSON.stringify(window.__saved || null)'));
     check('export saves a named plan file', exported && exported.name === 'Edited at the last moment.json');
     const file = exported && JSON.parse(exported.text);
-    check('that file is the plan, in the readable format', file && file.format === 'citrine-plan' && file.plan.nodes.length === 6);
+    check('that file is the plan, in the readable format', file && file.format === 'citrine-plan' && file.plan.nodes.length === 5);
 
     // Import reads a file the user picked; hand it that text. It is offered by
     // Add plan, under the list of plans (its only place), so go through that menu.
@@ -107,7 +107,7 @@ async function main(url) {
     await js(`document.querySelector('.nav-add').click();
         [...document.querySelectorAll('.menu-pop .menu-item')].find((b) => b.textContent.trim() === 'Import plan…').click(); true`);
     check('import, from Add plan, adds the plan',
-        await until(js, 'Store.state.tabs.length === 2 && Store.state.plan.nodes.length === 6'));
+        await until(js, 'Store.state.tabs.length === 2 && Store.state.plan.nodes.length === 5'));
     check('with its own id', await js('new Set(Store.state.tabs).size === 2'));
     await js('Store.flush()');
 
@@ -120,7 +120,20 @@ async function main(url) {
         check(`the navigation opens ${go}`, await until(js, showsOnly(cls)));
     }
     check('Compare lists every plan', await until(js, `document.querySelectorAll('.compare-table tbody tr').length === 2`));
-    await js(`document.querySelector('.nav-item[data-go="goals"]').click(); document.querySelector('[data-preset="retire"]').click(); true`);
+    // Write a goal in the goal editor: net worth at least 25 times yearly expenses by age 65.
+    await js(`document.querySelector('.nav-item[data-go="goals"]').click();
+        document.querySelector('.goals-board [data-act="add"]').click(); true`);
+    check('Add goal opens the goal editor', await until(js, `!!document.querySelector('.goal-editor')`));
+    await js(`(() => {
+        const f = document.querySelector('.goal-editor');
+        f.querySelector('#goal-name').value = 'Retire';
+        f.querySelector('[data-unit="times"]').click();
+        f.querySelector('[data-due="age"]').click();
+        f.querySelector('button[type="submit"]').click();
+        return true;
+    })()`);
+    check('saving closes the editor and lists the goal',
+        await until(js, `!document.querySelector('.goal-editor') && document.querySelectorAll('.goals-list .goal-row').length === 1`));
     await js('Store.flush()');
     const goals = JSON.parse(await js(`new Promise((resolve, reject) => {
         const open = indexedDB.open('aventurine-prism');
@@ -131,7 +144,8 @@ async function main(url) {
         };
     })`));
     check('a goal is stored once, for every plan, as its rule',
-        goals.length === 1 && goals[0].metric === 'net-worth' && goals[0].unit === 'times' && goals[0].due === 'age');
+        goals.length === 1 && goals[0].name === 'Retire' && goals[0].metric === 'net-worth'
+            && goals[0].unit === 'times' && goals[0].value === 25 && goals[0].due === 'age' && goals[0].age === 65);
     await js(`document.querySelector('.nav-plan').click()`);
     check('pressing a plan opens it in the builder', await until(js, showsOnly('builder') + ` && Store.state.workspace === 'plans'`));
 

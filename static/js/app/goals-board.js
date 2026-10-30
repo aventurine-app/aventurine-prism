@@ -1,25 +1,32 @@
 'use strict';
 
 // ─── goals-board.js ─────────────────────────────────────────────────────────
-// The Goals workspace: the goals every plan is measured against, each written
-// as one rule. A rule is a sentence whose parts are buttons:
+// The Goals workspace, as an Ant Design page: the goals every plan is measured
+// against (one list, shared by all plans) and how a plan does on each.
 //
-//   [Net worth] [is at least] [25 ×] [yearly expenses] [by age 65]
+//   header        the plan the goals are measured in (a dropdown of every
+//                 plan; picking one opens it) and Add goal
+//   figures       how many goals that plan meets on time, late, or not at all
+//   the list      each goal: its rule as a sentence, how far toward it the plan
+//                 gets by its deadline (CitrineGoals' progress), and its
+//                 status. Edit opens the goal editor; Delete removes it, and
+//                 the toast's Undo (or Ctrl+Z) brings it back.
+//   across plans  every goal against every plan, one status each
 //
-// The measure, the comparison, the "of" measure and the deadline each open a
-// menu of their choices; the target opens a small panel (an amount, a
-// multiple, or a percentage, and its figure), and so does an age deadline.
-// Every change applies at once, and Ctrl+Z steps back through them. A card
-// also holds the goal's name. Each card is a solid colour of the user's choosing, with a target drawn faintly at its left.
+// A goal is one rule (plan.js has its shape), written in the goal editor, a
+// modal form: its name, measure, comparison, target (an amount, a multiple of
+// another measure, or a share of one), deadline (a date or an age) and
+// colour. The editor reads the rule back as a sentence while it is written.
+// Saving is one undoable step.
 //
-// Analyze's Net worth chart flags the month a plan meets each.
-//
-// Cards are kept per goal and updated in place, never rebuilt while a goal
-// lives, so a name being typed or a menu's button keeps its focus.
+// Analyze's Net worth chart flags the month a plan meets each goal, in the
+// goal's colour.
 
 (function () {
     const P = window.CitrinePlan;
     const D = window.Describe;
+    const G = window.CitrineGoals;
+    const K = window.Components;
     const root = document.getElementById('goals-board');
     if (!root) return;
 
@@ -27,313 +34,461 @@
     // The kinds of target, and the figure each starts at when picked.
     const UNITS = [['amount', 'Amount'], ['times', 'Times'], ['percent', 'Percent']];
     const UNIT_START = { amount: 100000, times: 25, percent: 40 };
+    const VALUE_LABEL = { amount: 'Amount', times: 'Multiple', percent: 'Share' };
+    const DUES = [['date', 'By a date', 'calendar-blank'], ['age', 'By an age', 'user']];
+    // How each status tone (describe.js, goalStatus) is tagged.
+    const STATUS_TAG = {
+        positive: { tone: 'success', icon: 'check-circle' },
+        warning: { tone: 'warning', icon: 'clock' },
+        negative: { tone: 'error', icon: 'x-circle' },
+        muted: { tone: '', icon: 'minus-circle' },
+    };
+    // How each status reads as progress: Ant's Progress statuses.
+    const PROGRESS_STATUS = { reached: 'success', late: 'warning', behind: 'exception', open: 'normal' };
 
     root.innerHTML = `
-        <div class="board-body scroll-y">
-            <div class="board-bar">
-                <button class="button-primary" type="button" data-act="custom">${iconSvg('plus')}<span>Add New Goal</span></button>
-            </div>
-            <ul class="board-goals" aria-label="Your goals"></ul>
-            <div class="board-empty" hidden>
-                <p class="board-empty-title">No goals yet</p>
-                <p class="board-empty-text">Write one with Add New Goal.</p>
-            </div>
+        <div class="page scroll-y">
+            ${K.pageHead({
+                start: `<span class="page-label" aria-hidden="true">Measured in</span>${K.planPick({ act: 'plan', label: 'Plan the goals are measured in' })}`,
+                extra: `<button class="button-primary" type="button" data-act="add">${iconSvg('plus')}<span>Add goal</span></button>`,
+            })}
+            <div class="stat-cards" data-stats></div>
+            <section class="card" aria-label="Your goals">
+                <div class="card-body goals-body">
+                    <ul class="list goals-list"></ul>
+                    <div data-empty hidden>${K.empty({
+                        icon: 'target',
+                        title: 'No goals yet',
+                        text: 'A goal is a rule every plan is measured against, such as net worth reaching 25 times a year of expenses by age 65.',
+                        action: { act: 'add', label: 'Add goal', icon: 'plus' },
+                    })}</div>
+                </div>
+            </section>
+            <section class="card" data-matrix-card aria-labelledby="goals-matrix-title">
+                <div class="card-head">
+                    <h2 class="card-title" id="goals-matrix-title">Across plans</h2>
+                    <span class="card-extra">When each plan meets each goal, over its own length</span>
+                </div>
+                <div class="card-body card-body--flush"><div class="table-wrap" data-matrix></div></div>
+            </section>
         </div>`;
 
-    const list = root.querySelector('.board-goals');
-    const emptyEl = root.querySelector('.board-empty');
+    const statsEl = root.querySelector('[data-stats]');
+    const list = root.querySelector('.goals-list');
+    const emptyEl = root.querySelector('[data-empty]');
+    const matrixCard = root.querySelector('[data-matrix-card]');
+    const matrixEl = root.querySelector('[data-matrix]');
+    const planName = root.querySelector('.plan-pick-name');
     const showing = () => Store.state.workspace === 'goals';
+    let fresh = null;   // a goal just saved, to flash once it is drawn
 
-    // ── Cards ──────────────────────────────────────────────────────────────
+    // ── Measuring ──────────────────────────────────────────────────────────
 
-    const cards = new Map();   // goal id → { el, parts }
-
-    const tok = (name, popup) => `<button class="rule-tok" type="button" data-tok="${name}" aria-haspopup="${popup}" aria-expanded="false">
-        <span class="rule-tok-text"></span>${iconSvg('caret-down', { cls: 'rule-tok-caret' })}</button>`;
-
-    function buildCard(id) {
-        const el = document.createElement('li');
-        el.className = 'goal-card';
-        el.dataset.goal = id;
-        el.innerHTML = `
-            <span class="goal-wm" aria-hidden="true">${iconSvg('target')}</span>
-            <div class="goal-card-head">
-                <input class="goal-name" type="text" maxlength="${P.LIMITS.name}" aria-label="Goal name" spellcheck="false" autocomplete="off">
-                <button class="goal-tool" type="button" data-act="color" aria-haspopup="dialog" aria-expanded="false" title="Card colour">${iconSvg('palette')}</button>
-                <button class="goal-tool" type="button" data-act="delete" aria-label="Delete goal" title="Delete goal">${iconSvg('trash')}</button>
-            </div>
-            <p class="rule">${tok('metric', 'menu')}${tok('op', 'menu')}${tok('value', 'dialog')}<span class="rule-word" data-part="of-word">of</span>${tok('of', 'menu')}${tok('due', 'menu')}</p>`;
-        const part = (name) => el.querySelector(`[data-part="${name}"]`);
-        const toks = Object.fromEntries([...el.querySelectorAll('[data-tok]')].map((b) => [b.dataset.tok, b]));
-        return {
-            el, name: el.querySelector('.goal-name'), color: el.querySelector('[data-act="color"]'),
-            ofWord: part('of-word'), toks, drawn: {},
-        };
+    /** The open plan's results, when they cover every module (a redraw can
+     *  land between an edit and its run; the run that follows draws it). */
+    function openRun() {
+        const { plan, results } = Store.state;
+        return plan && results && plan.nodes.every((n) => results.nodes[n.id]) ? { plan, results } : null;
     }
 
-    /** Set a rule part's words (and its accessible name) if they changed. */
-    function setTok(c, name, label, text, hidden = false) {
-        const b = c.toks[name];
-        b.hidden = hidden;
-        if (c.drawn[name] === text) return;
-        c.drawn[name] = text;
-        b.querySelector('.rule-tok-text').textContent = text;
-        b.setAttribute('aria-label', `${label}: ${text}`);
+    /** A status in a few words for a narrow table cell; the full words are its title. */
+    function shortStatus(ev, plan, months) {
+        const full = D.goalStatus(ev, plan, months);
+        const title = full.detail ? `${full.text} · ${full.detail}` : full.text;
+        if (ev.blocked) return { text: 'Cannot measure', tone: '', icon: 'minus-circle', title };
+        if (ev.status === 'reached') return { text: ev.month === 0 ? 'Already' : D.monthLabel(plan, ev.month), tone: 'success', icon: 'check-circle', title };
+        if (ev.status === 'late') return { text: `${D.monthLabel(plan, ev.month)} · late`, tone: 'warning', icon: 'clock', title };
+        if (ev.status === 'behind') return { text: 'Not met', tone: 'error', icon: 'x-circle', title };
+        return { text: ev.byIdx != null && ev.byIdx > months ? 'Due after the end' : 'Not met', tone: '', icon: 'minus-circle', title };
     }
 
-    /** The target's figure, as its button shows it: '$20,000', '25 ×', '40%'. */
-    function valueText(g) {
-        if (g.unit === 'amount') return Fmt.money(g.value);
-        return g.unit === 'percent' ? `${Fmt.number(g.value, 2)}%` : `${Fmt.number(g.value, 2)} ×`;
+    // ── Render ─────────────────────────────────────────────────────────────
+
+    function renderStats(evs) {
+        const n = evs.length;
+        statsEl.hidden = !n || evs.some((e) => !e);
+        if (statsEl.hidden) return;
+        const count = (fn) => evs.filter(fn).length;
+        const onTime = count((e) => !e.blocked && e.status === 'reached');
+        const late = count((e) => !e.blocked && e.status === 'late');
+        const missed = count((e) => !e.blocked && e.status === 'behind');
+        const unknown = n - onTime - late - missed;
+        const of = `of ${n}`;
+        statsEl.innerHTML = [
+            K.statCard({ title: 'Met on time', value: String(onTime), suffix: of, icon: 'check-circle', tone: onTime ? 'up' : 'muted' }),
+            K.statCard({ title: 'Met late', value: String(late), suffix: of, icon: 'clock', tone: late ? 'warn' : 'muted' }),
+            K.statCard({ title: 'Not met by the deadline', value: String(missed), suffix: of, icon: 'x-circle', tone: missed ? 'down' : 'muted' }),
+            unknown ? K.statCard({ title: 'Not decided in this plan', value: String(unknown), suffix: of, icon: 'minus-circle', tone: 'muted' }) : '',
+        ].join('');
     }
 
-    function fillCard(c, g) {
-        if (document.activeElement !== c.name && c.name.value !== g.name) c.name.value = g.name;
-        if (c.drawn.color !== g.color) {
-            c.drawn.color = g.color;
-            c.el.dataset.color = g.color;
-            c.color.setAttribute('aria-label', `Card colour: ${D.GOAL_COLORS[g.color]}`);
+    /** One goal in the list: its colour and measure, its name and rule, its
+     *  progress, its status, and its actions. */
+    function row(g, ev, run) {
+        const name = g.name || 'Goal';
+        let progress = '';
+        let status = '';
+        if (ev && run) {
+            const st = D.goalStatus(ev, run.plan, run.results.months);
+            const look = STATUS_TAG[st.tone];
+            status = K.tag(st.detail ? `${st.text} · ${st.detail}` : st.text, { tone: look.tone, icon: look.icon });
+            if (ev.progress == null) {
+                progress = `<span class="goal-progress-note">${esc(st.text)}</span>`;
+            } else {
+                const when = D.monthLabel(run.plan, ev.progressAt);
+                const caption = ev.status === 'reached' ? 'Met in time'
+                    : ev.byIdx != null && ev.byIdx <= run.results.months ? `By the deadline, ${when}` : `By the plan's end, ${when}`;
+                progress = `${K.progress(ev.progress, { status: PROGRESS_STATUS[ev.status], label: `${name}: progress, ${caption}` })}
+                    <span class="goal-progress-note">${esc(caption)}</span>`;
+            }
         }
-        const hasOf = g.unit !== 'amount';
-        setTok(c, 'metric', 'Measure', D.GOAL_METRICS[g.metric].label);
-        setTok(c, 'op', 'Comparison', D.goalOp(g));
-        setTok(c, 'value', 'Target', valueText(g));
-        c.ofWord.hidden = g.unit !== 'percent';
-        setTok(c, 'of', 'Of', D.GOAL_METRICS[g.of].of, !hasOf);
-        setTok(c, 'due', 'Deadline', D.goalDue(g));
+        return `<li class="list-item goal-row${fresh === g.id ? ' is-new' : ''}" data-goal="${esc(g.id)}">
+            <div class="list-item-meta">
+                <span class="goal-avatar" data-color="${esc(g.color)}" aria-hidden="true">${iconSvg(D.GOAL_METRICS[g.metric].icon)}</span>
+                <div class="goal-text">
+                    <p class="list-item-title">${esc(name)}</p>
+                    <p class="list-item-desc">${esc(D.goalSentence(g))}</p>
+                </div>
+            </div>
+            <div class="goal-progress">${progress}</div>
+            <div class="goal-status">${status}</div>
+            <div class="list-item-actions">
+                <button class="button-icon" type="button" data-act="edit" aria-label="Edit ${esc(name)}" title="Edit goal">${iconSvg('pencil-simple')}</button>
+                <button class="button-icon" type="button" data-act="delete" aria-label="Delete ${esc(name)}" title="Delete goal">${iconSvg('trash')}</button>
+            </div>
+        </li>`;
+    }
+
+    /** Every goal against every plan, each plan over its own length. */
+    function renderMatrix(goals) {
+        if (!goals.length) { matrixEl.innerHTML = ''; return; }
+        const cols = Runs.all().map(({ plan, results }) => ({
+            plan, results, evs: results ? G.evaluate(plan, results, goals) : null,
+        }));
+        const cell = (c, i) => {
+            if (!c.evs) return '<td class="is-muted">—</td>';
+            const s = shortStatus(c.evs[i], c.plan, c.results.months);
+            return `<td>${K.tag(s.text, { tone: s.tone, icon: s.icon, title: s.title })}</td>`;
+        };
+        matrixEl.innerHTML = `<table class="data-table table--md">
+            <caption class="sr-only">When each plan meets each goal</caption>
+            <thead><tr><th scope="col" class="is-sticky">Goal</th>${cols.map((c) => `<th scope="col">${esc(c.plan.name)}</th>`).join('')}</tr></thead>
+            <tbody>${goals.map((g, i) => `<tr>
+                <th scope="row" class="is-sticky"><span class="goal-cell-name"><span class="goal-dot" data-color="${esc(g.color)}"></span>${esc(g.name || 'Goal')}</span></th>
+                ${cols.map((c) => cell(c, i)).join('')}</tr>`).join('')}</tbody>
+        </table>`;
     }
 
     function render() {
         if (!showing()) return;
         const goals = Store.state.goals;
+        const run = openRun();
+        planName.textContent = Store.state.plan ? Store.state.plan.name : '';
         emptyEl.hidden = goals.length > 0;
-        // Cards of goals that are gone go; the rest follow the list's order.
-        for (const [id, c] of cards) {
-            if (!goals.some((g) => g.id === id)) { c.el.remove(); cards.delete(id); }
+        list.hidden = !goals.length;
+        matrixCard.hidden = !goals.length;
+        const evs = run ? G.evaluate(run.plan, run.results, goals) : goals.map(() => null);
+        renderStats(evs);
+        list.innerHTML = goals.map((g, i) => row(g, evs[i], run)).join('');
+        renderMatrix(goals);
+        if (fresh) {
+            const el = list.querySelector(`[data-goal="${CSS.escape(fresh)}"]`);
+            if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            fresh = null;
         }
-        goals.forEach((g, i) => {
-            let c = cards.get(g.id);
-            if (!c) { c = buildCard(g.id); cards.set(g.id, c); }
-            if (list.children[i] !== c.el) list.insertBefore(c.el, list.children[i] || null);
-            fillCard(c, g);
-        });
     }
 
-    // ── Editing a rule ─────────────────────────────────────────────────────
+    // ── The goal editor ────────────────────────────────────────────────────
 
-    /** Change goal `id` with `fn(goal)`. `key` merges a run of edits to one
-     *  part (typing a figure) into one undo step. */
-    function change(id, fn, key = null) {
-        Store.editGoals((goals) => {
-            const g = goals.find((x) => x.id === id);
-            if (!g) return false;
-            fn(g);
-            return true;
-        }, { key });
-    }
+    /** A target figure as its field shows it. */
+    const figureText = (v) => Fmt.number(v, 2);
 
-    /** A menu item that picks a choice, ticked when it is the one set. */
-    const choice = (on, label, icon, pick) => ({ label, icon: on ? 'check' : icon, onSelect: pick });
-
-    /** Open the editor for one part of goal `id`'s rule, by its button. Picking
-     *  from a menu hands the focus back to the button, for the keyboard. */
-    function editPart(id, part, btn) {
-        const g = Store.goal(id);
-        if (!g) return;
-        const pick = (fn) => () => { change(id, fn); btn.focus(); };
+    /** Open the editor for goal `id`, or for a new goal when `id` is null. */
+    function openEditor(id) {
+        const existing = id ? Store.goal(id) : null;
+        if (id && !existing) return;
+        if (!existing && Store.state.goals.length >= P.LIMITS.goals) {
+            UI.toast(`You can set at most ${P.LIMITS.goals} goals.`, { type: 'error' });
+            return;
+        }
+        // The rule being written: a copy, so Cancel leaves the goal as it was.
+        const draft = existing ? { ...existing } : P.createGoal({ name: '', color: Store.nextGoalColor() });
         const metrics = Object.entries(D.GOAL_METRICS);
-        switch (part) {
-            case 'metric':
-                UI.menu(btn, metrics.map(([m, d]) => choice(g.metric === m, d.label, d.icon, pick((x) => {
-                    x.metric = m;
-                    // A measure is not compared with itself.
-                    if (x.of === m) x.of = m === 'expenses' ? 'income' : 'expenses';
-                }))));
-                break;
-            case 'op':
-                UI.menu(btn, Object.entries(D.GOAL_OPS).map(([op, d]) => choice(g.op === op, D.goalOp({ ...g, op }), d.icon, pick((x) => { x.op = op; }))));
-                break;
-            case 'of':
-                UI.menu(btn, metrics.filter(([m]) => m !== g.metric)
-                    .map(([m, d]) => choice(g.of === m, d.of, d.icon, pick((x) => { x.of = m; }))));
-                break;
-            case 'value':
-                valuePanel(id, btn);
-                break;
-            case 'due':
-                UI.menu(btn, [
-                    choice(g.due === 'date', 'By a date…', 'calendar-blank', () => pickDate(id, btn)),
-                    choice(g.due === 'age', 'By an age…', 'user', () => agePanel(id, btn)),
-                ]);
-                break;
-        }
-    }
-
-    /** A number field with its unit beside it: the currency symbol by an amount
-     *  (before or after, as the currency is set), '×', '%' or 'yrs' after. */
-    function numberField(unit, value, label) {
         const sym = Fmt.symbolParts();
-        const affix = { amount: sym.symbol, times: '×', percent: '%', age: 'yrs' }[unit];
-        const before = unit === 'amount' && !sym.suffix;
-        const input = `<input class="field-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
-            aria-label="${esc(label)}" value="${esc(Fmt.number(value, 2))}">`;
-        const text = `<span class="field-affix-text">${esc(affix)}</span>`;
-        return `<span class="field-affix">${before ? text + input : input + text}</span>`;
-    }
 
-    /** Typing a figure: read it, keep it in range, and set it with `set`. Enter closes the panel. */
-    function onFigure(input, min, max, set) {
-        input.addEventListener('input', () => {
-            const v = Fmt.parseNumber(input.value);
-            if (!Number.isFinite(v)) { input.setAttribute('aria-invalid', 'true'); return; }
-            input.removeAttribute('aria-invalid');
-            set(Math.min(max, Math.max(min, v)));
-        });
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); UI.closePop(); }
-        });
-    }
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.hidden = true;
+        overlay.innerHTML = `
+            <form class="modal goal-editor" role="dialog" aria-modal="true" aria-labelledby="goal-editor-title" novalidate>
+                <div class="modal-header">
+                    <h2 class="modal-title" id="goal-editor-title">${existing ? 'Edit goal' : 'Add goal'}</h2>
+                    <button class="modal-close" type="button" data-close aria-label="Close">×</button>
+                </div>
+                <div class="modal-body">
+                    <p class="sentence goal-preview" aria-live="polite"></p>
+                    <div class="form-item">
+                        <label class="form-label" for="goal-name">Name</label>
+                        <input class="field-input" id="goal-name" type="text" maxlength="${P.LIMITS.name}" autocomplete="off" spellcheck="false" placeholder="First million">
+                        <p class="form-explain" data-error="name" hidden>Name the goal so you can find it again.</p>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-item">
+                            <label class="form-label" for="goal-metric">Measure</label>
+                            <select class="field-select" id="goal-metric">${metrics.map(([m, d]) => `<option value="${m}">${esc(d.label)}</option>`).join('')}</select>
+                        </div>
+                        <div class="form-item">
+                            <label class="form-label" for="goal-op">Rule</label>
+                            <select class="field-select" id="goal-op">${Object.entries(D.GOAL_OPS).map(([op, d]) =>
+                                `<option value="${op}">${esc(d.words.charAt(0).toUpperCase() + d.words.slice(1))}</option>`).join('')}</select>
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <span class="form-label" id="goal-unit-label">Target is</span>
+                        ${K.segmented(UNITS, draft.unit, { attr: 'unit', label: 'Kind of target', block: true })}
+                    </div>
+                    <div class="form-row">
+                        <div class="form-item">
+                            <label class="form-label" for="goal-value" data-value-label></label>
+                            <span class="field-affix" data-value-field></span>
+                            <p class="form-explain" data-error="value" hidden></p>
+                        </div>
+                        <div class="form-item" data-of>
+                            <label class="form-label" for="goal-of">Of</label>
+                            <select class="field-select" id="goal-of"></select>
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <span class="form-label">Deadline</span>
+                        ${K.segmented(DUES, draft.due, { attr: 'due', label: 'Kind of deadline', block: true })}
+                    </div>
+                    <div class="form-item" data-by>
+                        <label class="form-label" for="goal-by">Month</label>
+                        <button class="field-input field-month" id="goal-by" type="button" data-month aria-haspopup="dialog"><span></span>${iconSvg('calendar-blank')}</button>
+                    </div>
+                    <div class="form-item" data-age>
+                        <label class="form-label" for="goal-age">Age</label>
+                        <span class="field-affix"><input class="field-input" id="goal-age" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"><span class="field-affix-text">yrs</span></span>
+                        <p class="form-hint">The month each plan reaches this age, from the age set in its plan details.</p>
+                        <p class="form-explain" data-error="age" hidden>Enter an age from ${P.GOAL_AGE.min} to ${P.GOAL_AGE.max}.</p>
+                    </div>
+                    <div class="form-item">
+                        <span class="form-label" id="goal-color-label">Colour</span>
+                        <div class="swatches" role="radiogroup" aria-labelledby="goal-color-label">${P.GOAL_COLORS.map((c) => `
+                            <button class="swatch" type="button" role="radio" data-color="${c}" aria-checked="${draft.color === c}"
+                                aria-label="${esc(D.GOAL_COLORS[c])}" title="${esc(D.GOAL_COLORS[c])}">${iconSvg('check')}</button>`).join('')}</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="button-secondary" type="button" data-close>Cancel</button>
+                    <button class="button-primary" type="submit">${existing ? 'Save goal' : 'Add goal'}</button>
+                </div>
+            </form>`;
+        const form = overlay.querySelector('form');
+        const $ = (sel) => form.querySelector(sel);
+        const nameInput = $('#goal-name');
+        const metricSelect = $('#goal-metric');
+        const opSelect = $('#goal-op');
+        const ofSelect = $('#goal-of');
+        const monthBtn = $('#goal-by');
+        const ageInput = $('#goal-age');
+        const preview = $('.goal-preview');
+        let valueInput = null;
 
-    /** The target: an amount, a multiple or a percentage, and its figure. */
-    function valuePanel(id, btn) {
-        const el = document.createElement('div');
-        el.className = 'rule-pop';
-        el.setAttribute('aria-label', 'Target');
-        const draw = () => {
-            const g = Store.goal(id);
-            el.innerHTML = `
-                <div class="segctl rule-units" role="group" aria-label="Kind of target">${UNITS.map(([u, name]) =>
-                    `<button class="segctl-btn" type="button" data-unit="${u}" aria-pressed="${g.unit === u}">${esc(name)}</button>`).join('')}</div>
-                <label class="rule-pop-field">${numberField(g.unit, g.value, 'Target figure')}</label>
-                <p class="rule-pop-hint">${g.unit === 'amount' ? 'A fixed amount.'
-                    : g.unit === 'times' ? 'A multiple of the measure picked next in the rule.'
-                        : 'A share of the measure picked next in the rule.'}</p>`;
-            const input = el.querySelector('input');
-            onFigure(input, 0, P.GOAL_VALUE[g.unit], (v) => change(id, (x) => { x.value = v; }, `goal:${id}:value`));
-            return input;
+        const showError = (key, message) => {
+            const el = $(`[data-error="${key}"]`);
+            if (message) el.textContent = message;
+            el.hidden = !message;
+            const field = { name: nameInput, value: valueInput, age: ageInput }[key];
+            if (field) {
+                if (message) field.setAttribute('aria-invalid', 'true');
+                else field.removeAttribute('aria-invalid');
+            }
         };
-        el.addEventListener('click', (e) => {
-            const u = e.target.closest('[data-unit]');
-            const g = Store.goal(id);
-            if (!u || !g || g.unit === u.dataset.unit) return;
-            change(id, (x) => { x.unit = u.dataset.unit; x.value = UNIT_START[x.unit]; });
-            const input = draw();
-            input.focus();
-            input.select();
+
+        /** The figure field, with its unit beside it: the currency symbol by
+         *  an amount (before or after, as the currency is set), '×' or '%' after. */
+        function drawValueField() {
+            const affix = { amount: sym.symbol, times: '×', percent: '%' }[draft.unit];
+            const before = draft.unit === 'amount' && !sym.suffix;
+            const input = `<input class="field-input" id="goal-value" type="text" inputmode="decimal" autocomplete="off" spellcheck="false">`;
+            const text = `<span class="field-affix-text">${esc(affix)}</span>`;
+            $('[data-value-field]').innerHTML = before ? text + input : input + text;
+            $('[data-value-label]').textContent = VALUE_LABEL[draft.unit];
+            valueInput = $('#goal-value');
+            valueInput.value = figureText(draft.value);
+            showError('value', '');
+        }
+
+        /** The "of" measures on offer: any but the rule's own. */
+        function drawOf() {
+            if (draft.of === draft.metric) draft.of = draft.metric === 'expenses' ? 'income' : 'expenses';
+            ofSelect.innerHTML = metrics.filter(([m]) => m !== draft.metric)
+                .map(([m, d]) => `<option value="${m}">${esc(d.of)}</option>`).join('');
+            ofSelect.value = draft.of;
+        }
+
+        /** Show the parts the rule has now, and read it back as a sentence. */
+        function sync() {
+            $('[data-of]').hidden = draft.unit === 'amount';
+            $('[data-by]').hidden = draft.due !== 'date';
+            $('[data-age]').hidden = draft.due !== 'age';
+            for (const b of form.querySelectorAll('[data-unit]')) b.setAttribute('aria-pressed', String(b.dataset.unit === draft.unit));
+            for (const b of form.querySelectorAll('[data-due]')) b.setAttribute('aria-pressed', String(b.dataset.due === draft.due));
+            for (const b of form.querySelectorAll('[data-color]')) b.setAttribute('aria-checked', String(b.dataset.color === draft.color));
+            monthBtn.firstElementChild.textContent = draft.by ? P.ymLabel(draft.by) : 'Pick a month';
+            monthBtn.classList.toggle('is-empty', !draft.by);
+            preview.textContent = D.goalSentence(draft);
+        }
+
+        nameInput.value = draft.name;
+        metricSelect.value = draft.metric;
+        opSelect.value = draft.op;
+        ageInput.value = draft.age == null ? '65' : figureText(draft.age);
+        drawValueField();
+        drawOf();
+        sync();
+
+        // A figure as it is typed: kept when it reads, flagged when it does not.
+        form.addEventListener('input', (e) => {
+            if (e.target === nameInput) { showError('name', ''); return; }
+            if (e.target === valueInput) {
+                const v = Fmt.parseNumber(valueInput.value);
+                const max = P.GOAL_VALUE[draft.unit];
+                if (Number.isFinite(v) && v >= 0 && v <= max) { draft.value = v; showError('value', ''); sync(); }
+                return;
+            }
+            if (e.target === ageInput) {
+                const v = Fmt.parseNumber(ageInput.value);
+                if (Number.isFinite(v) && v >= P.GOAL_AGE.min && v <= P.GOAL_AGE.max) { draft.age = v; showError('age', ''); sync(); }
+            }
         });
-        draw();
-        UI.popover(btn, el);
-        el.querySelector('input').select();
-    }
-
-    /** An age deadline: picking it sets one (65, or the age it had), then the age. */
-    function agePanel(id, btn) {
-        change(id, (x) => { x.due = 'age'; if (x.age == null) x.age = 65; });
-        const g = Store.goal(id);
-        const el = document.createElement('div');
-        el.className = 'rule-pop';
-        el.setAttribute('aria-label', 'Deadline age');
-        el.innerHTML = `<label class="rule-pop-field">By age ${numberField('age', g.age, 'Age')}</label>
-            <p class="rule-pop-hint">The month each plan's Person turns this age.</p>`;
-        onFigure(el.querySelector('input'), P.GOAL_AGE.min, P.GOAL_AGE.max, (v) => change(id, (x) => { x.age = v; }, `goal:${id}:age`));
-        UI.popover(btn, el);
-        el.querySelector('input').select();
-    }
-
-    /** The card's colour: a swatch for each, the current one ticked. Picking
-     *  one closes the panel back onto the colour button. */
-    function colorPanel(id, btn) {
-        const g = Store.goal(id);
-        if (!g) return;
-        const el = document.createElement('div');
-        el.className = 'rule-pop color-pop';
-        el.setAttribute('aria-label', 'Card colour');
-        el.innerHTML = `<div class="swatches">${P.GOAL_COLORS.map((color) => `
-            <button class="swatch" type="button" data-color="${color}" aria-pressed="${g.color === color}"
-                aria-label="${esc(D.GOAL_COLORS[color])}" title="${esc(D.GOAL_COLORS[color])}">${iconSvg('check')}</button>`).join('')}</div>`;
-        el.addEventListener('click', (e) => {
-            const s = e.target.closest('[data-color]');
-            if (!s) return;
-            change(id, (x) => { x.color = s.dataset.color; });
-            UI.closePop();
-            btn.focus();
+        form.addEventListener('change', (e) => {
+            if (e.target === metricSelect) { draft.metric = metricSelect.value; drawOf(); }
+            else if (e.target === opSelect) draft.op = opSelect.value;
+            else if (e.target === ofSelect) draft.of = ofSelect.value;
+            else return;
+            sync();
         });
-        UI.popover(btn, el);
-        el.querySelector('[aria-pressed="true"]')?.focus();
-    }
-
-    /** A date deadline, picked by month. */
-    function pickDate(id, btn) {
-        const g = Store.goal(id);
-        if (!g) return;
-        UI.monthPicker(btn, {
-            value: g.by,
-            fallback: g.by || P.ymAdd(P.ymNow(), 120),
-            onPick: (v) => {
-                if (v) change(id, (x) => { x.due = 'date'; x.by = v; });
-                btn.focus();
-            },
+        form.addEventListener('click', (e) => {
+            const unit = e.target.closest('[data-unit]');
+            if (unit && unit.dataset.unit !== draft.unit) {
+                draft.unit = unit.dataset.unit;
+                draft.value = UNIT_START[draft.unit];
+                drawValueField();
+                sync();
+                return;
+            }
+            const due = e.target.closest('[data-due]');
+            if (due) {
+                draft.due = due.dataset.due;
+                if (draft.due === 'age' && draft.age == null) draft.age = Fmt.parseNumber(ageInput.value) || 65;
+                if (draft.due === 'date' && !draft.by) draft.by = P.ymAdd(P.ymNow(), 120);
+                sync();
+                return;
+            }
+            const swatch = e.target.closest('[data-color]');
+            if (swatch) { draft.color = swatch.dataset.color; sync(); return; }
+            if (e.target.closest('[data-month]')) {
+                UI.monthPicker(monthBtn, {
+                    value: draft.by,
+                    fallback: draft.by || P.ymAdd(P.ymNow(), 120),
+                    onPick: (v) => { if (v) { draft.by = v; sync(); } },
+                });
+            }
         });
-    }
+        // Arrow keys move along the colours, as a radio group does.
+        form.querySelector('.swatches').addEventListener('keydown', (e) => {
+            const move = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+            if (!move) return;
+            e.preventDefault();
+            const i = P.GOAL_COLORS.indexOf(draft.color);
+            draft.color = P.GOAL_COLORS[(i + move + P.GOAL_COLORS.length) % P.GOAL_COLORS.length];
+            sync();
+            form.querySelector(`[data-color="${draft.color}"]`).focus();
+        });
 
-    // ── Adding and removing ────────────────────────────────────────────────
+        /** Check every field; true when the rule can be saved. */
+        function valid() {
+            let ok = true;
+            if (!nameInput.value.trim()) { showError('name', 'Name the goal so you can find it again.'); ok = false; }
+            const v = Fmt.parseNumber(valueInput.value);
+            const max = P.GOAL_VALUE[draft.unit];
+            if (!Number.isFinite(v) || v < 0 || v > max) {
+                showError('value', `Enter a number from 0 to ${Fmt.number(max)}.`);
+                ok = false;
+            }
+            if (draft.due === 'age') {
+                const age = Fmt.parseNumber(ageInput.value);
+                if (!Number.isFinite(age) || age < P.GOAL_AGE.min || age > P.GOAL_AGE.max) { showError('age', `Enter an age from ${P.GOAL_AGE.min} to ${P.GOAL_AGE.max}.`); ok = false; }
+            }
+            if (!ok) form.querySelector('[aria-invalid="true"]')?.focus();
+            return ok;
+        }
 
-    /** Add a goal and bring it into view, its name ready to type. */
-    function add() {
-        const g = Store.addGoal();
-        const c = g && cards.get(g.id);
-        if (!c) return;
-        c.el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        c.el.classList.add('is-new');
-        setTimeout(() => c.el.classList.remove('is-new'), 1600);
-        c.name.focus();
-        c.name.select();
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (!valid()) return;
+            const fields = {
+                name: nameInput.value.trim().slice(0, P.LIMITS.name),
+                metric: draft.metric, op: draft.op, unit: draft.unit, value: draft.value, of: draft.of,
+                due: draft.due, by: draft.due === 'date' ? draft.by : existing?.by ?? null,
+                age: draft.due === 'age' ? draft.age : existing?.age ?? null,
+                color: draft.color,
+            };
+            if (existing) {
+                Store.editGoals((goals) => {
+                    const g = goals.find((x) => x.id === existing.id);
+                    if (!g) return false;
+                    Object.assign(g, fields);
+                    return true;
+                });
+                fresh = existing.id;
+            } else {
+                const created = Store.addGoal(fields);
+                if (!created) return;
+                fresh = created.id;
+            }
+            UI.closeModal(overlay);
+            render();
+        });
+
+        document.body.appendChild(overlay);
+        UI.openModal(overlay, { initialFocus: nameInput, onClose: () => overlay.remove() });
+        nameInput.select();
     }
 
     function remove(id) {
         const g = Store.goal(id);
         if (!g) return;
         Store.removeGoal(id);
-        UI.toast(`Deleted ${g.name}.`, { action: { label: 'Undo', onClick: () => Store.undo() } });
+        UI.toast(`Deleted ${g.name || 'the goal'}.`, { action: { label: 'Undo', onClick: () => Store.undo() } });
     }
 
     // ── Input ──────────────────────────────────────────────────────────────
 
     root.addEventListener('click', (e) => {
-        const card = e.target.closest('[data-goal]');
-        const partBtn = e.target.closest('[data-tok]');
-        if (card && partBtn) { editPart(card.dataset.goal, partBtn.dataset.tok, partBtn); return; }
-        if (card && e.target.closest('[data-act="delete"]')) { remove(card.dataset.goal); return; }
-        const colorBtn = card && e.target.closest('[data-act="color"]');
-        if (colorBtn) { colorPanel(card.dataset.goal, colorBtn); return; }
-        if (e.target.closest('[data-act="custom"]')) add();
-    });
-
-    // The name: each keystroke is kept (one undo step for the run of them);
-    // left empty, it goes back to "Goal".
-    list.addEventListener('input', (e) => {
-        if (!e.target.classList.contains('goal-name')) return;
-        const id = e.target.closest('[data-goal]').dataset.goal;
-        const name = e.target.value.slice(0, P.LIMITS.name);
-        change(id, (x) => { x.name = name; }, `goal:${id}:name`);
-    });
-    list.addEventListener('focusout', (e) => {
-        if (!e.target.classList.contains('goal-name') || e.target.value.trim()) return;
-        const id = e.target.closest('[data-goal]').dataset.goal;
-        change(id, (x) => { x.name = 'Goal'; });
-        e.target.value = 'Goal';
-    });
-    list.addEventListener('keydown', (e) => {
-        if (e.target.classList.contains('goal-name') && (e.key === 'Enter' || e.key === 'Escape')) e.target.blur();
+        const act = e.target.closest('[data-act]');
+        if (!act) return;
+        const goalEl = act.closest('[data-goal]');
+        switch (act.dataset.act) {
+            case 'add': openEditor(null); break;
+            case 'edit': if (goalEl) openEditor(goalEl.dataset.goal); break;
+            case 'delete': if (goalEl) remove(goalEl.dataset.goal); break;
+            case 'plan': {
+                const { tabs, activeId } = Store.state;
+                UI.menu(act, tabs.map((id) => ({
+                    label: Store.planName(id), icon: id === activeId ? 'check' : 'file', chosen: id === activeId,
+                    onSelect: () => Store.openPlan(id),
+                })));
+                break;
+            }
+        }
     });
 
     Store.on((c) => {
-        if (c.type === 'goals' || c.type === 'workspace') render();
+        if (c.type === 'goals' || c.type === 'results' || c.type === 'workspace' || c.type === 'tabs') render();
     });
     // A Format change (Preferences) rewrites every figure.
-    window.addEventListener('citrine:format', () => {
-        for (const c of cards.values()) c.drawn = {};
-        render();
-    });
-
+    window.addEventListener('citrine:format', render);
 }());

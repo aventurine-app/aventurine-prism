@@ -1,11 +1,12 @@
 /* ============================================================================
-   nav.css — the navigation on the left (Plans with its list of plans, Goals,
-   Analyze, Compare; Settings at the foot, and under it the toggle that
-   collapses the pane), and the rule that shows only the workspace it has
-   open. Collapsed, it is a rail of icons (html.has-rail narrows --sidebar-width).
+   nav.css — the navigation on the left, as Ant Design's inline Menu: Plans (a
+   submenu listing the plans, then Add plan), Goals, Analyze, Compare; Settings
+   at the foot, and under it the toggle that collapses the pane. Collapsed, it
+   is Ant's collapsed menu, a rail of icons (html.has-rail narrows
+   --sidebar-width). Also the rule that shows only the workspace it has open.
    ============================================================================ */
 
-:root.has-rail { --sidebar-width: 56px; }
+:root.has-rail { --sidebar-width: 64px; }
 
 /* ── Workspaces: #app[data-workspace] (nav.js) shows one ────────────────── */
 #app:not([data-workspace="plans"]) .builder,
@@ -16,13 +17,13 @@
 /* ── The pane ───────────────────────────────────────────────────────────── */
 .nav {
     width: var(--sidebar-width);
-    transition: width 0.18s ease;
+    transition: width var(--motion-duration-mid) var(--motion-ease-in-out);
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     min-height: 0;
-    background-color: var(--surface1);
-    border-right: var(--border-width) solid var(--border);
+    background-color: var(--color-bg-container);
+    border-right: var(--line-width) solid var(--color-split);
 }
 
 .nav-scroll {
@@ -30,83 +31,73 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
-    padding: var(--space-12) var(--space-8) var(--space-16);
+    padding: var(--space-4) 0 var(--space-12);
     overflow-x: hidden;
 }
 
-/* A row of the navigation: an icon and its name. Its icon
-   centre sits on the rail's icon column (28px). */
+/* A menu item: an icon and its name, 40px, inset 4px with an 8px radius. */
 .nav-item {
     position: relative;
     display: flex;
     align-items: center;
-    gap: var(--space-12);
-    width: 100%;
+    gap: 10px;
+    width: calc(100% - 8px);
     min-width: 0;
-    height: 36px;
-    padding: 0 var(--space-8) 0 10px;
+    height: 40px;
+    margin: var(--space-4);
+    padding: 0 var(--space-16) 0 var(--space-24);
     border: 0;
-    border-radius: var(--radius-control);
+    border-radius: var(--border-radius-lg);
     background: transparent;
-    color: var(--text-secondary);
-    font-size: var(--size-body);
-    font-weight: var(--weight-medium);
+    color: var(--color-text);
+    font-size: var(--font-size);
     text-align: left;
     cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    transition: background-color var(--motion-duration-mid), color var(--motion-duration-mid), padding var(--motion-duration-mid);
 }
-.nav-item .icon { width: 20px; height: 20px; flex: none; }
-/* Hover and the current page take the neutral frost tints, not the accent:
-   the lighter step under the pointer, the stronger one where you are. */
-.nav-item:hover { background: var(--frost-2); color: var(--text-primary); }
-.nav-item:active { background: var(--frost-3); }
-.nav-item:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
-.nav-item[aria-current="page"] { background: var(--frost-3); color: var(--text-primary); font-weight: var(--weight-semibold); }
+.nav-item .icon { width: 16px; height: 16px; flex: none; }
+.nav-item:hover { background: var(--color-bg-text-hover); }
+.nav-item:active { background: var(--color-bg-text-active); }
+.nav-item:focus-visible { outline: 4px solid var(--color-primary-border); outline-offset: -4px; }
+.nav-item[aria-current="page"] { background: var(--control-item-bg-active); color: var(--color-primary-text); }
 .nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nav-caret { width: 14px !important; height: 14px !important; color: var(--text-tertiary); transition: transform 0.2s ease; }
+/* A submenu's arrow, on the right. */
+.nav-caret { width: 12px !important; height: 12px !important; color: var(--color-text-tertiary); transition: transform var(--motion-duration-slow) var(--motion-ease-in-out); }
 .nav-item[aria-expanded="false"] .nav-caret { transform: rotate(-90deg); }
 
-/* ── Plans: the heading and what it opens (the list, then Add plan) ─────── */
+/* ── Plans: the submenu's items (the plans, then Add plan) ──────────────── */
 .nav-group,
-.nav-plans-panel { display: flex; flex-direction: column; gap: 2px; }
-.nav-plans-panel {
-    /* Indented under Plans: each row's icon starts where the word Plans does
-       (a row's 20px icon and its gap, less the 2px a plan's icon is inset by). */
-    margin: 0 0 var(--space-8) calc(20px + var(--space-12) - 2px);
-}
+.nav-plans-panel { display: flex; flex-direction: column; }
 
 .nav-plans {
     display: flex;
     flex-direction: column;
-    gap: 2px;
     margin: 0;
     padding: 0;
     list-style: none;
 }
-/* A plan, under Plans: a page icon and its name. */
+/* A plan: a level-two item, its name indented as Ant's are (48px). */
 .nav-plan {
     position: relative;
     display: flex;
     align-items: center;
-    gap: var(--space-12);
-    height: 32px;
-    padding: 0 var(--space-4) 0 10px;
-    border-radius: var(--radius-control);
-    color: var(--text-secondary);
-    font-size: var(--size-small);
-    font-weight: var(--weight-medium);
+    gap: var(--space-8);
+    height: 40px;
+    margin: var(--space-4);
+    padding: 0 var(--space-4) 0 var(--space-48);
+    border-radius: var(--border-radius-lg);
+    color: var(--color-text);
+    font-size: var(--font-size);
     cursor: pointer;
     user-select: none;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    transition: background-color var(--motion-duration-mid), color var(--motion-duration-mid);
 }
-.nav-plan:hover { background: var(--frost-2); color: var(--text-primary); }
-.nav-plan:active { background: var(--frost-3); }
-.nav-plan:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
-.nav-plan[aria-current="page"] { background: var(--frost-3); color: var(--text-primary); font-weight: var(--weight-semibold); }
-/* 16px, centred in the 20px a row's icon takes. */
-.nav-plan-icon { width: 16px; height: 16px; flex: none; margin: 0 2px; }
-.nav-plan[aria-current="page"] .nav-plan-icon { color: var(--text-primary); }
+.nav-plan:hover { background: var(--color-bg-text-hover); }
+.nav-plan:active { background: var(--color-bg-text-active); }
+.nav-plan:focus-visible { outline: 4px solid var(--color-primary-border); outline-offset: -4px; }
+.nav-plan[aria-current="page"] { background: var(--control-item-bg-active); color: var(--color-primary-text); }
+/* Level-two items carry no icon in Ant's menu; the name says it. */
+.nav-plan .nav-plan-icon { display: none; }
 .nav-plan-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-plan-menu {
     display: grid;
@@ -115,74 +106,75 @@
     height: 24px;
     flex: none;
     border: 0;
-    border-radius: var(--radius-sm);
+    border-radius: var(--border-radius-sm);
     background: transparent;
-    color: var(--text-tertiary);
+    color: var(--color-text-tertiary);
     opacity: 0;
     cursor: pointer;
-    transition: opacity 0.15s ease, background-color 0.15s ease;
+    transition: opacity var(--motion-duration-mid), background-color var(--motion-duration-mid);
 }
 .nav-plan-menu .icon { width: 16px; height: 16px; }
 .nav-plan:hover .nav-plan-menu,
 .nav-plan:focus-within .nav-plan-menu,
 .nav-plan[aria-current="page"] .nav-plan-menu,
 .nav-plan-menu[aria-expanded="true"] { opacity: 1; }
-.nav-plan-menu:hover { background: var(--frost-3); color: var(--text-primary); }
+.nav-plan-menu:hover { background: var(--color-bg-text-hover); color: var(--color-text); }
 .nav-rename {
     flex: 1;
     min-width: 0;
-    height: 24px;
-    padding: 0 var(--space-4);
-    border: var(--border-width) solid var(--accent-ring);
-    border-radius: var(--radius-sm);
-    background: var(--surface2);
-    color: var(--text-primary);
-    font-size: var(--size-small);
+    height: 28px;
+    padding: 0 var(--space-8);
+    border: var(--line-width) solid var(--color-primary);
+    border-radius: var(--border-radius);
+    background: var(--color-bg-container);
+    box-shadow: 0 0 0 2px var(--control-outline);
+    color: var(--color-text);
+    font-size: var(--font-size);
     outline: none;
 }
 .nav-plan.is-dragging { opacity: 0.5; }
-.nav-plan.is-drop-before { box-shadow: inset 0 2px 0 var(--accent-primary); }
-.nav-plan.is-drop-after  { box-shadow: inset 0 -2px 0 var(--accent-primary); }
+.nav-plan.is-drop-before { box-shadow: inset 0 2px 0 var(--color-primary); }
+.nav-plan.is-drop-after  { box-shadow: inset 0 -2px 0 var(--color-primary); }
 
-/* Add plan: the last row of the list, shaped like a plan but quieter. */
+/* Add plan: the last item of the submenu, an action rather than a page. */
 .nav-add {
     display: flex;
     align-items: center;
-    gap: var(--space-12);
-    width: 100%;
-    height: 32px;
-    padding: 0 var(--space-4) 0 10px;
+    gap: var(--space-8);
+    width: calc(100% - 8px);
+    height: 40px;
+    margin: var(--space-4);
+    padding: 0 var(--space-4) 0 calc(var(--space-48) - 2px);
     border: 0;
-    border-radius: var(--radius-control);
+    border-radius: var(--border-radius-lg);
     background: transparent;
-    color: var(--text-tertiary);
-    font-size: var(--size-small);
-    font-weight: var(--weight-medium);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size);
     text-align: left;
     cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    transition: background-color var(--motion-duration-mid), color var(--motion-duration-mid);
 }
+.nav-add .nav-plan-icon { width: 14px; height: 14px; flex: none; }
 .nav-add:hover,
-.nav-add[aria-expanded="true"] { background: var(--frost-2); color: var(--text-primary); }
-.nav-add:active { background: var(--frost-3); }
-.nav-add:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
+.nav-add[aria-expanded="true"] { background: var(--color-bg-text-hover); color: var(--color-text); }
+.nav-add:active { background: var(--color-bg-text-active); }
+.nav-add:focus-visible { outline: 4px solid var(--color-primary-border); outline-offset: -4px; }
 
 /* ── Foot: Settings, then the toggle that collapses the pane ─────────────── */
 .nav-foot {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
-    padding: var(--space-8) var(--space-8) var(--space-12);
-    border-top: var(--border-width) solid var(--border);
+    padding: var(--space-4) 0;
+    border-top: var(--line-width) solid var(--color-split);
 }
 
-/* ── Collapsed: a rail of icons ─────────────────────────────────────────── */
+/* ── Collapsed: Ant's collapsed menu, a rail of icons ───────────────────── */
 .nav.is-rail .nav-label,
 .nav.is-rail .nav-caret,
 .nav.is-rail .nav-plans-panel { display: none; }
-.nav.is-rail .nav-item { width: 40px; padding: 0; justify-content: center; }
+.nav.is-rail .nav-item { padding: 0; justify-content: center; }
 /* In the rail, Plans stands for the builder it opens. */
-.nav.is-rail .nav-item.is-current { background: var(--frost-3); color: var(--text-primary); }
+.nav.is-rail .nav-item.is-current { background: var(--control-item-bg-active); color: var(--color-primary-text); }
 
 @media (prefers-reduced-motion: reduce) {
     .nav, .nav-caret, .nav-item, .nav-plan, .nav-plan-menu, .nav-add { transition: none; }

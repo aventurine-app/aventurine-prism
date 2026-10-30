@@ -30,6 +30,9 @@ const UI_ICONS = [
     // A goal's rule: its comparison and deadline (the measures wear module icons),
     // and its card's colour.
     'greater-than-or-equal', 'less-than-or-equal', 'palette',
+    // Status tags and progress (met, missed, not measured), Compare's swap and
+    // its differences up or down.
+    'x-circle', 'minus-circle', 'arrows-left-right', 'arrow-up', 'arrow-down',
 ];
 
 // Each asset is one <svg> of <path d="…"/> elements. Anything

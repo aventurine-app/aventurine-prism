@@ -1,12 +1,12 @@
 'use strict';
 
 // ─── chart.js ───────────────────────────────────────────────────────────────
-// Analyze's two chart forms, drawn as SVG:
+// The charts of Analyze and Compare, drawn as SVG in Ant Design's chart style:
 //
-//   area   stacked bands over time (accounts above zero, debts below) with a
-//          headline line on top
+//   area   stacked bands over time (accounts above zero, debts below) with
+//          lines on top (net worth; or Compare's two plans, with no bands)
 //   bars   stacked bars per period, ups above zero and downs below, with a
-//          line on top (net worth, cash flow)
+//          line on top (cash flow)
 //
 // Both share the same frame (recessive dashed grid, compact currency ticks,
 // year ticks along the bottom) and the same hover layer: a crosshair, a
@@ -42,14 +42,14 @@
         return ticks;
     }
 
-    /** The width of a marker label (11px semibold, as .chart-marker-label
+    /** The width of a marker label (12px semibold, as .chart-marker-label
      *  sets it) in the chart's font, measured on a canvas since the chart is
      *  drawn before it joins the page. */
     let measurer = null;
     function labelWidth(box, text) {
         if (!measurer) measurer = document.createElement('canvas').getContext('2d');
-        const weight = getComputedStyle(document.documentElement).getPropertyValue('--weight-semibold').trim() || '600';
-        measurer.font = `${weight} 11px ${getComputedStyle(box).fontFamily}`;
+        const weight = getComputedStyle(document.documentElement).getPropertyValue('--font-weight-strong').trim() || '600';
+        measurer.font = `${weight} 12px ${getComputedStyle(box).fontFamily}`;
         return measurer.measureText(text).width;
     }
 
@@ -72,12 +72,15 @@
      *   opts.gap        bars: px of surface between stacked segments (default 2;
      *                   0 butts them together with no seam)
      *   opts.line       { label, color, values }
+     *   opts.lines      [{ label, color, values }], drawn in order, for more than
+     *                   one line (opts.line is the one-line form)
+     *   opts.between    shade the gap between the first two lines (Compare)
      *   opts.markers    optional [{ i, label, color, fill }]: a dated event at
      *                   index i (a goal met), drawn as a dashed rule topped with
      *                   a rounded badge in a strip above the plot: a white target
      *                   and label on `fill`. `color` and `fill` are custom
      *                   property names for the rule and the badge (default: the
-     *                   accent; `fill` defaults to `color`). A label that would
+     *                   primary colour; `fill` defaults to `color`). A label that would
      *                   overlap another badge is left off, leaving the target's
      *                   square; the tooltip still names every marker.
      *   opts.format     value → axis label
@@ -93,6 +96,7 @@
         const H = box.clientHeight;
         if (W < 60 || H < 60 || opts.count < 2) return;
         const markers = opts.markers || [];
+        const lines = opts.lines || (opts.line ? [opts.line] : []);
         // Markers get a strip of their own above the plot for their labels.
         const top = M.top + (markers.length ? MARKER_STRIP : 0);
         const pw = W - M.left - M.right;
@@ -118,7 +122,7 @@
             }
         }
         for (let i = 0; i < n; i++) { hi = Math.max(hi, up[i]); lo = Math.min(lo, -down[i]); }
-        if (opts.line) for (let i = 0; i < n; i++) { hi = Math.max(hi, opts.line.values[i]); lo = Math.min(lo, opts.line.values[i]); }
+        for (const ln of lines) for (let i = 0; i < n; i++) { hi = Math.max(hi, ln.values[i]); lo = Math.min(lo, ln.values[i]); }
         // A flat-zero plan still gets a readable axis rather than $0..$1.
         if (hi - lo < 1) hi = lo + 1000;
         const ticks = niceTicks(lo, hi);
@@ -144,6 +148,14 @@
         }
 
         // ── Marks ──────────────────────────────────────────────────────────
+        // The gap between two lines, shaded under them (Compare's plans).
+        if (opts.between && lines.length >= 2) {
+            const [a, b] = lines;
+            let d = '';
+            for (let i = 0; i < n; i++) d += `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(a.values[i]).toFixed(1)}`;
+            for (let i = n - 1; i >= 0; i--) d += `L${X(i).toFixed(1)},${Y(b.values[i]).toFixed(1)}`;
+            el('path', { class: 'chart-between', d: `${d}Z` }, svg);
+        }
         if (!bars) {
             const accUp = new Float64Array(n);
             const accDown = new Float64Array(n);
@@ -219,8 +231,8 @@
         const half = BADGE_H / 2;
         let badgeEnd = -Infinity;
         for (const { mk, x } of placed) {
-            const rule = `color: var(${mk.color || '--accent-primary'})`;
-            const fill = `fill: var(${mk.fill || mk.color || '--accent-primary'})`;
+            const rule = `color: var(${mk.color || '--color-primary'})`;
+            const fill = `fill: var(${mk.fill || mk.color || '--color-primary'})`;
             el('line', { class: 'chart-marker', x1: x, x2: x, y1: markY + half, y2: top + ph, style: rule }, svg);
             const width = labelWidth(box, mk.label) + BADGE_PAD;
             // A label that fits right of its square, else left of it.
@@ -245,15 +257,15 @@
             text.textContent = mk.label;
         }
 
-        if (opts.line) {
+        for (const ln of lines) {
             let d = '';
-            for (let i = 0; i < n; i++) d += `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(opts.line.values[i]).toFixed(1)}`;
-            el('path', { class: 'chart-line', d, style: `stroke: var(${opts.line.color})` }, svg);
+            for (let i = 0; i < n; i++) d += `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(ln.values[i]).toFixed(1)}`;
+            el('path', { class: 'chart-line', d, style: `stroke: var(${ln.color})` }, svg);
         }
 
         // ── Hover ──────────────────────────────────────────────────────────
         const cross = el('line', { class: 'chart-cross', x1: 0, x2: 0, y1: top, y2: top + ph, visibility: 'hidden' }, svg);
-        const dot = opts.line ? el('circle', { class: 'chart-dot', r: 5, cx: 0, cy: 0, visibility: 'hidden', style: `fill: var(${opts.line.color})` }, svg) : null;
+        const dots = lines.map((ln) => el('circle', { class: 'chart-dot', r: 4.5, cx: 0, cy: 0, visibility: 'hidden', style: `fill: var(${ln.color})` }, svg));
         const hit = el('rect', { class: 'chart-hit', x: M.left, y: top, width: pw, height: ph }, svg);
         box.appendChild(svg);
 
@@ -270,11 +282,11 @@
             cross.setAttribute('x1', x);
             cross.setAttribute('x2', x);
             cross.setAttribute('visibility', 'visible');
-            if (dot) {
+            dots.forEach((dot, j) => {
                 dot.setAttribute('cx', x);
-                dot.setAttribute('cy', Y(opts.line.values[i]));
+                dot.setAttribute('cy', Y(lines[j].values[i]));
                 dot.setAttribute('visibility', 'visible');
-            }
+            });
             const t = opts.tooltip(i);
             const people = (t.people || []).map((p) => `
                 <div class="chart-tip-person"><span>${escapeHtml(p.name)}</span>${p.age ? `<b>${escapeHtml(p.age)}</b>` : ''}</div>`).join('');
@@ -292,7 +304,7 @@
         function hide() {
             last = -1;
             cross.setAttribute('visibility', 'hidden');
-            if (dot) dot.setAttribute('visibility', 'hidden');
+            for (const dot of dots) dot.setAttribute('visibility', 'hidden');
             tip.hidden = true;
             if (opts.onHover) opts.onHover(null);
         }
@@ -305,5 +317,21 @@
         hit.addEventListener('pointerleave', hide);
     }
 
-    window.Chart = { draw };
+    /** Ticks for a monthly series of `count` points from `plan`'s start:
+     *  each point that starts a calendar year (the first only if it is a
+     *  January), thinned to at most ~8 labels. */
+    function yearTicks(plan, count) {
+        const P = window.CitrinePlan;
+        const ticks = [];
+        let prev = null;
+        for (let i = 0; i < count; i++) {
+            const { y, m } = P.ymParse(P.ymAdd(plan.settings.start, i));
+            if (i === 0 ? m === 1 : y !== prev) ticks.push({ i, label: String(y) });
+            prev = y;
+        }
+        const step = Math.ceil(ticks.length / 8);
+        return ticks.filter((_, i) => i % step === 0);
+    }
+
+    window.Chart = { draw, yearTicks };
 }());

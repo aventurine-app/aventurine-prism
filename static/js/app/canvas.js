@@ -63,17 +63,22 @@
 
     stage.insertAdjacentHTML('beforeend', `
         <div class="island island--tools" role="toolbar" aria-label="Canvas tools">
-            <button class="button-icon" type="button" data-act="undo" aria-label="Undo" title="Undo (Ctrl+Z)">${iconSvg('arrow-counter-clockwise')}</button>
-            <button class="button-icon" type="button" data-act="redo" aria-label="Redo" title="Redo (Ctrl+Shift+Z)">${iconSvg('arrow-clockwise')}</button>
-            <span class="island-sep"></span>
-            <button class="button-icon" type="button" data-act="add" aria-label="Add module" title="Add module">${iconSvg('plus')}</button>
-            <button class="button-icon" type="button" data-act="fit" aria-label="Fit plan to view" title="Fit to view">${iconSvg('corners-out')}</button>
-            <button class="button-icon" type="button" data-act="inspector" aria-label="Show inspector" title="Inspector" aria-pressed="true">${iconSvg('sidebar-simple')}</button>
+            <div class="button-group">
+                <button class="button-icon" type="button" data-act="undo" aria-label="Undo" title="Undo (Ctrl+Z)">${iconSvg('arrow-counter-clockwise')}</button>
+                <button class="button-icon" type="button" data-act="redo" aria-label="Redo" title="Redo (Ctrl+Shift+Z)">${iconSvg('arrow-clockwise')}</button>
+            </div>
+            <div class="button-group">
+                <button class="button-icon" type="button" data-act="add" aria-label="Add module" title="Add module">${iconSvg('plus')}</button>
+                <button class="button-icon" type="button" data-act="fit" aria-label="Fit plan to view" title="Fit to view">${iconSvg('corners-out')}</button>
+                <button class="button-icon" type="button" data-act="inspector" aria-label="Show inspector" title="Inspector" aria-pressed="true">${iconSvg('sidebar-simple')}</button>
+            </div>
         </div>
         <div class="island island--zoom" role="toolbar" aria-label="Zoom">
-            <button class="button-icon" type="button" data-act="zoom-out" aria-label="Zoom out">${iconSvg('minus')}</button>
-            <button class="zoom-level" type="button" data-act="zoom-reset" title="Reset zoom">100%</button>
-            <button class="button-icon" type="button" data-act="zoom-in" aria-label="Zoom in">${iconSvg('plus')}</button>
+            <div class="button-group">
+                <button class="button-icon" type="button" data-act="zoom-out" aria-label="Zoom out">${iconSvg('minus')}</button>
+                <button class="zoom-level" type="button" data-act="zoom-reset" title="Reset zoom">100%</button>
+                <button class="button-icon" type="button" data-act="zoom-in" aria-label="Zoom in">${iconSvg('plus')}</button>
+            </div>
         </div>
         <div class="island island--time" hidden aria-live="polite">${iconSvg('clock-counter-clockwise')}<span></span></div>
         <div class="canvas-empty" hidden>
@@ -85,6 +90,7 @@
                         `<span class="role-tile role-tile--lg" data-role="${role}">${iconSvg(icon)}</span>`).join('')}
                 </div>
                 <h2 class="empty-state-title" id="empty-state-title">Empty plan</h2>
+                <p class="empty-state-text">Add modules from the library above, or start from the example.</p>
                 <div class="empty-state-actions">
                     <button class="button-primary" type="button" data-act="example">${iconSvg('sparkle')}Load example</button>
                     <button class="button-secondary" type="button" data-act="add">Add module</button>
@@ -237,6 +243,8 @@
 
     const avg = (arr) => (arr ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
     const NONE = [];
+    // How serious each issue level is, for a module's flag (describe.js warningLevel).
+    const LEVEL_RANK = { info: 0, notice: 1, warn: 2 };
 
     /** What a source pays per period, from its settings (for the resting card). */
     function sourcePeriod(node) {
@@ -247,17 +255,10 @@
         return { value: net * (C.PER_MONTH[p.per] || 1), unit: '/mo' };
     }
 
-    function figure(node, role, nr, vp, plan) {
+    function figure(node, role, nr, vp) {
         const out = { value: '', unit: '', delta: '', deltaDir: '', negative: false, done: false };
         if (!nr || !vp) return out;
-        if (role === 'person') {
-            // Their net worth at the point shown, and how old they are then.
-            const v = nr.worth[vp.k];
-            out.value = Fmt.money(v, { compact: Math.abs(v) >= 1e6 });
-            out.negative = v < -0.005;
-            const age = P.ageAt(node, P.ymAdd(plan.settings.start, vp.k));
-            out.unit = age == null ? 'net worth' : `at ${age}`;
-        } else if (role === 'account') {
+        if (role === 'account') {
             const v = nr.balance[vp.k];
             out.value = Fmt.money(v, { compact: v >= 1e6 });
             out.negative = v < -0.005;     // overdrawn
@@ -309,7 +310,7 @@
     function barSegments(node, role, nr, frame) {
         const { res, vp } = frame;
         // Spending and income carry no balance, so they get no bar (see .node-bar in canvas.css).
-        if (!nr || !vp || role === 'expense' || role === 'source' || role === 'person') return [];
+        if (!nr || !vp || role === 'expense' || role === 'source') return [];
         const upto = vp.all ? res.months : Math.max(1, vp.k);
         const sumTo = (arr) => { let s = 0; for (let i = 0; i < upto && i < arr.length; i++) s += arr[i]; return s; };
         if (role === 'account') {
@@ -394,13 +395,12 @@
         el.innerHTML = `
             ${SIDES.map((side) => `<span class="node-port" data-side="${side}" aria-hidden="true"></span>`).join('')}
             <div class="node-wm" aria-hidden="true"></div>
-            <div class="node-cat"><span class="node-glyph"></span><span class="node-cat-name"></span></div>
+            <div class="node-cat"><span class="node-cat-name"></span></div>
             <div class="node-titles"><span class="node-name"></span><span class="node-meta"></span></div>
             <div class="node-figure"><span class="node-value"></span><span class="node-unit"></span><span class="node-delta"></span></div>
             <div class="node-bar" aria-hidden="true"></div>`;
         const view = {
             el,
-            tile: el.querySelector('.node-glyph'),
             wm: el.querySelector('.node-wm'),
             cat: el.querySelector('.node-cat-name'),
             name: el.querySelector('.node-name'),
@@ -433,7 +433,6 @@
         });
         put(view, 'role', role, (r) => {
             view.el.dataset.role = r;
-            view.tile.dataset.role = r;
         });
         // A dot starts a link when the module sends money on. A debt's left dot is
         // the exception: it asks who pays the debt. The rest only receive.
@@ -451,16 +450,13 @@
         put(view, 'linked', SIDES.filter((side) => used && used.has(side)).join(''), (sig) => {
             for (const port of view.ports) port.classList.toggle('is-linked', sig.includes(port.dataset.side));
         });
-        put(view, 'icon', P.iconOf(node), (icon) => {
-            view.tile.innerHTML = iconSvg(icon);
-            view.wm.innerHTML = iconSvg(icon);
-        });
+        put(view, 'icon', P.iconOf(node), (icon) => { view.wm.innerHTML = iconSvg(icon); });
         put(view, 'cat', D.CATEGORY_NAME[p.cat] || C.ROLES[role].label, (t) => { view.cat.textContent = t; });
         put(view, 'name', node.name, (t) => { view.name.textContent = t; });
         put(view, 'meta', D.nodeMeta(node), (t) => { view.meta.textContent = t; });
 
         const nr = res && res.nodes[node.id];
-        const f = figure(node, role, nr, vp, plan);
+        const f = figure(node, role, nr, vp);
         put(view, 'value', f.value, (t) => { view.value.textContent = t; });
         put(view, 'neg', f.negative, (v) => view.value.classList.toggle('is-negative', v));
         put(view, 'unit', f.unit, (t) => { view.unit.textContent = t; });
@@ -481,17 +477,21 @@
 
         const warns = frame.warns.get(node.id) || NONE;
         const done = f.done;
-        // A module whose only issues are notices (a card's high utilization) wears
-        // a yellow info flag; any real warning makes it the orange warning flag.
-        const notice = warns.length > 0 && warns.every((w) => D.warningLevel(w) === 'notice');
-        const flagSig = warns.length ? `${notice ? 'n' : 'w'}:${warns.map((w) => w.code).join(',')}` : done ? 'done' : '';
+        // A module's flag is its most serious issue (a warning, else a notice such
+        // as a card's high utilization), in the colour and icon that issue's
+        // callout has in the inspector.
+        const level = warns.reduce((top, w) => {
+            const l = D.warningLevel(w);
+            return LEVEL_RANK[l] > LEVEL_RANK[top] ? l : top;
+        }, 'info');
+        const flagSig = warns.length ? `${level}:${warns.map((w) => w.code).join(',')}` : done ? 'done' : '';
         put(view, 'flag', flagSig, () => {
             if (view.flag) { view.flag.remove(); view.flag = null; }
             if (warns.length) {
                 view.flag = document.createElement('span');
-                view.flag.className = notice ? 'node-flag node-flag--notice' : 'node-flag';
+                view.flag.className = level === 'warn' ? 'node-flag' : `node-flag node-flag--${level}`;
                 view.flag.title = warns.map((w) => D.warning(w, plan).text).join('\n');
-                view.flag.innerHTML = iconSvg(notice ? 'info' : 'warning');
+                view.flag.innerHTML = iconSvg(level === 'warn' ? 'warning' : 'info');
             } else if (done) {
                 view.flag = document.createElement('span');
                 view.flag.className = 'node-check';
@@ -570,16 +570,9 @@
             view.label.style.top = `${c.mid.y}px`;
         });
 
-        // A person's link names what is theirs: drawn dashed, with no money or label.
-        const person = link.basis === 'person';
-        put(view, 'person', person, (on) => {
-            view.g.classList.toggle('is-person', on);
-            view.flow.classList.toggle('is-person', on);
-            view.label.hidden = on;
-        });
         const lr = res && res.links[link.id];
         const amount = !lr || !vp ? 0 : vp.all ? lr.avg : lr.flow[vp.month];
-        const idle = !person && (!lr || lr.total < 0.005);
+        const idle = !lr || lr.total < 0.005;
         put(view, 'idle', idle, () => {
             view.g.classList.toggle('is-idle', idle);
             view.flow.classList.toggle('is-idle', idle);
@@ -593,8 +586,7 @@
             view.rule.hidden = !t;
         });
         put(view, 'short', !!(lr && lr.short > 0.005), (v) => view.label.classList.toggle('is-short', v));
-        const said = person ? `${to.name} is ${from.name}'s`
-            : `${from.name} to ${to.name}: ${figure.amount}${figure.rule ? ` (${figure.rule})` : ''}`;
+        const said = `${from.name} to ${to.name}: ${figure.amount}${figure.rule ? ` (${figure.rule})` : ''}`;
         put(view, 'title', said, (t) => view.label.setAttribute('aria-label', t));
 
         const selected = sel && sel.kind === 'link' && sel.id === link.id;
@@ -1042,8 +1034,7 @@
 
     /** Why a link was refused, as what IS allowed. */
     function linkRuleText(fromRole, toRole) {
-        if (toRole === 'person') return 'Nothing links into a person.';
-        if (toRole === 'source') return 'Only a person links to income.';
+        if (toRole === 'source') return 'Income has no input.';
         return `${C.ROLES[fromRole].label} links only to ${rolesInWords(C.LINK_TARGETS[fromRole])}.`;
     }
 
@@ -1134,8 +1125,7 @@
         } else if (linkEl) {
             const id = linkEl.dataset.link;
             Store.select({ kind: 'link', id });
-            const what = Store.link(id)?.basis === 'person' ? 'link' : 'flow';
-            UI.menu(at, [{ label: `Delete ${what}`, icon: 'trash', danger: true, onSelect: () => Store.removeLink(id) }]);
+            UI.menu(at, [{ label: 'Delete flow', icon: 'trash', danger: true, onSelect: () => Store.removeLink(id) }]);
         } else if (!e.target.closest('.island')) {
             UI.menu(at, [
                 { label: 'Add module here…', icon: 'plus', onSelect: () => openAddPicker(e.clientX, e.clientY) },

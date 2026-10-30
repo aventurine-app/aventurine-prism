@@ -29,6 +29,7 @@ const appGlobals = {
     CitrineGoals: 'readonly',
     // shell/
     UI: 'readonly',             // ui.js
+    Components: 'readonly',     // components.js (Ant Design's display components, as HTML)
     Settings: 'readonly',       // settings.js
     Account: 'readonly',        // account.js
     authPost: 'readonly',       // auth/common.js (the public sign-in pages)

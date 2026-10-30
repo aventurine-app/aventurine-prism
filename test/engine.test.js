@@ -271,16 +271,122 @@ test('a percent of balance every year: the 4% rule', () => {
     close(r.links[l.id].flow[12], 38400);
 });
 
-test('"above" sweeps the part of a balance over the threshold', () => {
+test('an account keeps its minimum: the rest sweeps only what is over it', () => {
     const plan = mkPlan('2026-01', 1);
     const pay = node(plan, 'paycheck', { amount: 1000, per: 'month' });
-    const savings = node(plan, 'bank-account', { balance: 0, rate: 0 });
+    const savings = node(plan, 'bank-account', { balance: 0, rate: 0, minBalance: 5000 });
     const brokerage = node(plan, 'investment', { balance: 0, rate: 0 });
     link(plan, pay, savings);
-    link(plan, savings, brokerage, { basis: 'balance', mode: 'above', value: 5000 });
+    const sweep = link(plan, savings, brokerage, { basis: 'balance', mode: 'rest' });
     const r = run(plan);
+    // It fills up to $5,000 first (five months), then passes each paycheck on.
+    assert.equal(r.links[sweep.id].flow.slice(0, 5).reduce((a, b) => a + b, 0), 0);
     close(last(r.nodes[savings.id].balance), 5000);
     close(last(r.nodes[brokerage.id].balance), 7000);
+    // Filling up to the minimum is not going below it.
+    assert.ok(!r.warnings.some((w) => w.code === 'below-minimum'));
+});
+
+test('shares out of an account are of what is over its minimum: 50/30/20 of each paycheck', () => {
+    const plan = mkPlan('2026-01', 1);
+    const pay = node(plan, 'paycheck', { amount: 5000, per: 'month' });
+    const checking = node(plan, 'bank-account', { balance: 4000, rate: 0, minBalance: 4000 });
+    const needs = node(plan, 'expense');
+    const wants = node(plan, 'expense');
+    const savings = node(plan, 'bank-account', { balance: 0, rate: 0 });
+    link(plan, pay, checking);
+    const a = link(plan, checking, needs, { basis: 'balance', mode: 'percent', value: 50 });
+    const b = link(plan, checking, wants, { basis: 'balance', mode: 'percent', value: 30 });
+    const c = link(plan, checking, savings, { basis: 'balance', mode: 'percent', value: 20 });
+    const r = run(plan);
+    close(r.links[a.id].flow[0], 2500);
+    close(r.links[b.id].flow[0], 1500);
+    close(r.links[c.id].flow[0], 1000);
+    for (const v of r.nodes[checking.id].balance) close(v, 4000);
+});
+
+test('a fixed bill is paid past an account\'s minimum, and the plan says when it goes below', () => {
+    const plan = mkPlan('2026-01', 1);
+    const checking = node(plan, 'bank-account', { balance: 6000, rate: 0, minBalance: 4000 });
+    const rent = node(plan, 'expense');
+    const fun = node(plan, 'expense');
+    const bill = link(plan, checking, rent, { basis: 'balance', mode: 'fixed', value: 1500 });
+    const share = link(plan, checking, fun, { basis: 'balance', mode: 'rest' });
+    const r = run(plan);
+    close(r.links[bill.id].total, 12 * 1500);
+    // January: rent leaves 4,500, and the rest takes the 500 over the minimum.
+    close(r.links[share.id].total, 500);
+    const dip = r.warnings.find((w) => w.code === 'below-minimum' && w.nodeId === checking.id);
+    assert.equal(dip.month, 1);
+    close(dip.amount, 4000);
+});
+
+test('a link set to an expense\'s cost pays it, rising by its inflation each year', () => {
+    const plan = mkPlan('2026-01', 2);
+    const pay = node(plan, 'paycheck', { amount: 5000, per: 'month' });
+    const rent = node(plan, 'expense', { cost: 1000, per: 'month', growth: 10 });
+    const savings = node(plan, 'bank-account', { balance: 0, rate: 0 });
+    const l = link(plan, pay, rent, { mode: 'cost' });
+    link(plan, pay, savings);
+    const r = run(plan);
+    close(r.links[l.id].flow[0], 1000);
+    close(r.links[l.id].flow[11], 1000);
+    close(r.links[l.id].flow[12], 1100);
+    close(r.totals.spent, 12 * 1000 + 12 * 1100);
+    assert.ok(!r.warnings.some((w) => w.code === 'cost-unpaid'));
+});
+
+test('a cost follows the expense\'s schedule: a yearly lump in its month, a one-off on its date', () => {
+    const plan = mkPlan('2026-01', 2);
+    const checking = node(plan, 'bank-account', { balance: 50000, rate: 0 });
+    const insurance = node(plan, 'expense', { cost: 1200, per: 'year', payMonth: 3 });
+    const wedding = node(plan, 'expense', { cost: 20000, per: 'once', start: '2027-06' });
+    const yearly = link(plan, checking, insurance, { basis: 'balance', mode: 'cost' });
+    const once = link(plan, checking, wedding, { basis: 'balance', mode: 'cost' });
+    const r = run(plan);
+    const months = (l) => [...r.links[l.id].flow].map((v, i) => (v > 0 ? i : -1)).filter((i) => i >= 0);
+    assert.deepEqual(months(yearly), [2, 14]);
+    assert.deepEqual(months(once), [17]);
+    close(r.links[once.id].total, 20000);
+});
+
+test('a cost is a fixed amount: it overdraws an account, and falls short from income', () => {
+    const plan = mkPlan('2026-01', 1);
+    const checking = node(plan, 'bank-account', { balance: 500, rate: 0 });
+    const rent = node(plan, 'expense', { cost: 1000, per: 'month' });
+    const pay = node(plan, 'paycheck', { amount: 300, per: 'month' });
+    const food = node(plan, 'expense', { cost: 400, per: 'month' });
+    const fromBalance = link(plan, checking, rent, { basis: 'balance', mode: 'cost' });
+    const fromPay = link(plan, pay, food, { mode: 'cost' });
+    const r = run(plan);
+    close(r.links[fromBalance.id].total, 12 * 1000);
+    assert.ok(r.warnings.some((w) => w.code === 'overdrawn' && w.nodeId === checking.id));
+    const short = r.warnings.find((w) => w.code === 'short' && w.linkId === fromPay.id);
+    close(short.amount, 12 * 100);
+});
+
+test('a card can be charged an expense\'s cost', () => {
+    const plan = mkPlan('2026-01', 1);
+    const card = node(plan, 'credit-card', { balance: 0, rate: 0, cashBack: 0 });
+    const gas = node(plan, 'expense', { cost: 150, per: 'month' });
+    const l = link(plan, card, gas, { basis: 'charges', mode: 'cost' });
+    const r = run(plan);
+    close(r.links[l.id].total, 12 * 150);
+    close(last(r.nodes[card.id].balance), 12 * 150);
+});
+
+test('an expense with a cost no link pays is a notice; one with no cost set pays nothing', () => {
+    const plan = mkPlan('2026-01', 1);
+    const pay = node(plan, 'paycheck', { amount: 1000, per: 'month' });
+    const fun = node(plan, 'expense', { cost: 300, per: 'month' });
+    const blank = node(plan, 'expense');
+    link(plan, pay, fun, { mode: 'percent', value: 30 });
+    const none = link(plan, pay, blank, { mode: 'cost' });
+    const r = run(plan);
+    assert.ok(r.warnings.some((w) => w.code === 'cost-unpaid' && w.nodeId === fun.id));
+    assert.ok(!r.warnings.some((w) => w.code === 'cost-unpaid' && w.nodeId === blank.id));
+    assert.equal(r.links[none.id].total, 0);
+    assert.ok(!r.warnings.some((w) => w.code === 'short' && w.linkId === none.id));
 });
 
 test('a locked account moves nothing until it unlocks', () => {
@@ -297,7 +403,7 @@ test('a locked account moves nothing until it unlocks', () => {
 test('a yearly deposit limit parks the excess in Unassigned', () => {
     const plan = mkPlan('2026-01', 1);
     const pay = node(plan, 'paycheck', { amount: 1000, per: 'month' });
-    const ira = node(plan, 'tax-free-account', { balance: 0, rate: 0, capYearly: 7000 });
+    const ira = node(plan, 'tax-advantaged-account', { balance: 0, rate: 0, capYearly: 7000 });
     link(plan, pay, ira, { mode: 'fixed', value: 1000 });
     const r = run(plan);
     close(last(r.nodes[ira.id].balance), 7000);
@@ -442,7 +548,7 @@ test('a payment from income pays a card off, and what it cannot take stays with 
 test('a 401(k) contribution comes out of gross pay, before withholding', () => {
     const plan = mkPlan('2026-01', 1);
     const salary = node(plan, 'salary', { amount: 100000, per: 'year', tax: 22 });
-    const k = node(plan, 'pretax-account');
+    const k = node(plan, 'tax-advantaged-account', { contributions: 'pre' });
     const savings = node(plan, 'bank-account');
     link(plan, salary, k, { mode: 'percent', value: 6 });
     link(plan, salary, savings, { mode: 'rest' });
@@ -505,7 +611,7 @@ test('a 401(k) matches only pay, not transfers, and only on a 401(k)', () => {
     const plan = mkPlan('2026-01', 1);
     const savings = node(plan, 'bank-account', { balance: 12000 });
     const k = node(plan, '401k', { match: 100 });
-    const ira = node(plan, 'pretax-account', { match: 100 });    // hidden setting: ignored
+    const ira = node(plan, 'tax-advantaged-account', { contributions: 'pre', match: 100 });    // hidden setting: ignored
     const pay = node(plan, 'paycheck', { amount: 1000, per: 'month' });
     link(plan, savings, k, { basis: 'balance', mode: 'fixed', value: 500 });
     link(plan, pay, ira, { mode: 'rest' });
@@ -518,7 +624,7 @@ test('a 401(k) matches only pay, not transfers, and only on a 401(k)', () => {
 test('a Roth IRA is paid from take-home pay', () => {
     const plan = mkPlan('2026-01', 1);
     const salary = node(plan, 'salary', { amount: 100000, per: 'year', tax: 22 });
-    const roth = node(plan, 'tax-free-account');
+    const roth = node(plan, 'tax-advantaged-account', { contributions: 'after' });
     link(plan, salary, roth, { mode: 'percent', value: 6 });
     link(plan, salary, node(plan, 'expense'), { mode: 'rest' });
     const r = run(plan);
@@ -553,24 +659,6 @@ test('a match does not count toward the yearly contribution limit, and matches o
     close(r.totals.match, 6000);                   // each accepted deposit matched, none past it
     close(last(r.nodes[k401.id].balance), 12000);
     assert.ok(codes(r).includes('cap'));
-});
-
-test("a person's net worth is the accounts less the debts their money reaches", () => {
-    const plan = mkPlan('2026-01', 1);
-    const me = node(plan, 'person', { age: 30, planStart: '2026-01' });
-    const pay = node(plan, 'paycheck', { amount: 1000, per: 'month' });
-    const savings = node(plan, 'bank-account', { balance: 500 });
-    const card = node(plan, 'credit-card', { balance: 2000 });
-    const theirs = node(plan, 'bank-account', { balance: 9000 });   // not reached: not counted
-    link(plan, me, pay, { basis: 'person' });
-    link(plan, pay, card, { mode: 'fixed', value: 100 });
-    link(plan, pay, savings, { mode: 'rest' });
-    const r = run(plan);
-    const worth = r.nodes[me.id].worth;
-    close(worth[0], 500 - 2000);
-    close(worth[12], 500 + 900 * 12 - (2000 - 1200));
-    close(r.nodes[theirs.id].balance[12], 9000);
-    assert.equal(r.links[plan.links[0].id], undefined, "a person's link moves no money");
 });
 
 test('a tax modifier takes its cut and passes the rest on', () => {

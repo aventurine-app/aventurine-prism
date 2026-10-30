@@ -5,24 +5,22 @@
 // ("roles") they are all built from.
 //
 // THE STANDARD. A module's role decides what it does to money, and nothing else
-// does. There are five, plus the person the plan is for:
+// does. There are five:
 //
-//   person    Person     Who the plan is for: their age and when the plan
-//                        starts. Moves no money. Its links point at the
-//                        modules that are theirs, and it shows the net worth
-//                        of every account and debt those modules' money
-//                        reaches.
 //   source    Income     Makes money on a schedule. Output only.
 //   account   Account    Holds a balance that grows at a rate. Counts toward
-//                        net worth.
-//   expense   Spending   Money that arrives here leaves the plan.
+//                        net worth. An optional minimum it keeps: shares and
+//                        sweeps out of it only take what is over that.
+//   expense   Spending   Money that arrives here leaves the plan. An optional
+//                        cost on a schedule (and a yearly inflation rate),
+//                        which a link set to its cost pays.
 //   debt      Debt       Holds what is owed. Interest adds to it; money that
 //                        arrives pays it down.
 //   modifier  Modifier   Money passes through and changes on the way: a tax or
 //                        a fee. A budget group is the one that changes
 //                        nothing: it only splits.
 //
-// Every preset below (a couple of dozen of them) is one of those five roles with a
+// Every preset below (about a dozen of them) is one of those five roles with a
 // name, an icon, the fields it shows and starting values. Learning the five
 // roles is learning the whole library: a Roth IRA and a CD behave alike because
 // both are accounts, and the canvas paints them alike for the same reason.
@@ -46,21 +44,19 @@
     // output port depends on its bases: plan.js, basesFor). `holds` marks the
     // two roles that carry a balance from month to month.
     const ROLES = {
-        person:   { id: 'person',   label: 'Person',   hasIn: false, holds: false },
         source:   { id: 'source',   label: 'Income',   hasIn: false, holds: false },
         account:  { id: 'account',  label: 'Account',  hasIn: true,  holds: true },
         expense:  { id: 'expense',  label: 'Spending', hasIn: true,  holds: false },
         debt:     { id: 'debt',     label: 'Debt',     hasIn: true,  holds: true },
         modifier: { id: 'modifier', label: 'Modifier', hasIn: true,  holds: false },
     };
-    const ROLE_ORDER = ['person', 'source', 'account', 'expense', 'debt', 'modifier'];
+    const ROLE_ORDER = ['source', 'account', 'expense', 'debt', 'modifier'];
 
     // Which roles a link may run into, by the role it leaves. Nothing links
-    // into a source (income has no input) except a person, whose links move no
-    // money. Nothing links into a person. Spending sends nothing on. A credit
-    // card pays for spending: its links out to spending are purchases charged to the card.
+    // into a source (income has no input). Spending sends nothing on. A credit
+    // card pays for spending: its links out to spending are purchases charged
+    // to the card.
     const LINK_TARGETS = {
-        person:   ['source', 'account', 'expense', 'debt', 'modifier'],
         source:   ['account', 'expense', 'debt', 'modifier'],
         account:  ['account', 'expense', 'debt', 'modifier'],
         expense:  ['expense'],
@@ -81,6 +77,7 @@
     //   account    the id of an account in the plan, or null
     const FIELDS = {
         amount:     { type: 'money',     label: 'Amount',           min: 0,    max: 1e10 },
+        cost:       { type: 'money',     label: 'Cost',             min: 0,    max: 1e10, optional: true },
         per:        { type: 'choice',    label: 'Every',
                       options: [['week', 'Week'], ['biweek', '2 weeks'], ['month', 'Month'],
                                 ['year', 'Year'], ['once', 'Once']] },
@@ -90,6 +87,7 @@
         start:      { type: 'yearmonth', label: 'Starts',           optional: true },
         end:        { type: 'yearmonth', label: 'Ends',             optional: true },
         balance:    { type: 'money',     label: 'Starting balance', min: 0,    max: 1e11 },
+        minBalance: { type: 'money',     label: 'Keep at least',    min: 0,    max: 1e11, optional: true },
         rate:       { type: 'percent',   label: 'Interest',         min: -100, max: 1000, suffix: '/yr' },
         lockUntil:  { type: 'yearmonth', label: 'Locked until',     optional: true },
         capYearly:  { type: 'money',     label: 'Yearly limit',     min: 0,    max: 1e10, optional: true },
@@ -99,9 +97,9 @@
         annualFee:  { type: 'money',     label: 'Annual fee',       min: 0,    max: 1e10, optional: true },
         limit:      { type: 'money',     label: 'Credit limit',     min: 0,    max: 1e10, optional: true },
         match:      { type: 'percent',   label: 'Employer match',   min: 0,    max: 200 },
-        age:        { type: 'number',    label: 'Current age',      min: 0,    max: 120,  optional: true, suffix: 'yrs' },
-        planStart:  { type: 'yearmonth', label: 'Plan starts' },
         matchLimit: { type: 'money',     label: 'Yearly match limit', min: 0, max: 1e10, optional: true },
+        contributions: { type: 'choice', label: 'Contributions',
+                      options: [['after', 'After tax'], ['pre', 'Before tax']] },
     };
 
     // How many of each `per` period fall in a month. A yearly amount and a
@@ -109,19 +107,17 @@
     const PER_MONTH = { week: 52 / 12, biweek: 26 / 12, month: 1 };
 
     const ROLE_FIELDS = {
-        person:   ['age', 'planStart'],
         source:   ['amount', 'per', 'payMonth', 'growth', 'tax', 'start', 'end'],
-        account:  ['balance', 'rate', 'lockUntil', 'capYearly', 'match', 'matchLimit'],
-        expense:  [],
+        account:  ['balance', 'minBalance', 'rate', 'lockUntil', 'capYearly', 'match', 'matchLimit', 'contributions'],
+        expense:  ['cost', 'per', 'payMonth', 'growth', 'start', 'end'],
         debt:     ['balance', 'rate', 'term', 'start', 'cashBack', 'cashBackTo', 'annualFee', 'limit'],
         modifier: ['rate'],
     };
 
     const ROLE_DEFAULTS = {
-        person:   { age: null, planStart: null },   // createNode dates it from the plan
         source:   { amount: 0, per: 'month', payMonth: 0, growth: 0, tax: 0, start: null, end: null },
-        account:  { balance: 0, rate: 0, lockUntil: null, capYearly: null, match: 0, matchLimit: null },
-        expense:  {},
+        account:  { balance: 0, minBalance: null, rate: 0, lockUntil: null, capYearly: null, match: 0, matchLimit: null, contributions: 'after' },
+        expense:  { cost: null, per: 'month', payMonth: 0, growth: 0, start: null, end: null },
         debt:     { balance: 0, rate: 0, term: null, start: null, cashBack: 0, cashBackTo: null, annualFee: null, limit: null },
         modifier: { rate: 0 },
     };
@@ -134,10 +130,6 @@
     // its preset's icon (the user picks one in the inspector). Every preset's
     // own icon is offered too (see iconChoices).
     const CATEGORIES = [
-        { id: 'people',     name: 'People',     icon: 'user',
-          icons: ['user', 'user-circle', 'users', 'person', 'person-simple', 'person-simple-walk', 'person-arms-spread',
-                  'smiley', 'hand-waving', 'baby', 'student', 'graduation-cap', 'briefcase', 'heart', 'star', 'crown',
-                  'sun', 'flower', 'tree', 'house-line', 'cake', 'dog', 'cat'] },
         { id: 'income',     name: 'Income',     icon: 'briefcase',
           icons: ['briefcase', 'money', 'arrow-u-up-left', 'laptop', 'coins', 'hand-coins', 'storefront',
                   'receipt', 'handshake', 'chalkboard-teacher', 'hammer', 'paint-brush', 'camera', 'pen-nib',
@@ -186,6 +178,8 @@
     //             card).
     // pretax      accounts paid from gross pay: income sent here is taken before
     //             withholding (see engine.js, pre-tax contributions)
+    // taxChoice   accounts whose Contributions setting says whether they are
+    //             pre-tax ('pre') or paid from take-home pay ('after')
     // employerMatch  accounts whose Employer match setting adds to what pay puts
     //             in (see engine.js, employer match)
     // inLink      the rule a new link INTO this module starts with
@@ -199,10 +193,6 @@
     const monthly = () => ({ mode: 'fixed', value: 0, when: 'monthly' });
 
     const PRESETS = [
-        // People
-        P('people', 'person', 'person', 'Person', 'user', {
-            keywords: 'me myself partner spouse household age birthday owner retirement who' }),
-
         // Income
         // Only a one-time income takes a date; the rest run for the whole plan.
         P('income', 'source', 'salary', 'Salary', 'briefcase', {
@@ -216,11 +206,7 @@
             fixed: { tax: 0 },               // take-home pay is already after tax
             fields: ['amount', 'per', 'payMonth', 'growth'],
             labels: { amount: 'Take-home' },
-            keywords: 'net pay biweekly job gig allowance support royalties other income' }),
-        P('income', 'source', 'tax-refund', 'Tax refund', 'arrow-u-up-left', {
-            defaults: { per: 'year', payMonth: 4 },
-            fields: ['amount', 'per', 'payMonth'],
-            keywords: 'irs return' }),
+            keywords: 'net pay biweekly job gig allowance support royalties other income tax refund irs return' }),
         P('income', 'source', 'one-time-income', 'One-time income', 'sparkle', {
             fixed: { per: 'once' },
             fields: ['amount', 'tax', 'start'],
@@ -231,11 +217,11 @@
         // are one thing at different rates; only a lock date makes a deposit
         // its own module.
         P('accounts', 'account', 'bank-account', 'Bank account', 'bank', {
-            fields: ['balance', 'rate'],
+            fields: ['balance', 'minBalance', 'rate'],
             labels: { rate: 'APY' },
             keywords: 'checking savings hysa high-yield money market emergency fund cash bank debit everyday save interest' }),
         P('accounts', 'account', 'term-deposit', 'Term deposit', 'certificate', {
-            fields: ['balance', 'rate', 'lockUntil'],
+            fields: ['balance', 'minBalance', 'rate', 'lockUntil'],
             labels: { rate: 'APY', lockUntil: 'Matures' },
             keywords: 'cd certificate of deposit locked fixed term' }),
 
@@ -243,32 +229,38 @@
         // expected return, so one module covers stocks, funds, bonds, crypto and
         // gold. What sets the retirement accounts apart is when tax is paid:
         // before the money goes in (pre-tax) or already paid (tax-free growth).
-        // A 401(k) is the pre-tax account an employer adds to.
+        // A 401(k) is the pre-tax account an employer adds to; every other
+        // tax-advantaged account (IRA, HSA, 529) is one module whose
+        // Contributions setting says which.
         P('accounts', 'account', '401k', '401(k)', 'piggy-bank', {
             pretax: true,
             employerMatch: true,
-            fields: ['balance', 'rate', 'lockUntil', 'capYearly', 'match', 'matchLimit'],
+            fields: ['balance', 'minBalance', 'rate', 'lockUntil', 'capYearly', 'match', 'matchLimit'],
             labels: { rate: 'Expected return', capYearly: 'Yearly contribution limit' },
             keywords: '401k 403b 457 tsp workplace retirement employer match pre-tax free money' }),
-        P('accounts', 'account', 'pretax-account', 'Pre-tax account', 'plant', {
-            pretax: true,
-            fields: ['balance', 'rate', 'lockUntil', 'capYearly'],
+        P('accounts', 'account', 'tax-advantaged-account', 'Tax-advantaged account', 'tree-evergreen', {
+            taxChoice: true,
+            fields: ['balance', 'minBalance', 'rate', 'lockUntil', 'capYearly', 'contributions'],
             labels: { rate: 'Expected return' },
-            keywords: 'traditional ira hsa health savings account retirement' }),
-        P('accounts', 'account', 'tax-free-account', 'Tax-free account', 'tree-evergreen', {
-            fields: ['balance', 'rate', 'lockUntil', 'capYearly'],
-            labels: { rate: 'Expected return' },
-            keywords: 'roth ira 529 plan college education savings retirement' }),
+            keywords: 'traditional ira roth ira hsa health savings account 529 plan college education savings retirement pre-tax tax-free' }),
         P('accounts', 'account', 'investment', 'Investment', 'chart-line-up', {
-            fields: ['balance', 'rate'],
+            fields: ['balance', 'minBalance', 'rate'],
             labels: { rate: 'Expected return' },
             keywords: 'brokerage stocks etf index fund s&p 500 bonds treasury t-bills crypto bitcoin reit gold invest taxable' }),
 
-        // Spending. Every expense consumes what arrives; how often it is paid
-        // is the link's timing, not the module's.
+        // Spending. Every expense consumes what arrives. It may have a cost of
+        // its own, on a schedule like income's; a link set to the cost pays it.
+        // Without one, what it spends is up to its links.
         P('spending', 'expense', 'expense', 'Expense', 'shopping-cart', {
+            labels: { growth: 'Inflation' },
             inLink: monthly(),
             keywords: 'rent groceries food dining utilities bills transport insurance healthcare subscriptions entertainment shopping travel childcare education pets gifts charity taxes home upkeep repairs' }),
+        P('spending', 'expense', 'one-time-expense', 'One-time expense', 'package', {
+            fixed: { per: 'once' },
+            fields: ['cost', 'start'],
+            labels: { start: 'Date' },
+            inLink: { mode: 'fixed', value: 0, when: 'once', relDate: 12 },
+            keywords: 'wedding renovation remodel vacation trip down payment car purchase furniture appliance funeral emergency repair medical bill one-off big purchase' }),
 
         // Debt. A card is its own thing (purchases, cash back). All
         // other debt is a balance owed at a rate, repaid over a term.

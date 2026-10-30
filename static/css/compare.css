@@ -1,124 +1,75 @@
 /* ============================================================================
-   compare.css — the Compare workspace (compare.js): every plan in a row, with
-   all run over one length (the Over dropdown): net worth at the end, growth,
-   how soon its debt is paid off and the taxes it pays. Each
-   column is a heat map by rank: one accent hue, strongest on the best figure,
-   lighter on the runners-up. Each shaded cell also names its place (Best,
-   2nd, 3rd), so rank never rests on colour alone. The page frame is
-   goals.css's.
+   compare.css — the Compare workspace (compare.js), as an Ant Design page:
+   the bar picking two plans (A in blue, B in orange) and the length they run
+   over, their net worth chart and side-by-side table, and every plan ranked.
+   The page frame is components.css's .page; the chart's marks are
+   outlook.css's.
    ============================================================================ */
 
-/* The length every plan runs over: a field that opens a menu (compare.js),
-   labelled as the scrubber's and Analyze's lengths are. */
-.compare-bar {
+/* ── The two plans ──────────────────────────────────────────────────────── */
+.compare-pick { margin-bottom: var(--space-16); }
+.compare-pick-body {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-12);
-    margin-bottom: var(--space-16);
-}
-.compare-label {
-    color: var(--text-tertiary);
-    font-size: var(--size-micro);
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--track-wide);
-    text-transform: uppercase;
-}
-.compare-length {
-    display: flex;
-    align-items: center;
-    gap: var(--space-8);
-    min-width: 140px;
-    text-align: left;
-}
-.compare-length > span { flex: 1; }
-.compare-length .icon { width: 16px; height: 16px; flex: none; color: var(--text-secondary); }
-.compare-length .compare-length-caret { width: 14px; height: 14px; color: var(--text-tertiary); }
-
-.compare-wrap { max-width: 960px; overflow-x: auto; }
-
-.compare-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--size-small);
-    font-variant-numeric: tabular-nums;
-}
-.compare-table th,
-.compare-table td {
+    gap: var(--space-8) var(--space-12);
     padding: var(--space-12) var(--space-16);
-    border-bottom: var(--border-width) solid var(--stroke-divider);
-    text-align: right;
-    vertical-align: middle;
-    white-space: nowrap;
 }
-.compare-table thead th {
-    color: var(--text-tertiary);
-    font-size: var(--size-micro);
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--track-widest);
-    text-transform: uppercase;
-    vertical-align: bottom;
-}
-.compare-table thead th > span { display: block; }
-.compare-col-note {
-    margin-top: 2px;
-    font-weight: var(--weight-medium);
-    letter-spacing: 0;
-    text-transform: none;
-}
-.compare-table th:first-child { text-align: left; }
-.compare-table tbody th { font-weight: var(--weight-regular); }
-/* Rules between the columns, matching the ones between the rows. */
-.compare-table th + th,
-.compare-table th + td,
-.compare-table td + td { border-left: var(--border-width) solid var(--stroke-divider); }
-
-/* --heat runs 0..1 (compare.js sets it per place). Values keep the text
-   colours. */
-.compare-table td.is-heat { background: color-mix(in srgb, var(--accent-primary) calc(var(--heat) * 38%), transparent); }
-
-.compare-plan {
-    display: block;
-    max-width: 280px;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--text-primary);
-    font-size: var(--size-body);
-    font-weight: var(--weight-semibold);
-    text-align: left;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    cursor: pointer;
-}
-.compare-plan:hover { text-decoration: underline; text-underline-offset: 3px; }
-.compare-plan:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; border-radius: var(--radius-sm); }
-.compare-span { display: block; margin-top: 2px; color: var(--text-tertiary); font-size: var(--size-micro); }
-
-.compare-value { color: var(--text-primary); font-size: var(--size-body); font-weight: var(--weight-semibold); }
-.compare-table td.is-negative .compare-value { color: var(--accent-negative); }
-.compare-table td.is-missing { color: var(--text-tertiary); }
-/* The place sits before the figure, so the figures keep one right edge. */
-.compare-best,
-.compare-place {
-    display: inline-flex;
+.compare-pick .badge-dot { gap: 0; }
+.compare-dot--a { --dot: var(--chart-plan-a); }
+.compare-dot--b { --dot: var(--chart-plan-b); }
+.compare-dot--a::before,
+.compare-dot--b::before { width: 8px; height: 8px; }
+.compare-over {
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 4px;
-    margin-right: var(--space-8);
-    padding: 2px 6px;
-    border-radius: var(--radius-pill);
-    color: var(--text-primary);
-    font-size: var(--size-micro);
-    font-weight: var(--weight-semibold);
-    vertical-align: 1px;
+    gap: var(--space-8) var(--space-12);
+    margin-left: auto;
 }
-.compare-best { background: var(--surface1); }
-.compare-best .icon { width: 12px; height: 12px; color: var(--accent-ink); }
-.compare-place { color: var(--text-secondary); }
+.compare-legend { padding-left: 0; }
+
+.compare-chart-body { padding: var(--space-16) var(--space-24) var(--space-16) var(--space-8); }
+.compare-chart { height: clamp(280px, calc(100vh - 480px), 440px); }
+
+/* The side-by-side table: plan names in the header, wrapped if long. */
+.compare-side th .badge-dot { justify-content: flex-end; white-space: normal; }
+.compare-side abbr { text-decoration: none; }
+
+/* ── All plans ──────────────────────────────────────────────────────────── */
+.compare-all { margin-top: var(--space-16); }
+.compare-col { display: inline-flex; flex-direction: column; align-items: flex-end; }
+.compare-col-note { color: var(--color-text-tertiary); font-size: var(--font-size-sm); font-weight: var(--font-weight-normal); }
+
+/* --heat runs 0..1 (compare.js sets it per place): a tint of the primary
+   colour, strongest on the best figure. Values keep the text colours. */
+.compare-table td.is-heat { background: color-mix(in srgb, var(--color-primary) calc(var(--heat) * 12%), var(--color-bg-container)); }
+.compare-table tbody tr:hover td.is-heat { background: color-mix(in srgb, var(--color-primary) calc(var(--heat) * 16%), var(--color-bg-container)); }
+
+.compare-plan { display: block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; font-weight: var(--font-weight-strong); text-align: left; }
+.compare-span { display: block; color: var(--color-text-tertiary); font-size: var(--font-size-sm); }
+
+/* The place sits before the figure, so the figures keep one right edge. */
+.compare-cell { display: inline-flex; align-items: center; gap: var(--space-8); }
+.compare-value { font-weight: var(--font-weight-medium); }
+
+/* The runners-up's tags: a trophy in the place's medal colour, on a tint of
+   it. Best is the success tag. */
+.compare-cell[data-medal="silver"] { --medal: var(--medal-silver); }
+.compare-cell[data-medal="bronze"] { --medal: var(--medal-bronze); }
+.compare-cell[data-medal] .tag {
+    background: color-mix(in srgb, var(--medal) 12%, transparent);
+    border-color: color-mix(in srgb, var(--medal) 40%, transparent);
+    color: color-mix(in srgb, var(--medal) 55%, var(--color-text));
+}
+.compare-cell[data-medal] .tag .icon { color: var(--medal); }
+.compare-table td.is-negative .compare-value { color: var(--color-error-text); }
 
 .compare-note {
-    max-width: 640px;
-    margin: var(--space-16) 0 0;
-    color: var(--text-tertiary);
-    font-size: var(--size-micro);
-    line-height: var(--lh-normal);
+    max-width: 72ch;
+    margin: 0;
+    padding: var(--space-12) var(--space-16) var(--space-16);
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-sm);
 }

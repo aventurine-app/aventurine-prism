@@ -61,9 +61,14 @@
      *  no timing of their own. */
     const ON_ARRIVAL = new Set(['inflow', 'proceeds']);
 
+    /** What an account keeps out of the reach of its shares and its rest
+     *  (its Keep at least), or 0. Only a balance link is held back by it. */
+    function kept(link, from) {
+        return link.basis === 'balance' ? from.params.minBalance || 0 : 0;
+    }
+
     /** The label on a link's pill: '20%', '$1,800/mo', 'Rest', 'Above $20K'. */
     function linkShort(link, from) {
-        if (link.basis === 'person') return 'Theirs';
         const onArrival = ON_ARRIVAL.has(link.basis);
         const tag = onArrival ? '' : link.basis === 'charges' ? ' of limit' : ' of balance';
         switch (link.mode) {
@@ -71,10 +76,13 @@
                 return `${Fmt.number(link.value, 2)}%${tag}${onArrival ? '' : timingShort(link).replace('/mo', '')}`.trim();
             case 'fixed':
                 return `${compact(link.value)}${timingShort(link)}`;
-            case 'above':
-                return `Above ${compact(link.value)}`;
+            case 'cost':
+                return 'Cost';
             default:
-                if (link.basis === 'balance') return `Everything${timingShort(link).replace('/mo', ' monthly')}`;
+                if (link.basis === 'balance') {
+                    const floor = kept(link, from);
+                    return `${floor ? `Above ${compact(floor)}` : 'Everything'}${timingShort(link).replace('/mo', ' monthly')}`;
+                }
                 if (link.basis === 'charges') return 'Credit left';
                 if (link.basis === 'proceeds') return 'Proceeds';
                 return roleOf(from) === 'debt' ? 'Overpayment' : 'Rest';
@@ -84,11 +92,14 @@
     /** A link's rule in a word or two, shown beside its dollars on the
      *  canvas: '20%', 'Rest', 'Above $20K'. A fixed link's rule is its
      *  amount, so it has none. */
-    function linkRule(link) {
+    function linkRule(link, from) {
         switch (link.mode) {
             case 'percent': return `${Fmt.number(link.value, 2)}%`;
-            case 'rest':    return 'Rest';
-            case 'above':   return `Above ${compact(link.value)}`;
+            case 'rest': {
+                const floor = kept(link, from);
+                return floor ? `Above ${compact(floor)}` : 'Rest';
+            }
+            case 'cost':    return 'Cost';
             default:        return null;
         }
     }
@@ -100,33 +111,30 @@
      *  and timing instead ('$1,800/mo', '$5K/yr'). */
     function linkFigure(link, from, amount, perMonth) {
         if (link.mode === 'fixed' && perMonth) return { amount: linkShort(link, from), rule: null };
-        return { amount: `${compact(amount)}${perMonth ? '/mo' : ''}`, rule: linkRule(link) };
+        return { amount: `${compact(amount)}${perMonth ? '/mo' : ''}`, rule: linkRule(link, from) };
     }
 
     /** The full rule as HTML, numbers and names in <b>. Names are escaped. */
     function linkSentence(link, from, to) {
         const b = (s) => `<b>${escapeHtml(s)}</b>`;
-        if (link.basis === 'person') {
-            return `${b(to.name)} is ${b(from.name)}'s: it counts toward their net worth, with every account and debt its money reaches. No money moves along this link.`;
-        }
         const pretax = Store.state.plan && P.isPretax(Store.state.plan, link);
         const noun = pretax ? 'pay before tax' : basisNoun(from, link.basis);
         const target = b(to.name);
+        const floor = kept(link, from);
+        const over = floor ? ` over ${b(Fmt.money(floor))}` : '';
         let what;
         switch (link.mode) {
             case 'percent':
-                what = `${b(`${Fmt.number(link.value, 2)}%`)} of the ${noun}`;
+                what = `${b(`${Fmt.number(link.value, 2)}%`)} of the ${noun}${over}`;
                 break;
             case 'fixed':
                 what = b(Fmt.money(link.value, { decimals: link.value % 1 ? 2 : 0 }));
                 break;
-            case 'above':
-                what = `everything above ${b(Fmt.money(link.value))}`;
-                break;
             default:
-                what = link.basis === 'balance' ? 'the whole balance'
+                what = link.basis === 'balance' ? (floor ? `everything${over}` : 'the whole balance')
                     : link.basis === 'charges' ? 'the credit left' : `the rest of the ${noun}`;
         }
+        if (link.mode === 'cost') return costSentence(link, from, to);
         // A card's fixed purchase names what it buys; a share of its limit or
         // the credit left is charged to the card for that spending.
         const parts = [link.basis !== 'charges' ? `Send ${what} to ${target}`
@@ -146,7 +154,41 @@
         return `${parts.join(', ')}.`;
     }
 
+    /** A link paying an expense's own cost, as a sentence: the cost and its
+     *  schedule are the expense's. */
+    function costSentence(link, from, to) {
+        const b = (s) => `<b>${escapeHtml(s)}</b>`;
+        const v = to.params;
+        const pay = link.basis === 'charges'
+            ? `Charge the cost of ${b(to.name)} to ${b(from.name)}` : `Pay the cost of ${b(to.name)}`;
+        if (v.cost == null) return `${pay}. ${escapeHtml(to.name)} has no cost set yet.`;
+        const parts = [`${pay}: ${b(Fmt.money(v.cost, { decimals: v.cost % 1 ? 2 : 0 }))} ${scheduleWords(v)}`];
+        if (v.growth && v.per !== 'once') parts.push(`rising ${b(`${Fmt.number(v.growth, 2)}%`)} a year`);
+        if (link.start && link.end) parts.push(`from ${P.ymLabel(link.start)} to ${P.ymLabel(link.end)}`);
+        else if (link.start) parts.push(`starting ${P.ymLabel(link.start)}`);
+        else if (link.end) parts.push(`until ${P.ymLabel(link.end)}`);
+        return `${parts.join(', ')}.`;
+    }
+
+    /** How often a module's amount falls due, as words: 'a month', 'every March'. */
+    function scheduleWords(v) {
+        switch (v.per) {
+            case 'week':   return 'a week';
+            case 'biweek': return 'every 2 weeks';
+            case 'year':   return v.payMonth ? `every ${MONTH_NAMES[v.payMonth - 1]}` : 'a year';
+            case 'once':   return v.start ? `once, in ${P.ymLabel(v.start)}` : 'once';
+            default:       return 'a month';
+        }
+    }
+
     const PER_WORD = { week: '/wk', biweek: ' every 2 weeks', month: '/mo', year: '/yr' };
+
+    /** A scheduled amount in short: '$65K/yr', '$1,800/mo in March', 'Jun 2028'. */
+    function scheduleShort(v, amount) {
+        if (v.per === 'once') return `${compact(amount)} · ${v.start ? P.ymLabel(v.start) : 'once'}`;
+        const lump = v.per === 'year' && v.payMonth ? ` in ${P.MONTHS[v.payMonth - 1]}` : '';
+        return `${compact(amount)}${PER_WORD[v.per]}${lump}`;
+    }
 
     /** A module's defining figure as a badge: '4% APY', '24% APR', '2% back'. */
     function nodeBadge(node) {
@@ -158,7 +200,10 @@
                 const word = label === 'APY' ? 'APY' : label === 'Interest' ? 'interest' : 'return';
                 const growth = r ? `${Fmt.pct(r)} ${word}` : '';
                 const match = p.employerMatch && node.params.match ? `${Fmt.pct(node.params.match)} match` : '';
-                return [growth, match].filter(Boolean).join(' · ');
+                const keeps = node.params.minBalance ? `keeps ${compact(node.params.minBalance)}` : '';
+                const taxed = p.taxChoice ? (node.params.contributions === 'pre' ? 'pre-tax' : 'after-tax') : '';
+                const badge = [growth, match, taxed, keeps].filter(Boolean).join(' · ');
+                return badge.charAt(0).toUpperCase() + badge.slice(1);
             }
             case 'debt': {
                 const apr = r ? `${Fmt.pct(r)} APR` : '';
@@ -180,16 +225,16 @@
     /** One line under a module's name: its key setting. */
     function nodeMeta(node) {
         const p = presetOf(node);
-        if (p.role === 'person') {
-            const v = node.params;
-            const from = v.planStart ? `from ${P.ymLabel(v.planStart)}` : '';
-            return [v.age != null ? `Age ${Fmt.number(v.age, 1)}` : '', from].filter(Boolean).join(' · ');
-        }
         if (p.role === 'source') {
             const v = node.params;
             if (v.per === 'once') return v.start ? P.ymLabel(v.start) : 'once';
-            const lump = v.per === 'year' && v.payMonth ? ` in ${P.MONTHS[v.payMonth - 1]}` : '';
-            return `${compact(v.amount)}${PER_WORD[v.per]}${lump}`;
+            return scheduleShort(v, v.amount);
+        }
+        if (p.role === 'expense') {
+            const v = node.params;
+            if (v.cost == null) return '';
+            const inflation = v.growth && v.per !== 'once' ? ` · ${Fmt.pct(v.growth)} inflation` : '';
+            return `${scheduleShort(v, v.cost)}${inflation}`;
         }
         return nodeBadge(node);
     }
@@ -203,10 +248,10 @@
         return n ? n.name : 'A module';
     };
 
-    // How loud a warning is. A card's high utilization is a notice (not a
-    // problem yet) and money parked in Unassigned is information; every other
-    // warning is a warning.
-    const WARNING_LEVEL = { unassigned: 'info', utilization: 'notice' };
+    // How loud a warning is. A card's high utilization and an expense's cost
+    // that no link pays are notices (not a problem yet) and money parked in
+    // Unassigned is information; every other warning is a warning.
+    const WARNING_LEVEL = { unassigned: 'info', utilization: 'notice', 'cost-unpaid': 'notice' };
 
     /** 'warn', 'notice' or 'info', without writing the warning's sentence. */
     function warningLevel(w) {
@@ -240,6 +285,10 @@
                 return { select: node, text: `${Fmt.money(w.amount, { compact: true })} from ${name} has no link and lands in Unassigned.` };
             case 'overdrawn':
                 return { select: node, text: `${name} goes below zero in ${m(w.month)}.` };
+            case 'cost-unpaid':
+                return { select: node, text: `${name} has a cost, but no link pays it. Set a link into it to Cost.` };
+            case 'below-minimum':
+                return { select: node, text: `${name} goes below the ${Fmt.money(w.amount, { compact: true })} it keeps in ${m(w.month)}.` };
             case 'cap':
                 return { select: node, text: `${name} reaches its yearly limit in ${m(w.month)}; ${Fmt.money(w.amount, { compact: true })} lands in Unassigned.` };
             case 'no-limit':
@@ -325,16 +374,16 @@
 
     // Why a goal cannot be measured in a plan, as what to do about it.
     const BLOCKED = {
-        'no-person': 'Add a person to date it',
-        'no-age': 'Set their age to date it',
+        'no-age': 'Set your age in the plan details to date it',
         'no-income': 'Add income to measure',
         'no-expenses': 'Add spending to measure',
     };
 
     /** A goal's status: `text` in a few words, an optional `detail` beside its
-     *  date, and its tone: 'positive' (met on time), 'warning' (late, or
-     *  behind its deadline) or 'muted'. `ev` is one of CitrineGoals.evaluate's
-     *  results; `months` is the plan's length. */
+     *  date, and its tone: 'positive' (met on time), 'warning' (met late),
+     *  'negative' (not met by its deadline) or 'muted' (cannot tell yet).
+     *  `ev` is one of CitrineGoals.evaluate's results; `months` is the plan's
+     *  length. */
     function goalStatus(ev, plan, months) {
         if (ev.blocked) return { tone: 'muted', text: BLOCKED[ev.blocked] || 'Cannot measure yet', detail: null };
         if (ev.status === 'reached') {
@@ -353,7 +402,8 @@
         if (ev.status === 'open' && ev.byIdx != null && ev.byIdx > months) {
             return { tone: 'muted', text: 'Due after the plan ends', detail: monthLabel(plan, ev.byIdx) };
         }
-        return { tone: ev.status === 'behind' ? 'warning' : 'muted', text: 'Not met', detail: `by ${monthLabel(plan, months)}` };
+        if (ev.status === 'behind') return { tone: 'negative', text: 'Not met', detail: `due ${monthLabel(plan, ev.byIdx)}` };
+        return { tone: 'muted', text: 'Not met', detail: `by ${monthLabel(plan, months)}` };
     }
 
     window.Describe = {

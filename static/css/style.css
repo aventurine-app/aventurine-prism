@@ -1,281 +1,271 @@
 /* ============================================================================
-   style.css — Aventurine Prism's design language.
+   style.css — Aventurine Prism's design language: Ant Design (v5).
    ============================================================================
-   Tokens (colour, type, spacing, elevation) and the base layout. Every other
-   stylesheet consumes these and declares none of its own.
+   Tokens and the base layout. Every other stylesheet consumes these and
+   declares none of its own. The names and values follow Ant Design's tokens
+   (colorText, colorBgContainer, borderRadius, controlHeight, boxShadow…), in
+   kebab-case: --color-text, --color-bg-container, --border-radius…
 
-   Aventurine Prism shares Aventurine's design system: the same neutral ramp, type,
-   spacing, radii, controls and themes, including the teal accent.
+   The app has no framework, so Ant Design's components are rebuilt here and in
+   the other stylesheets from its specs (sizes, states, motion), not imported.
 
-     1. Colour ramps
+   Departures from Ant's defaults, for legibility (WCAG AA): tertiary
+   text is 0.55 alpha (Ant: 0.45, 3.4:1) and text in the status colours (tags,
+   alerts, figures) takes a darker step of each palette than Ant's (green-8,
+   orange-8, red-7, blue-7 on light).
+
+     1. Palettes (light; the dark theme's are in themes.css)
      2. Semantic tokens (light baseline; dark lives in themes.css)
      3. Module roles and chart colours
      4. Typography
-     5. Component tokens
+     5. Size, radius, elevation and motion
      6. Base layout
-     7. Modal primitives
-     8. Form controls
+     7. Modal (Ant's Modal)
+     8. Form controls (Ant's Input, Select, InputNumber addons)
    ============================================================================ */
 
-@font-face {
-    font-family: 'Manrope';
-    src: url('/static/fonts/Manrope/Manrope-VariableFont_wght.ttf') format('truetype');
-    font-weight: 100 900;
-    font-style: normal;
-    font-display: swap;
-}
 
-@font-face {
-    font-family: 'IBM Plex Mono';
-    src: url('/static/fonts/IBM_Plex_Mono/IBMPlexMono-Regular.ttf') format('truetype');
-    font-weight: 400;
-    font-style: normal;
-    font-display: swap;
-}
+/* ─── 1. Palettes ───────────────────────────────────────────────────────────
+ * Ant Design's preset palettes (@ant-design/colors), the steps the app uses.
+ * themes.css swaps in Ant's dark palettes, so a component that reads --blue-1
+ * gets the right tint in either theme. */
+:root,
+.settings-theme-swatch[data-theme="light"] {
+    --blue-1: #e6f4ff;   --blue-2: #bae0ff;   --blue-3: #91caff;   --blue-4: #69b1ff;   --blue-5: #4096ff;
+    --blue-6: #1677ff;   --blue-7: #0958d9;   --blue-8: #003eb3;   --blue-9: #002c8c;   --blue-10: #001d66;
 
-@font-face {
-    font-family: 'IBM Plex Mono';
-    src: url('/static/fonts/IBM_Plex_Mono/IBMPlexMono-Bold.ttf') format('truetype');
-    font-weight: 700;
-    font-style: normal;
-    font-display: swap;
-}
+    --cyan-1: #e6fffb;   --cyan-2: #b5f5ec;   --cyan-3: #87e8de;   --cyan-4: #5cdbd3;   --cyan-5: #36cfc9;
+    --cyan-6: #13c2c2;   --cyan-7: #08979c;   --cyan-8: #006d75;   --cyan-9: #00474f;   --cyan-10: #002329;
 
+    --green-1: #f6ffed;  --green-2: #d9f7be;  --green-3: #b7eb8f;  --green-4: #95de64;  --green-5: #73d13d;
+    --green-6: #52c41a;  --green-7: #389e0d;  --green-8: #237804;  --green-9: #135200;  --green-10: #092b00;
 
-/* ─── 1. Colour ramps ───────────────────────────────────────────────────────
- * Both ramps are Aventurine's, unchanged. */
-:root {
-    --color-base-050: #f2f3f2;
-    --color-base-100: #e5e6e5;
-    --color-base-200: #cdd0ce;
-    --color-base-300: #b3b7b5;
-    --color-base-400: #9ba09d;
-    --color-base-500: #7f8581;
-    --color-base-600: #666b68;
-    --color-base-700: #4d514f;
-    --color-base-800: #343735;
-    --color-base-900: #191a19;
-    --color-base-950: #0c0d0d;
+    --gold-1: #fffbe6;   --gold-2: #fff1b8;   --gold-3: #ffe58f;   --gold-4: #ffd666;   --gold-5: #ffc53d;
+    --gold-6: #faad14;   --gold-7: #d48806;   --gold-8: #ad6800;   --gold-9: #874d00;   --gold-10: #613400;
 
-    --color-accent-050: #eff6f4;
-    --color-accent-100: #dfecea;
-    --color-accent-200: #bbd8d2;
-    --color-accent-300: #9bc5bd;
-    --color-accent-400: #79b2a7;
-    --color-accent-500: #5b9f92;   /* primary accent (light theme) */
-    --color-accent-600: #497e74;
-    --color-accent-700: #365e56;
-    --color-accent-800: #25413b;
-    --color-accent-900: #13201e;
-    --color-accent-950: #09100f;
+    --orange-1: #fff7e6; --orange-2: #ffe7ba; --orange-3: #ffd591; --orange-4: #ffc069; --orange-5: #ffa940;
+    --orange-6: #fa8c16; --orange-7: #d46b08; --orange-8: #ad4e00; --orange-9: #873800; --orange-10: #612500;
+
+    --red-1: #fff1f0;    --red-2: #ffccc7;    --red-3: #ffa39e;    --red-4: #ff7875;    --red-5: #ff4d4f;
+    --red-6: #f5222d;    --red-7: #cf1322;    --red-8: #a8071a;    --red-9: #820014;    --red-10: #5c0011;
+
+    --purple-1: #f9f0ff; --purple-2: #efdbff; --purple-3: #d3adf7; --purple-4: #b37feb; --purple-5: #9254de;
+    --purple-6: #722ed1; --purple-7: #531dab; --purple-8: #391085; --purple-9: #22075e; --purple-10: #120338;
+
+    --magenta-1: #fff0f6; --magenta-2: #ffd6e7; --magenta-3: #ffadd2; --magenta-4: #ff85c0; --magenta-5: #f759ab;
+    --magenta-6: #eb2f96; --magenta-7: #c41d7f; --magenta-8: #9e1068; --magenta-9: #780650; --magenta-10: #520339;
 }
 
 
 /* ─── 2. Semantic tokens ────────────────────────────────────────────────────
- * Light is the baseline; themes.css overrides for dark. The swatch selectors
- * put the theme picker's previews in each theme's own context. */
+ * Ant Design's map tokens, light algorithm. themes.css overrides them for dark.
+ * The swatch selectors put the theme picker's previews in each theme's own
+ * context. */
 :root,
 .settings-theme-swatch[data-theme="light"] {
     color-scheme: light;
 
-    --text-primary:   var(--color-base-900);
-    --text-secondary: var(--color-base-700);
-    --text-tertiary:  var(--color-base-600);
+    /* Text and icons. */
+    --color-text:            rgba(0, 0, 0, 0.88);
+    --color-text-secondary:  rgba(0, 0, 0, 0.65);
+    --color-text-tertiary:   rgba(0, 0, 0, 0.55);
+    --color-text-quaternary: rgba(0, 0, 0, 0.25);
+    --color-text-disabled:   rgba(0, 0, 0, 0.25);
+    --color-text-light-solid: #fff;
+    --color-icon:            rgba(0, 0, 0, 0.45);
+    --color-icon-hover:      rgba(0, 0, 0, 0.88);
 
-    /* 1 = card, 2 = control fill, 3 = hover/prominent, 4 = top elevation. */
-    --background: var(--color-base-100);
-    --surface1:   var(--color-base-050);
-    --surface2:   var(--color-base-100);
-    --surface3:   var(--color-base-200);
-    --surface4:   var(--color-base-300);
-    --border:     var(--color-base-300);
+    /* Surfaces: the page (layout), cards (container), pop-ups (elevated). */
+    --color-bg-layout:             #f5f5f5;
+    --color-bg-container:          #ffffff;
+    --color-bg-elevated:           #ffffff;
+    --color-bg-spotlight:          rgba(0, 0, 0, 0.85);
+    --color-bg-mask:               rgba(0, 0, 0, 0.45);
+    --color-bg-container-disabled: rgba(0, 0, 0, 0.04);
+    --color-bg-text-hover:         rgba(0, 0, 0, 0.06);
+    --color-bg-text-active:        rgba(0, 0, 0, 0.15);
 
-    /* The accent. Accent used AS text or a focus ring on a light surface takes
-       the darker --accent-ink, since the fill step itself is too light against
-       the page. The primary button is charcoal (the neutral fill) with white
-       text, not accent-filled. */
-    --accent-primary:       var(--color-accent-500);
-    --accent-primary-hover: var(--color-accent-400);
-    --accent-ink:           var(--color-accent-700);
-    --accent-ring:          var(--color-accent-600);
-    --accent-wash:          color-mix(in srgb, var(--accent-primary) 14%, var(--surface1));
-    --button-text:          #fff;
+    /* Lines and fills. */
+    --color-border:           #d9d9d9;
+    --color-border-secondary: #f0f0f0;
+    --color-split:            rgba(5, 5, 5, 0.06);
+    --color-fill:             rgba(0, 0, 0, 0.15);
+    --color-fill-secondary:   rgba(0, 0, 0, 0.06);
+    --color-fill-tertiary:    rgba(0, 0, 0, 0.04);
+    --color-fill-quaternary:  rgba(0, 0, 0, 0.02);
+    --color-fill-alter:       rgba(0, 0, 0, 0.02);
 
-    --accent-neutral:        var(--color-base-800);
-    --accent-neutral-fill:   var(--color-base-800);
-    --accent-neutral-border: var(--accent-neutral-fill);
-    --accent-neutral-text:   var(--color-base-050);
+    /* The accent: Ant's blue, and its states. Text in it takes a step darker
+       (blue-7), which clears 4.5:1 on white and on its own tint. */
+    --color-primary:              var(--blue-6);
+    --color-primary-hover:        var(--blue-5);
+    --color-primary-active:       var(--blue-7);
+    --color-primary-bg:           var(--blue-1);
+    --color-primary-bg-hover:     var(--blue-2);
+    --color-primary-border:       var(--blue-3);
+    --color-primary-border-hover: var(--blue-4);
+    --color-primary-text:         var(--blue-7);
+    --color-link:                 var(--blue-6);
+    --color-link-hover:           var(--blue-4);
+    --color-link-active:          var(--blue-7);
 
-    /* The dark gray that stands in for the accent in the chart tabs and the
-       Preferences modal. */
-    --accent-gray:       var(--color-base-800);
-    --accent-gray-hover: var(--color-base-700);
-    --icon-button-fill:      var(--surface1);
-    --icon-button-ink:       var(--text-primary);
-    --danger-text:           #fff;
+    /* Status colours: the fill (icons, bars, dots), its tint, its border, and
+       the darker step for text. */
+    --color-success:        var(--green-6);
+    --color-success-bg:     var(--green-1);
+    --color-success-border: var(--green-3);
+    --color-success-text:   var(--green-8);
+    --color-warning:        var(--gold-6);
+    --color-warning-bg:     var(--gold-1);
+    --color-warning-border: var(--gold-3);
+    --color-warning-text:   var(--orange-8);
+    --color-error:          var(--red-5);
+    --color-error-hover:    var(--red-4);
+    --color-error-active:   var(--red-7);
+    --color-error-bg:       var(--red-1);
+    --color-error-border:   var(--red-2);
+    --color-error-text:     var(--red-7);
+    /* Information wears the accent, as Ant's does. */
+    --color-info:           var(--blue-6);
+    --color-info-bg:        var(--blue-1);
+    --color-info-border:    var(--blue-3);
+    --color-info-text:      var(--blue-7);
 
-    /* The ring around the active (selected or focused) module: black on light. */
-    --node-active-ring: #000;
+    /* Controls: list rows under the pointer and chosen, and the soft ring a
+       focused field wears. */
+    --control-item-bg-hover:        rgba(0, 0, 0, 0.04);
+    --control-item-bg-active:       var(--blue-1);
+    --control-item-bg-active-hover: var(--blue-2);
+    --control-outline:              rgba(5, 145, 255, 0.1);
+    --color-error-outline:          rgba(255, 38, 5, 0.06);
+    --color-warning-outline:        rgba(255, 215, 5, 0.1);
 
-    --accent-positive: #22a64a;
-    --accent-negative: #c44448;
-    --warning:         #b97a00;
-    --warning-fill:    color-mix(in srgb, var(--warning) 15%, transparent);
-    --info:            #1d4ed8;
-    /* The bright orange of a module's warning flag, and the issue callouts that match it. */
-    --flag:            #ff7e4d;
-    --flag-ink:        #1c0a00;
-    /* A notice (not yet a warning) is the same flag in yellow, with an info icon. */
-    --notice:          #ffd23f;
-    --notice-ink:      #1f1700;
+    /* Buttons' own drop shadows. */
+    --button-shadow:         0 2px 0 rgba(0, 0, 0, 0.02);
+    --button-primary-shadow: 0 2px 0 rgba(5, 145, 255, 0.1);
+    --button-danger-shadow:  0 2px 0 rgba(255, 38, 5, 0.06);
 
-    --frost-2:     rgba(0, 0, 0, 0.05);
-    --frost-3:     rgba(0, 0, 0, 0.10);
-    --frost-caret: rgba(0, 0, 0, 0.50);
-
-    --stroke-divider: rgba(0, 0, 0, 0.08);
-    --stroke-soft:    rgba(0, 0, 0, 0.12);
-    --stroke-medium:  rgba(0, 0, 0, 0.16);
-    --stroke-strong:  rgba(0, 0, 0, 0.22);
-
-    /* Segmented control: a grey track, the active option filled with
-       dark gray. */
-    --segctl-track:       var(--surface1);
-    --segctl-hover:       var(--color-base-200);
-    --segctl-stroke:      var(--border);
-    --segctl-active:      var(--accent-gray);
-    --segctl-active-text: #fff;
-
-    /* The canvas: a page-coloured plane with a dot grid. */
-    --canvas-bg:  var(--color-base-100);
-    --canvas-dot: rgba(0, 0, 0, 0.13);
+    /* The canvas: the page grey with a dot grid. */
+    --canvas-bg:  var(--color-bg-layout);
+    --canvas-dot: rgba(0, 0, 0, 0.14);
 }
 
 
 /* ─── 3. Module roles and chart colours ─────────────────────────────────────
- * Every module wears its ROLE's colour (catalog.js): its icon tile and its ports.
- * Links are all one light blue. Five roles, five hues, following Aventurine's
- * meaning of colour: green is money arriving, gold money leaving, blue money
- * held, red money owed, violet money changing on the way through.
+ * Every module wears its ROLE's colour (catalog.js): its avatar, its ports and
+ * its bar. Five roles, five Ant hues: cyan is money arriving, blue money held,
+ * gold money leaving, red money owed, purple money changing on the way through.
  *
- * Picked with the dataviz validator against both surfaces, all pairs, since any
- * two roles can sit side by side on the canvas. Light lands in the 6-8 CVD floor
- * band, which is allowed because no module is ever colour-only: each carries
- * its own icon, name and port layout. Dark clears the 8 target. */
+ * Picked from Ant's palettes with the dataviz validator against the card
+ * surface, all pairs, since any two roles can sit side by side on the canvas
+ * (.scratch/rainbow/roles-antd.mjs). Light: cyan-7, blue-6, gold-8, red-8,
+ * purple-6 pass every check (CVD 9.9, normal 16.8, contrast 3.5:1 or more).
+ * Green would read as gold to protan eyes (ΔE 0.4), so income is Ant's cyan.
+ * Dark (themes.css) passes all but the lightness band, as the earlier roles did. */
 :root,
 .settings-theme-swatch[data-theme="light"] {
-    --role-source:   #3a9163;
-    --role-account:  #154eb2;
-    --role-expense:  #b27d23;
-    --role-debt:     #b43933;
-    --role-modifier: #8c5cb4;
+    --role-source:   var(--cyan-7);
+    --role-account:  var(--blue-6);
+    --role-expense:  var(--gold-8);
+    --role-debt:     var(--red-8);
+    --role-modifier: var(--purple-6);
 
     /* Unassigned money: no role, so it takes the neutral that recedes. */
-    --role-none: var(--color-base-500);
-    /* A person is not a role colour: their card is white in both themes, with
-       neutral ink (--role-person-ink) for the icon, edge and ports on it. */
-    --role-person:      var(--color-base-600);
-    --role-person-card: #ffffff;
-    --role-person-ink:  var(--color-base-600);
+    --role-none: #8c8c8c;
+
+    /* Runner-up medals (Compare's All plans): silver, bronze. */
+    --medal-silver: #8c8c8c;
+    --medal-bronze: var(--orange-7);
 
     /* Every link on the canvas, whatever it carries. */
-    --link-line:      #7bbcf2;
+    --link-line: var(--blue-4);
 
     /* Net worth bands wear the colour of the module they stand for: accounts
-       blue, debts red, as on the canvas. Several of one role are
-       told apart by alternating lighter and darker shades of it, in module
-       order (outlook.js, worthBands). Mixed from the role colours, so a theme
-       switch carries them along. Unassigned and folded "Other" bands are the
-       neutral. */
+       blue, debts red, as on the canvas. Several of one role are told apart by
+       alternating lighter and darker shades of it, in module order (outlook.js,
+       worthBands). Mixed from the role colours, so a theme switch carries them
+       along. Unassigned and folded "Other" bands are the neutral. */
     --chart-account-1: var(--role-account);
     --chart-account-2: color-mix(in srgb, var(--role-account) 70%, white);
-    --chart-account-3: color-mix(in srgb, var(--role-account) 85%, black);
+    --chart-account-3: color-mix(in srgb, var(--role-account) 80%, black);
     --chart-account-4: color-mix(in srgb, var(--role-account) 45%, white);
-    --chart-account-5: color-mix(in srgb, var(--role-account) 70%, black);
+    --chart-account-5: color-mix(in srgb, var(--role-account) 62%, black);
     --chart-account-6: color-mix(in srgb, var(--role-account) 28%, white);
 
-    --chart-debt-1: var(--role-debt);
-    --chart-debt-2: color-mix(in srgb, var(--role-debt) 70%, white);
-    --chart-debt-3: color-mix(in srgb, var(--role-debt) 85%, black);
-    --chart-debt-4: color-mix(in srgb, var(--role-debt) 45%, white);
-    --chart-debt-5: color-mix(in srgb, var(--role-debt) 70%, black);
-    --chart-debt-6: color-mix(in srgb, var(--role-debt) 28%, white);
+    --chart-debt-1: var(--red-6);
+    --chart-debt-2: color-mix(in srgb, var(--red-6) 70%, white);
+    --chart-debt-3: color-mix(in srgb, var(--red-6) 80%, black);
+    --chart-debt-4: color-mix(in srgb, var(--red-6) 45%, white);
+    --chart-debt-5: color-mix(in srgb, var(--red-6) 62%, black);
+    --chart-debt-6: color-mix(in srgb, var(--red-6) 28%, white);
     --chart-unassigned: var(--role-none);
 
-    /* The headline line (net worth) is the accent, as Aventurine's charts are;
-       the cash-flow pair is the arriving green against the leaving gold. */
-    --chart-networth: var(--color-accent-600);
-    --chart-worth-line: #000;   /* the Net worth chart's line */
-    --chart-in:       var(--role-source);
-    --chart-out:      var(--role-expense);
-    --chart-growth:   #3e6dc8;
-    --chart-interest: #a83630;
-    --chart-grid:     var(--stroke-medium);
+    /* Headline lines are the text colour, as in Ant's charts; the cash-flow
+       pair is the arriving cyan against the leaving gold. */
+    --chart-networth:   var(--color-text);
+    --chart-worth-line: var(--color-text);
+    --chart-in:         var(--cyan-6);
+    --chart-out:        var(--gold-6);
+    --chart-growth:     var(--blue-6);
+    --chart-interest:   var(--red-5);
+    --chart-grid:       var(--color-split);
+    /* Compare's two plans: Ant's blue against its orange. */
+    --chart-plan-a: var(--blue-6);
+    --chart-plan-b: var(--orange-6);
 
-    /* The Sankey wears Aventurine Manage's cash-flow ramps (its style.css and
-       core/chartramp.js, validated there), so the two apps' diagrams read
-       alike: money arriving on the green ramp, money leaving on the gold one
-       from Manage's expense step down, both deepest first (they grade size;
-       every band prints its own name), and a grey hub that is neither. Past
-       the hub, money splits into groups that wear their modules' role colours
-       (accounts blue, debts red, taxes and fees the modifier violet), so the
-       pipes read like the canvas. */
-    --chart-inflow-1: #0a5b47;
-    --chart-inflow-2: #10744c;
-    --chart-inflow-3: #1a8b52;
-    --chart-inflow-4: #2ba25b;
-    --chart-inflow-5: #48b76b;
-    --chart-inflow-6: #72c983;
-    --chart-outflow-1: #b28a06;
-    --chart-outflow-2: #c39a0e;
-    --chart-outflow-3: #d3ab1e;
-    --chart-outflow-4: #e2bd3c;
-    --chart-outflow-5: #eed168;
-    --chart-net:       #4e5153;
+    /* The Sankey: money arriving on the cyan ramp, money leaving on the gold
+       one, both deepest first (they grade size; every band prints its own
+       name), and a green hub, Money in, that is neither. Past the hub, money splits into
+       groups that wear their modules' role colours (accounts blue, debts red,
+       taxes and fees purple), so the pipes read like the canvas. */
+    --chart-inflow-1: var(--cyan-8);
+    --chart-inflow-2: var(--cyan-7);
+    --chart-inflow-3: var(--cyan-6);
+    --chart-inflow-4: var(--cyan-5);
+    --chart-inflow-5: var(--cyan-4);
+    --chart-inflow-6: var(--cyan-3);
+    --chart-outflow-1: var(--gold-8);
+    --chart-outflow-2: var(--gold-7);
+    --chart-outflow-3: var(--gold-6);
+    --chart-outflow-4: var(--gold-5);
+    --chart-outflow-5: var(--gold-4);
+    --chart-hub:       var(--green-6);
     --chart-fee-1: var(--role-modifier);
     --chart-fee-2: color-mix(in srgb, var(--role-modifier) 70%, white);
-    --chart-fee-3: color-mix(in srgb, var(--role-modifier) 85%, black);
+    --chart-fee-3: color-mix(in srgb, var(--role-modifier) 80%, black);
     --chart-fee-4: color-mix(in srgb, var(--role-modifier) 45%, white);
 }
 
 
 /* ─── 4. Typography ─────────────────────────────────────────────────────────
- * Aventurine's scale: 1.25 modular, anchored at 15px body, Manrope throughout,
- * IBM Plex Mono for strings read character by character (a file path). */
+ * Ant's: the system font stack at 14px, and its heading scale. */
 :root {
-    --font-ui:      'Manrope', system-ui, sans-serif;
-    --font-numeric: 'Manrope', system-ui, sans-serif;
-    --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
+    --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+        'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-family-code: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
 
-    --size-display: 2.5rem;
-    --size-h1:      1.5rem;
-    --size-h2:      1.125rem;
-    --size-h3:      1rem;
-    --size-body:    0.9375rem;
-    --size-small:   0.8125rem;
-    --size-micro:   0.6875rem;
+    --font-size:           14px;
+    --font-size-sm:        12px;
+    --font-size-lg:        16px;
+    --font-size-xl:        20px;
+    --font-size-heading-1: 38px;
+    --font-size-heading-2: 30px;
+    --font-size-heading-3: 24px;
+    --font-size-heading-4: 20px;
+    --font-size-heading-5: 16px;
 
-    --weight-light:     300;
-    --weight-regular:   400;
-    --weight-medium:    500;
-    --weight-semibold:  600;
-    --weight-bold:      700;
-    --weight-superbold: 900;
+    --line-height:    1.5714285714;
+    --line-height-sm: 1.6666666667;
+    --line-height-lg: 1.5;
+    --line-height-heading: 1.4;
 
-    --lh-tight:   1.15;
-    --lh-snug:    1.3;
-    --lh-normal:  1.5;
-    --lh-relaxed: 1.65;
-
-    --track-tighter: -0.02em;
-    --track-tight:   -0.01em;
-    --track-wide:    0.04em;
-    --track-wider:   0.07em;
-    --track-widest:  0.1em;
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-strong: 600;
 }
 
 
-/* ─── 5. Component tokens ─────────────────────────────────────────────────── */
+/* ─── 5. Size, radius, elevation and motion ─────────────────────────────── */
 :root {
     --space-4:   4px;
     --space-8:   8px;
@@ -287,24 +277,31 @@
     --space-48: 48px;
     --space-64: 64px;
 
-    --border-width:   1px;
-    --control-height: 32px;
-    --radius-sm:      6px;     /* fields, menu rows, small inline buttons */
-    --radius-control: 8px;
-    --radius-card:    10px;
-    --radius-panel:   12px;
-    --radius-pill:    999px;
+    --line-width: 1px;
+    --control-height:    32px;
+    --control-height-sm: 24px;
+    --control-height-lg: 40px;
+    --border-radius-xs: 2px;
+    --border-radius-sm: 4px;
+    --border-radius:    6px;
+    --border-radius-lg: 8px;
 
-    /* Elevation ladder: card → popover → menu → modal. */
-    --shadow-card:    0 1px 2px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.06);
-    --shadow-popover: 0 4px 14px rgba(0, 0, 0, 0.22);
-    --shadow-menu:    0 8px 24px rgba(0, 0, 0, 0.28);
-    --shadow-modal:   0 20px 50px rgba(0, 0, 0, 0.5);
-    --scrim:          rgba(0, 0, 0, 0.55);
+    /* Ant's three shadows: pop-ups and modals, then cards and small chrome. */
+    --box-shadow:           0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05);
+    --box-shadow-secondary: 0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05);
+    --box-shadow-tertiary:  0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02);
+    /* A hoverable card lifted under the pointer. */
+    --box-shadow-card-hover: 0 1px 2px -2px rgba(0, 0, 0, 0.16), 0 3px 6px 0 rgba(0, 0, 0, 0.12), 0 5px 12px 4px rgba(0, 0, 0, 0.09);
 
-    --titlebar-height: 40px;
+    --motion-duration-fast: 0.1s;
+    --motion-duration-mid:  0.2s;
+    --motion-duration-slow: 0.3s;
+    --motion-ease-in-out:   cubic-bezier(0.645, 0.045, 0.355, 1);
+    --motion-ease-out:      cubic-bezier(0.215, 0.61, 0.355, 1);
+
+    --titlebar-height: 48px;
     --sidebar-width:   224px;
-    --inspector-width: 300px;
+    --inspector-width: 320px;
 }
 
 
@@ -315,12 +312,12 @@ html, body { height: 100%; }
 
 body {
     margin: 0;
-    background-color: var(--background);
-    color: var(--text-primary);
-    font-family: var(--font-ui);
-    font-size: var(--size-body);
-    font-weight: var(--weight-regular);
-    line-height: var(--lh-normal);
+    background-color: var(--color-bg-layout);
+    color: var(--color-text);
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+    font-weight: var(--font-weight-normal);
+    line-height: var(--line-height);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -355,14 +352,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .scroll-y {
     overflow-y: auto;
     scrollbar-width: thin;
-    scrollbar-color: var(--surface4) transparent;
+    scrollbar-color: var(--color-fill) transparent;
 }
 
 .icon { width: 1em; height: 1em; flex-shrink: 0; display: block; }
 
 
-/* ─── 7. Modal primitives ───────────────────────────────────────────────────
- * Every dialog: the same scrim, frame, header and close button. */
+/* ─── 7. Modal ──────────────────────────────────────────────────────────────
+ * Every dialog: Ant's Modal. A mask, a white panel with an 8px radius and the
+ * pop-up shadow, a 16px semibold title, the close cross in its corner. */
 .modal-overlay {
     position: fixed;
     inset: 0;
@@ -370,99 +368,131 @@ button, input, select, textarea { font: inherit; color: inherit; }
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: var(--space-32);
-    background: var(--scrim);
+    padding: var(--space-32) var(--space-16);
+    background: var(--color-bg-mask);
 }
 
 .modal {
-    width: 560px;
-    max-width: calc(100vw - 64px);
+    position: relative;
+    width: 520px;
+    max-width: 100%;
     max-height: calc(100vh - 96px);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: var(--surface1);
-    border: var(--border-width) solid var(--border);
-    border-radius: var(--radius-card);
-    box-shadow: var(--shadow-modal);
+    background: var(--color-bg-elevated);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--box-shadow);
 }
 
 .modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--space-16) var(--space-24);
-    border-bottom: var(--border-width) solid var(--border);
+    gap: var(--space-16);
+    padding: var(--space-20) var(--space-24) var(--space-8);
 }
 
 .modal-title {
     margin: 0;
-    color: var(--text-primary);
-    font-size: var(--size-h2);
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--track-tight);
+    color: var(--color-text);
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-strong);
+    line-height: var(--line-height-lg);
+    word-wrap: break-word;
 }
 
 .modal-close {
-    width: 28px;
-    height: 28px;
+    width: 22px;
+    height: 22px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex: none;
     padding: 0;
     border: none;
-    border-radius: var(--radius-sm);
+    border-radius: var(--border-radius-sm);
     background: transparent;
-    color: var(--text-tertiary);
-    font-size: var(--size-h3);
+    color: var(--color-icon);
+    font-size: var(--font-size-lg);
+    line-height: 1;
     cursor: pointer;
-    transition: background-color 120ms ease, color 120ms ease;
+    transition: background-color var(--motion-duration-mid), color var(--motion-duration-mid);
 }
-.modal-close:hover { background: var(--surface3); color: var(--text-primary); }
-.modal-close:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; }
+.modal-close:hover { background: var(--color-bg-text-hover); color: var(--color-icon-hover); }
+.modal-close:active { background: var(--color-bg-text-active); }
+.modal-close:focus-visible { outline: 4px solid var(--color-primary-border); outline-offset: 1px; }
 
 .modal-body {
-    padding: var(--space-20) var(--space-24);
+    padding: var(--space-8) var(--space-24) var(--space-12);
     overflow-y: auto;
     scrollbar-width: thin;
-    scrollbar-color: var(--surface4) var(--surface1);
+    scrollbar-color: var(--color-fill) transparent;
 }
 
 .modal-footer {
     display: flex;
     justify-content: flex-end;
     gap: var(--space-8);
-    padding: var(--space-16) var(--space-24);
-    border-top: var(--border-width) solid var(--border);
+    padding: var(--space-12) var(--space-24) var(--space-20);
 }
 
 
 /* ─── 8. Form controls ──────────────────────────────────────────────────────
- * One text-field shape for every input and select in the app. */
+ * Ant's Input and Select: 32px, a 6px radius, a grey border that turns the
+ * primary hover colour under the pointer and the primary colour, with a soft
+ * ring, when focused. */
 .field-input,
 .field-select {
     height: var(--control-height);
     min-width: 0;
-    padding: 0 var(--space-12);
-    background: var(--surface2);
-    border: var(--border-width) solid var(--border);
-    border-radius: var(--radius-sm);
-    color: var(--text-primary);
-    font-size: var(--size-small);
+    padding: 4px 11px;
+    background: var(--color-bg-container);
+    border: var(--line-width) solid var(--color-border);
+    border-radius: var(--border-radius);
+    color: var(--color-text);
+    font-size: var(--font-size);
+    line-height: var(--line-height);
     font-variant-numeric: tabular-nums;
-    caret-color: var(--frost-caret);
     outline: none;
-    transition: border-color 0.15s ease, background-color 0.15s ease;
+    transition: border-color var(--motion-duration-mid), box-shadow var(--motion-duration-mid), background-color var(--motion-duration-mid);
 }
 .field-input:hover,
-.field-select:hover { border-color: var(--text-tertiary); }
+.field-select:hover { border-color: var(--color-primary-hover); }
 .field-input:focus,
-.field-select:focus { border-color: var(--accent-ring); }
-.field-input::placeholder { color: var(--text-tertiary); }
-.field-select { padding-right: var(--space-8); cursor: pointer; }
-.field-input[aria-invalid="true"] { border-color: var(--accent-negative); }
+.field-select:focus,
+.field-input:focus-visible,
+.field-select:focus-visible {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--control-outline);
+}
+.field-input::placeholder { color: var(--color-text-quaternary); }
+.field-input:disabled,
+.field-select:disabled {
+    background: var(--color-bg-container-disabled);
+    border-color: var(--color-border);
+    color: var(--color-text-disabled);
+    box-shadow: none;
+    cursor: not-allowed;
+}
+.field-input[aria-invalid="true"] { border-color: var(--color-error); }
+.field-input[aria-invalid="true"]:focus { box-shadow: 0 0 0 2px var(--color-error-outline); }
 
-/* A field with a unit stuck to it: "$ [ 1,800 ]", "[ 4.5 ] %". */
+/* Ant's Select arrow, drawn with two gradients (the CSP allows no data: images). */
+.field-select {
+    appearance: none;
+    padding-right: 28px;
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--color-text-quaternary) 50%),
+        linear-gradient(135deg, var(--color-text-quaternary) 50%, transparent 50%);
+    background-position: calc(100% - 15px) 52%, calc(100% - 11px) 52%;
+    background-size: 4px 4px, 4px 4px;
+    background-repeat: no-repeat;
+    cursor: pointer;
+}
+.field-select option { background: var(--color-bg-elevated); color: var(--color-text); }
+
+/* A field with a unit stuck to it, as Ant's addons: "$ [ 1,800 ]", "[ 4.5 ] %". */
 .field-affix {
     display: flex;
     align-items: stretch;
@@ -472,24 +502,27 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .field-affix-text {
     display: inline-flex;
     align-items: center;
-    padding: 0 var(--space-8);
-    background: var(--surface3);
-    border: var(--border-width) solid var(--border);
-    color: var(--text-secondary);
-    font-size: var(--size-small);
+    padding: 0 11px;
+    background: var(--color-fill-alter);
+    border: var(--line-width) solid var(--color-border);
+    color: var(--color-text);
+    font-size: var(--font-size);
     white-space: nowrap;
 }
-.field-affix-text:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); border-right: 0; }
-.field-affix-text:last-child  { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; border-left: 0; }
+.field-affix-text:first-child { border-radius: var(--border-radius) 0 0 var(--border-radius); border-right: 0; }
+.field-affix-text:last-child  { border-radius: 0 var(--border-radius) var(--border-radius) 0; border-left: 0; }
 .field-affix > .field-input:not(:first-child) { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .field-affix > .field-input:not(:last-child)  { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+/* The addon keeps the field's ring company: it sits behind the focused field. */
+.field-affix > .field-input:focus { position: relative; z-index: 1; }
 
-/* The eyebrow: a micro all-caps label over a section. */
+/* A section heading inside a panel: a small all-caps label. */
 .eyebrow {
     margin: 0;
-    color: var(--text-tertiary);
-    font-size: var(--size-micro);
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--track-widest);
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-strong);
+    line-height: var(--line-height-sm);
+    letter-spacing: 0.06em;
     text-transform: uppercase;
 }

@@ -1,8 +1,10 @@
 /* ============================================================================
-   themes.css — the surface themes, as in Aventurine.
+   themes.css — the dark theme: Ant Design's dark algorithm.
    ============================================================================
-   Light is the :root baseline in style.css. Dark overrides it here. The theme
-   lands on <html data-theme> before first paint (shell/theme-init.js). */
+   Light is the :root baseline in style.css. Dark overrides it here: Ant's dark
+   palettes (presetDarkPalettes) and the map tokens its dark algorithm derives
+   from the same seed. The theme lands on <html data-theme> before first paint
+   (shell/theme-init.js). */
 
 
 /* ─── Dark ─────────────────────────────────────────────────────────────────── */
@@ -10,93 +12,134 @@ html[data-theme="dark"],
 .settings-theme-swatch[data-theme="dark"] {
     color-scheme: dark;
 
-    --text-primary:   var(--color-base-100);
-    --text-secondary: var(--color-base-300);
-    --text-tertiary:  var(--color-base-400);
+    /* Ant's dark palettes. */
+    --blue-1: #111a2c;   --blue-2: #112545;   --blue-3: #15325b;   --blue-4: #15417e;   --blue-5: #1554ad;
+    --blue-6: #1668dc;   --blue-7: #3c89e8;   --blue-8: #65a9f3;   --blue-9: #8dc5f8;   --blue-10: #b7dcfa;
 
-    --background: var(--color-base-950);
-    --surface1:   var(--color-base-900);
-    --surface2:   var(--color-base-900);
-    --surface3:   var(--color-base-800);
-    --surface4:   var(--color-base-600);
-    --border:     var(--color-base-800);
+    --cyan-1: #112123;   --cyan-2: #113536;   --cyan-3: #144848;   --cyan-4: #146262;   --cyan-5: #138585;
+    --cyan-6: #13a8a8;   --cyan-7: #33bcb7;   --cyan-8: #58d1c9;   --cyan-9: #84e2d8;   --cyan-10: #b2f1e8;
 
-    /* The accent rests a rung lighter on dark, and its hover lifts toward the
-       light end as on light. Ink and ring come from the light end too. */
-    --accent-primary:       var(--color-accent-400);
-    --accent-primary-hover: var(--color-accent-300);
-    --accent-ink:           var(--color-accent-300);
-    --accent-ring:          var(--color-accent-400);
-    --accent-wash:          color-mix(in srgb, var(--accent-primary) 18%, var(--surface1));
+    --green-1: #162312;  --green-2: #1d3712;  --green-3: #274916;  --green-4: #306317;  --green-5: #3c8618;
+    --green-6: #49aa19;  --green-7: #6abe39;  --green-8: #8fd460;  --green-9: #b2e58b;  --green-10: #d5f2bb;
 
-    --accent-neutral:        var(--color-base-300);
-    --accent-neutral-fill:   var(--stroke-medium);
-    --accent-neutral-border: var(--stroke-medium);
-    --accent-gray:           var(--color-base-600);
-    --accent-gray-hover:     var(--color-base-500);
+    --gold-1: #2b2111;   --gold-2: #443111;   --gold-3: #594214;   --gold-4: #7c5914;   --gold-5: #aa7714;
+    --gold-6: #d89614;   --gold-7: #e8b339;   --gold-8: #f3cc62;   --gold-9: #f8df8b;   --gold-10: #faedb5;
 
-    --node-active-ring: #fff;
+    --orange-1: #2b1d11; --orange-2: #442a11; --orange-3: #593815; --orange-4: #7c4a15; --orange-5: #aa6215;
+    --orange-6: #d87a16; --orange-7: #e89a3c; --orange-8: #f3b765; --orange-9: #f8cf8d; --orange-10: #fae4b6;
 
-    --warning: #f5a524;
-    --info:    #4177ff;
+    --red-1: #2a1215;    --red-2: #431418;    --red-3: #58181c;    --red-4: #791a1f;    --red-5: #a61d24;
+    --red-6: #d32029;    --red-7: #e84749;    --red-8: #f37370;    --red-9: #f89f9a;    --red-10: #fac8c3;
 
-    --frost-2:     rgba(255, 255, 255, 0.05);
-    --frost-3:     rgba(255, 255, 255, 0.10);
-    --frost-caret: rgba(255, 255, 255, 0.80);
+    --purple-1: #1a1325; --purple-2: #24163a; --purple-3: #301c4d; --purple-4: #3e2069; --purple-5: #51258f;
+    --purple-6: #642ab5; --purple-7: #854eca; --purple-8: #ab7ae0; --purple-9: #cda8f0; --purple-10: #ebd7fa;
 
-    --stroke-divider: rgba(255, 255, 255, 0.06);
-    --stroke-soft:    rgba(255, 255, 255, 0.12);
-    --stroke-medium:  rgba(255, 255, 255, 0.20);
-    --stroke-strong:  rgba(255, 255, 255, 0.25);
+    --magenta-1: #291321; --magenta-2: #40162f; --magenta-3: #551c3b; --magenta-4: #75204f; --magenta-5: #a02669;
+    --magenta-6: #cb2b83; --magenta-7: #e0529c; --magenta-8: #f37fb7; --magenta-9: #f8a8cc; --magenta-10: #fad2e3;
 
-    --segctl-hover: var(--color-base-700);
+    /* Text and icons. Tertiary is 0.5 (Ant: 0.45) for 4.5:1 on the cards. */
+    --color-text:            rgba(255, 255, 255, 0.85);
+    --color-text-secondary:  rgba(255, 255, 255, 0.65);
+    --color-text-tertiary:   rgba(255, 255, 255, 0.5);
+    --color-text-quaternary: rgba(255, 255, 255, 0.25);
+    --color-text-disabled:   rgba(255, 255, 255, 0.25);
+    --color-icon:            rgba(255, 255, 255, 0.45);
+    --color-icon-hover:      rgba(255, 255, 255, 0.85);
 
-    --canvas-bg:  var(--color-base-950);
-    --canvas-dot: rgba(255, 255, 255, 0.11);
+    --color-bg-layout:             #000000;
+    --color-bg-container:          #141414;
+    --color-bg-elevated:           #1f1f1f;
+    --color-bg-spotlight:          #424242;
+    --color-bg-mask:               rgba(0, 0, 0, 0.45);
+    --color-bg-container-disabled: rgba(255, 255, 255, 0.08);
+    --color-bg-text-hover:         rgba(255, 255, 255, 0.12);
+    --color-bg-text-active:        rgba(255, 255, 255, 0.18);
 
-    /* Roles and ramps re-picked against the dark surface (see style.css §3;
-       roles validated all pairs, CVD 10.5). */
-    --role-source:   #39832f;
-    --role-account:  #5d99d5;
-    --role-expense:  #d3a63e;
-    --role-debt:     #d8777f;
-    --role-modifier: #8053a4;
-    --role-none:     var(--color-base-500);
-    --role-person:   var(--color-base-300);
+    --color-border:           #424242;
+    --color-border-secondary: #303030;
+    --color-split:            rgba(253, 253, 253, 0.12);
+    --color-fill:             rgba(255, 255, 255, 0.18);
+    --color-fill-secondary:   rgba(255, 255, 255, 0.12);
+    --color-fill-tertiary:    rgba(255, 255, 255, 0.08);
+    --color-fill-quaternary:  rgba(255, 255, 255, 0.04);
+    --color-fill-alter:       rgba(255, 255, 255, 0.04);
 
-    --chart-growth:   #6991dc;
-    --chart-interest: #bc4a41;
-    --chart-networth:   #34c3a8;
+    /* The primary and status tokens re-resolve against the dark palettes
+       above; only the steps that differ from light are restated. */
+    --color-primary-hover:  var(--blue-7);
+    --color-primary-active: var(--blue-5);
+    --color-primary-text:   var(--blue-7);
+    --color-link-hover:     var(--blue-7);
+    --color-success-text:   var(--green-7);
+    --color-warning-text:   var(--gold-6);
+    --color-error:          #dc4446;
+    --color-error-hover:    #e86e6b;
+    --color-error-active:   #ad393a;
+    --color-error-bg:       #2c1618;
+    --color-error-border:   #5b2526;
+    --color-error-text:     var(--red-7);
+    --color-info-text:      var(--blue-7);
 
-    /* Net worth bands: the module roles above, pushed further in saturation
-       so the stacked bands hold up on the dark canvas (the modules keep their
-       own colours). Same shade ladder as style.css. */
-    --chart-account-1: #3d8bf2;
-    --chart-account-2: color-mix(in srgb, #3d8bf2 78%, white);
-    --chart-account-3: color-mix(in srgb, #3d8bf2 85%, black);
-    --chart-account-4: color-mix(in srgb, #3d8bf2 58%, white);
-    --chart-account-5: color-mix(in srgb, #3d8bf2 70%, black);
-    --chart-account-6: color-mix(in srgb, #3d8bf2 40%, white);
+    --control-item-bg-hover:  rgba(255, 255, 255, 0.08);
+    --control-outline:        rgba(0, 60, 180, 0.15);
+    --color-error-outline:    rgba(238, 38, 56, 0.11);
+    --color-warning-outline:  rgba(173, 107, 0, 0.15);
+    --button-primary-shadow:  0 2px 0 rgba(0, 60, 180, 0.15);
+    --button-danger-shadow:   0 2px 0 rgba(238, 38, 56, 0.11);
 
-    --chart-debt-1: #f0525e;
-    --chart-debt-2: color-mix(in srgb, #f0525e 78%, white);
-    --chart-debt-3: color-mix(in srgb, #f0525e 85%, black);
-    --chart-debt-4: color-mix(in srgb, #f0525e 58%, white);
-    --chart-debt-5: color-mix(in srgb, #f0525e 70%, black);
-    --chart-debt-6: color-mix(in srgb, #f0525e 40%, white);
-    --chart-worth-line: #fff;
+    --canvas-dot: rgba(255, 255, 255, 0.12);
 
-    /* The Sankey: Manage's dark ramps (see style.css). */
-    --chart-inflow-1: #147a5a;
-    --chart-inflow-2: #1a9163;
-    --chart-inflow-3: #23a86c;
-    --chart-inflow-4: #3fbe7c;
-    --chart-inflow-5: #64d194;
-    --chart-inflow-6: #8ee0b0;
-    --chart-outflow-1: #c8a110;
-    --chart-outflow-2: #d7b227;
-    --chart-outflow-3: #e4c449;
-    --chart-outflow-4: #efd777;
-    --chart-outflow-5: #f7e6a8;
-    --chart-net:       #5f6265;
+    /* Roles re-picked from Ant's dark palettes against the dark card (style.css
+       §3): cyan-7, blue-6, gold-6, red-6, purple-8. All pairs clear CVD 9.6 and
+       normal 19.0, and every one 3.5:1. Cyan and gold sit at OKLCH L 0.72, past
+       the chart band's 0.67, as the earlier dark roles did (gold at 0.75): a role
+       marks an avatar or a port, not a wide area, so there is no glare to fear. */
+    --role-source:   var(--cyan-7);
+    --role-account:  var(--blue-6);
+    --role-expense:  var(--gold-6);
+    --role-debt:     var(--red-6);
+    --role-modifier: var(--purple-8);
+    --role-none:     #7a7a7a;
+
+    --medal-silver: #bfbfbf;
+    --medal-bronze: var(--orange-6);
+
+    --link-line: var(--blue-7);
+
+    /* Net worth bands: the roles a step brighter, so the stacked bands hold up
+       on the dark surface (the modules keep their own colours). */
+    --chart-account-1: var(--blue-7);
+    --chart-account-2: color-mix(in srgb, var(--blue-7) 75%, white);
+    --chart-account-3: color-mix(in srgb, var(--blue-7) 80%, black);
+    --chart-account-4: color-mix(in srgb, var(--blue-7) 55%, white);
+    --chart-account-5: color-mix(in srgb, var(--blue-7) 62%, black);
+    --chart-account-6: color-mix(in srgb, var(--blue-7) 38%, white);
+
+    --chart-debt-1: var(--red-7);
+    --chart-debt-2: color-mix(in srgb, var(--red-7) 75%, white);
+    --chart-debt-3: color-mix(in srgb, var(--red-7) 80%, black);
+    --chart-debt-4: color-mix(in srgb, var(--red-7) 55%, white);
+    --chart-debt-5: color-mix(in srgb, var(--red-7) 62%, black);
+    --chart-debt-6: color-mix(in srgb, var(--red-7) 38%, white);
+
+    --chart-in:       var(--cyan-6);
+    --chart-out:      var(--gold-6);
+    --chart-growth:   var(--blue-7);
+    --chart-interest: var(--red-7);
+    --chart-plan-a:   var(--blue-7);
+    --chart-plan-b:   var(--orange-6);
+
+    /* The Sankey: Ant's dark cyan and gold ramps, deepest first. */
+    --chart-inflow-1: var(--cyan-5);
+    --chart-inflow-2: var(--cyan-6);
+    --chart-inflow-3: var(--cyan-7);
+    --chart-inflow-4: var(--cyan-8);
+    --chart-inflow-5: var(--cyan-9);
+    --chart-inflow-6: var(--cyan-10);
+    --chart-outflow-1: var(--gold-5);
+    --chart-outflow-2: var(--gold-6);
+    --chart-outflow-3: var(--gold-7);
+    --chart-outflow-4: var(--gold-8);
+    --chart-outflow-5: var(--gold-9);
+    --chart-hub:       var(--green-6);
 }

@@ -1,41 +1,45 @@
 'use strict';
 
 // ─── outlook.js ─────────────────────────────────────────────────────────────
-// The Analyze workspace: how one plan's money changes over its horizon. The
-// plan is the open one; the dropdown in the header row opens another.
+// The Analyze workspace, as an Ant Design page: how one plan's money changes
+// over its length. The plan is the open one; the dropdown in the header opens
+// another. The header also holds the plan's length (the chips the scrubber
+// has, which change the plan).
 //
-//   Net worth   bars of accounts stacked above zero, debts below, net worth
-//               on top (monthly on short plans, thinning to yearly)
+//   figures     net worth at the end, its change, take-home pay, spending,
+//               growth and interest paid over the run
+//   Net worth   stacked areas: accounts above zero, debts below, net worth on
+//               top, flagging each goal (set in Goals) the plan meets
 //   Cash flow   money in against money out, per year (per month under 3 years)
 //   Sankey      where one year's money (or the whole plan's) came from and
 //               where it went: into spending, taxes, debts and accounts,
 //               then module by module (sankey.js)
-//   Table       year-end balances, and every link's total
-//
-// The Net worth chart flags each goal (set in the Goals workspace) the plan
-// reaches.
+//   Table       by year (sortable), year-end balances, and every link's total
 //
 // Hovering a chart scrubs the plan to that month (Store.setScrub), which the
-// canvas and inspector follow. The Net worth chart has no legend row: its
-// tooltip names every band. Money is
-// shown as of its own month (Compare's "Leave behind" is the place that
-// reckons in today's money).
+// canvas and inspector follow.
 
 (function () {
     const C = window.CitrineCatalog;
     const D = window.Describe;
     const P = window.CitrinePlan;
     const G = window.CitrineGoals;
+    const K = window.Components;
 
     const root = document.getElementById('outlook');
     if (!root) return;
 
-    const PREFS = { view: 'outlook-view' };
+    const PREFS = { view: 'outlook-view', table: 'outlook-table' };
 
-    const VIEWS = [['worth', 'chart-line', 'Net worth'], ['flow', 'chart-bar', 'Cash flow'], ['sankey', 'flow-arrow', 'Sankey'],
-        ['table', 'table', 'Table']];
+    const VIEWS = [['worth', 'Net worth', 'chart-line'], ['flow', 'Cash flow', 'chart-bar'], ['sankey', 'Sankey', 'flow-arrow'],
+        ['table', 'Table', 'table']];
+    const TABLES = [['year', 'By year'], ['balances', 'Balances'], ['links', 'Money moved']];
     let view = Prefs.get(PREFS.view, 'worth');
     if (!VIEWS.some(([v]) => v === view)) view = 'worth';
+    let tableView = Prefs.get(PREFS.table, 'year');
+    if (!TABLES.some(([v]) => v === tableView)) tableView = 'year';
+    // The By year table's sort: a column and 'asc' or 'desc', or none (plan order).
+    let yearSort = { key: null, dir: null };
     const LENGTHS = [1, 3, 5, 10, 20, 30, 40];
     // Net worth bands: at most this many per family before the rest fold
     // into "Other". Each band wears its module's role colour (style.css).
@@ -53,69 +57,59 @@
     const SANKEY_ACCOUNTS = [1, 2, 3, 4, 5, 6].map((i) => `--chart-account-${i}`);
 
     root.innerHTML = `
-        <div class="outlook-main">
-            <div class="outlook-head">
-                <div class="segctl outlook-views" role="tablist" aria-label="Analyze view">
-                    ${VIEWS.map(([v, icon, name]) =>
-                        `<button class="segctl-btn" type="button" role="tab" data-view="${v}" aria-label="${name}" title="${name}">${iconSvg(icon)}<span>${name}</span></button>`).join('')}
-                </div>
-                <div class="plan-pick-field">
-                    ${iconSvg('file')}
-                    <button class="field-select plan-pick" type="button" data-act="plan" aria-haspopup="menu" aria-expanded="false" title="Analyze another plan">
-                        <span class="plan-pick-name"></span>${iconSvg('caret-down', { cls: 'plan-pick-caret' })}</button>
-                </div>
-                <div class="outlook-length">
-                    <span class="outlook-label">Over</span>
-                    <div class="segctl segctl--chips" role="group" aria-label="Plan length">
-                        ${LENGTHS.map((y) => `<button class="segctl-btn" type="button" data-years="${y}">${y}Y</button>`).join('')}
+        <div class="page scroll-y">
+            ${K.pageHead({
+                start: K.planPick({ act: 'plan', label: 'Plan to analyze' }),
+                extra: `<span class="page-label" aria-hidden="true">Over</span>
+                    ${K.segmented(LENGTHS.map((y) => [y, `${y}Y`]), null, { attr: 'years', label: 'Plan length', chips: true })}`,
+            })}
+            <div class="stat-cards" data-stats></div>
+            <section class="card outlook-card" aria-label="Charts and tables">
+                <div class="outlook-bar">
+                    ${K.tabs(VIEWS, view, { label: 'Analyze view' })}
+                    <div class="outlook-tools">
+                        <button class="button-secondary span-btn" type="button" data-act="span" aria-haspopup="menu" aria-expanded="false" hidden>${iconSvg('calendar-blank')}<span></span>${iconSvg('caret-down')}</button>
+                        <div data-table-views hidden>${K.segmented(TABLES, tableView, { attr: 'table', label: 'Table' })}</div>
                     </div>
                 </div>
-            </div>
-            <div class="outlook-body">
                 <div class="chart-pane">
-                    <div class="chart-top">
-                        <button class="button-ghost span-btn" type="button" data-act="span" aria-haspopup="menu" hidden>${iconSvg('calendar-blank')}<span></span>${iconSvg('caret-down')}</button>
-                        <div class="chart-legend"></div>
-                    </div>
+                    <div class="chart-legend"></div>
                     <div class="chart-box"></div>
                 </div>
-                <div class="outlook-table-wrap scroll-y" hidden></div>
-            </div>
+                <div class="outlook-table-wrap table-wrap" hidden></div>
+            </section>
         </div>`;
 
-    const planBtn = root.querySelector('[data-act="plan"]');
+    const planName = root.querySelector('.plan-pick-name');
+    const statsEl = root.querySelector('[data-stats]');
     const pane = root.querySelector('.chart-pane');
     const legendEl = root.querySelector('.chart-legend');
     const box = root.querySelector('.chart-box');
     const tableWrap = root.querySelector('.outlook-table-wrap');
-    const chartTop = root.querySelector('.chart-top');
     const spanBtn = root.querySelector('[data-act="span"]');
+    const tableViews = root.querySelector('[data-table-views]');
 
     // Analyze draws only while it is the open workspace.
     const showing = () => Store.state.workspace === 'analyze';
 
     // ── Values ─────────────────────────────────────────────────────────────
 
-    /** The factor each balance point's money is shown at: 1 throughout, as
-     *  Analyze shows money as of its own month. Every figure reads through
-     *  these, so a way to show today's money would go here. */
-    const deflator = (plan, months) => G.deflator(plan, months, false);
+    /** The factor each balance point's money is shown at: 1 throughout (the
+     *  money of each month). Every figure reads through these. */
+    const deflator = (plan, months) => G.deflator(plan, months);
 
     const balances = (arr, def) => Float64Array.from(arr, (v, k) => v * def[k]);
-    // A month's flow lands at the end of that month: balance point m + 1.
-    const flows = (arr, def) => Float64Array.from(arr, (v, m) => v * def[m + 1]);
 
     const label = (plan, k) => D.monthLabel(plan, k);
+    const money = (v, o) => Fmt.money(v, o);
 
-    /** The plan's people, each with their age from month `from` to `to`: one
-     *  age, or a range when a birthday falls in between. For the top of a
-     *  chart's tooltip. */
+    /** The plan's age from month `from` to `to`: one age, or a range when a
+     *  birthday falls in between. For the top of a chart's tooltip; none when
+     *  the plan has no age. */
     function people(plan, from, to = from) {
-        return plan.nodes.filter((n) => D.roleOf(n) === 'person').map((n) => {
-            const a = P.ageAt(n, P.ymAdd(plan.settings.start, from));
-            const b = P.ageAt(n, P.ymAdd(plan.settings.start, to));
-            return { name: n.name, age: a == null ? '' : a === b ? `Age ${a}` : `Age ${a}–${b}` };
-        });
+        const a = P.ageAt(plan, P.ymAdd(plan.settings.start, from));
+        const b = P.ageAt(plan, P.ymAdd(plan.settings.start, to));
+        return a == null ? [] : [{ name: 'Age', age: a === b ? `${a}` : `${a}–${b}` }];
     }
 
     /** Bands as the chart shows them, top to bottom. They stack away from
@@ -157,42 +151,48 @@
         return bands;
     }
 
+    // ── Figures ────────────────────────────────────────────────────────────
+
+    /** The run's headline figures, in the money shown. */
+    function figures(res, def) {
+        const n = res.months;
+        const F = res.flows;
+        const sum = (fn) => { let s = 0; for (let m = 0; m < n; m++) s += fn(m) * def[m + 1]; return s; };
+        const start = res.netWorth[0] * def[0];
+        const end = res.netWorth[n] * def[n];
+        return {
+            end, change: end - start,
+            takeHome: sum((m) => F.earned[m] - F.withheld[m]),
+            spent: sum((m) => F.spent[m] + F.skimmed[m]),
+            growth: sum((m) => F.growth[m]),
+            interest: sum((m) => F.interest[m]),
+        };
+    }
+
+    function renderStats(plan, res, def) {
+        const f = figures(res, def);
+        statsEl.innerHTML = [
+            K.statCard({ title: `Net worth, ${label(plan, res.months)}`, value: money(f.end), tone: f.end < -0.5 ? 'down' : '' }),
+            K.statCard({ title: 'Change', value: money(f.change, { sign: true }), tone: f.change >= 0 ? 'up' : 'down' }),
+            K.statCard({ title: 'Take-home pay', value: money(f.takeHome) }),
+            K.statCard({ title: 'Spent', value: money(f.spent) }),
+            K.statCard({ title: 'Growth', value: money(f.growth), tone: f.growth < -0.5 ? 'down' : '' }),
+            K.statCard({ title: 'Interest paid', value: money(f.interest), tone: f.interest > 0.5 ? 'down' : '' }),
+        ].join('');
+    }
+
     // ── Charts ─────────────────────────────────────────────────────────────
 
     function legend(items) {
         legendEl.innerHTML = items.map((it) => `<span class="chart-legend-item"><i class="${it.line ? 'is-line' : ''}" style="--swatch: var(${it.color})"></i>${escapeHtml(it.label)}</span>`).join('');
+        legendEl.hidden = !items.length;
     }
 
-    /** Month indices the net worth bars sample: every month on short plans,
-     *  thinning to quarterly, half-yearly or yearly so there are at most
-     *  ~40 bars. Always ends on the plan's last month. */
-    function worthSamples(months) {
-        const step = [1, 3, 6, 12].find((s) => Math.ceil(months / s) + 1 <= 40) || 12;
-        const idx = [];
-        for (let k = 0; k < months; k += step) idx.push(k);
-        idx.push(months);
-        return idx;
-    }
-
-    /** Bar ticks: each sample that starts a new calendar year (the first only
-     *  if it is a January), thinned to at most ~8 labels. */
-    function sampleTicks(plan, idx) {
-        const ticks = [];
-        let prev = null;
-        idx.forEach((k, i) => {
-            const { y, m } = P.ymParse(P.ymAdd(plan.settings.start, k));
-            if (i === 0 ? m === 1 : y !== prev) ticks.push({ i, label: String(y) });
-            prev = y;
-        });
-        const step = Math.ceil(ticks.length / 8);
-        return ticks.filter((_, i) => i % step === 0);
-    }
-
-    /** A flag for each goal the plan meets after its start, on the first bar
-     *  that shows it met: its badge in the goal's card colour, whose white
-     *  text it is made for, its rule in the chart shade of it. Goals met from
-     *  the start are not events; one met after its deadline says so. */
-    function goalMarkers(plan, res, idx) {
+    /** A flag for each goal the plan meets after its start, at the month it
+     *  is met: its badge in the goal's colour, whose white text it is made
+     *  for, its rule in the chart shade of it. Goals met from the start are
+     *  not events; one met after its deadline says so. */
+    function goalMarkers(plan, res) {
         const goals = Store.state.goals;
         if (!goals.length) return [];
         const evs = G.evaluate(plan, res, goals);
@@ -202,7 +202,7 @@
             if (!ev.month) return;
             const late = ev.status === 'late';
             out.push({
-                i: idx.findIndex((k) => k >= ev.month), month: ev.month, name: g.name, late,
+                i: ev.month, month: ev.month, name: g.name, late,
                 label: late ? `${g.name} (late)` : g.name,
                 color: `--goal-${g.color}-mark`,
                 fill: `--goal-${g.color}`,
@@ -212,36 +212,37 @@
     }
 
     function drawWorth(plan, res, def) {
-        const idx = worthSamples(res.months);
-        const pick = (values) => Float64Array.from(idx, (k) => values[k]);
-        const bands = worthBands(plan, res, def).map((b) => ({ ...b, values: pick(b.values) }));
-        const worth = pick(balances(res.netWorth, def));
-        const markers = goalMarkers(plan, res, idx);
+        const count = res.months + 1;
+        const bands = worthBands(plan, res, def);
+        const worth = balances(res.netWorth, def);
+        const markers = goalMarkers(plan, res);
         const listed = topDown(bands);
+        // The legend names the bands that hold something at some point.
+        const shown = listed.filter((b) => b.values.some((v) => Math.abs(v) > 0.5));
+        legend([{ label: 'Net worth', color: '--chart-worth-line', line: true }, ...shown.map((b) => ({ label: b.label, color: b.color }))]);
         Chart.draw(box, {
-            kind: 'bars',
+            kind: 'area',
             label: 'Net worth over time',
-            count: idx.length,
-            xTicks: sampleTicks(plan, idx),
-            bars: bands,
-            gap: 0,
+            count,
+            xTicks: Chart.yearTicks(plan, count),
+            bands,
             line: { label: 'Net worth', color: '--chart-worth-line', values: worth },
             markers,
-            format: (v) => Fmt.money(v, { compact: true }),
+            format: (v) => money(v, { compact: true }),
             tooltip: (k) => ({
-                people: people(plan, idx[k]),
-                title: label(plan, idx[k]),
+                people: people(plan, k),
+                title: label(plan, k),
                 rows: [
-                    ...listed.filter((b) => b.values[k] > 0.5).map((b) => ({
-                        label: b.label, color: b.color, value: Fmt.money(b.sign < 0 ? -b.values[k] : b.values[k]),
+                    ...listed.filter((b) => Math.abs(b.values[k]) > 0.5).map((b) => ({
+                        label: b.label, color: b.color, value: money(b.sign < 0 ? -b.values[k] : b.values[k]),
                     })),
-                    { label: 'Net worth', color: '--chart-worth-line', value: Fmt.money(worth[k]), total: true },
+                    { label: 'Net worth', color: '--chart-worth-line', value: money(worth[k]), total: true },
                     ...markers.filter((mk) => mk.i === k).map((mk) => ({
                         label: `${mk.name} met${mk.late ? ' late' : ''}`, color: mk.color, value: label(plan, mk.month),
                     })),
                 ],
             }),
-            onHover: (k) => Store.setScrub(k == null ? null : idx[k]),
+            onHover: (k) => Store.setScrub(k),
         });
     }
 
@@ -281,13 +282,13 @@
             xTicks: ticks,
             bars,
             line: { label: 'Net change', color: '--chart-networth', values: net },
-            format: (v) => Fmt.money(v, { compact: true }),
+            format: (v) => money(v, { compact: true }),
             tooltip: (i) => ({
                 people: people(plan, i * size, Math.min(months, (i + 1) * size) - 1),
                 title: periodLabel(i),
                 rows: [
-                    ...bars.map((b) => ({ label: b.label, color: b.color, value: Fmt.money(b.sign < 0 ? -b.values[i] : b.values[i]) })),
-                    { label: 'Net change', color: '--chart-networth', value: Fmt.money(net[i], { sign: true }), total: true },
+                    ...bars.map((b) => ({ label: b.label, color: b.color, value: money(b.sign < 0 ? -b.values[i] : b.values[i]) })),
+                    { label: 'Net change', color: '--chart-networth', value: money(net[i], { sign: true }), total: true },
                 ],
             }),
             onHover: (i) => Store.setScrub(i == null ? null : Math.min(months, (i + 1) * size)),
@@ -347,7 +348,6 @@
         const losses = group('Losses', '--chart-interest', SANKEY_DEBTS);
         const accounts = group('Accounts', '--chart-account-1', SANKEY_ACCOUNTS);
         const add = (list, name, value, id, extra) => { if (value > 0.005) list.push({ label: name, value, id, ...extra }); };
-        const money = (v) => Fmt.money(v);
 
         for (const n of plan.nodes) {
             const r = res.nodes[n.id];
@@ -409,9 +409,9 @@
             groups,
             inRamp: SANKEY_IN,
             hubLabel: 'Money in',
-            hubColor: '--chart-net',
+            hubColor: '--chart-hub',
             otherLabel: 'Other',
-            format: (v) => Fmt.money(v),
+            format: (v) => money(v),
             empty: 'Add income and spending to see where the money goes.',
             onSelect: (id) => Store.select({ kind: 'node', id }),
         });
@@ -419,7 +419,71 @@
 
     // ── Tables ─────────────────────────────────────────────────────────────
 
-    function renderTables(plan, res, def) {
+    const esc = escapeHtml;
+    const td = (v, { negative = false } = {}) => `<td class="is-num${negative ? ' is-negative' : ''}">${esc(money(v))}</td>`;
+
+    /** A sortable column's header: the cell holds a button that cycles
+     *  ascending, descending and plan order, as Ant's sorter does. */
+    function sortHeader(key, name) {
+        const dir = yearSort.key === key ? yearSort.dir : null;
+        const sort = dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : 'none';
+        return `<th scope="col" class="is-num" aria-sort="${sort}"><button class="th-sort" type="button" data-sort="${key}"${dir ? ` data-dir="${dir}"` : ''}>
+            <span>${esc(name)}</span><span class="sort-caret" aria-hidden="true">${iconSvg('caret-up')}${iconSvg('caret-down')}</span></button></th>`;
+    }
+
+    /** A row per plan year: what it brought in and spent, what grew and what
+     *  interest cost, and the net worth it ended on. */
+    function yearRows(plan, res, def) {
+        const n = res.months;
+        const F = res.flows;
+        const hasAge = plan.settings.age != null;
+        const rows = [];
+        for (let from = 0, y = 0; from < n; from += 12, y++) {
+            const to = Math.min(n, from + 12);
+            const sum = (fn) => { let s = 0; for (let m = from; m < to; m++) s += fn(m) * def[m + 1]; return s; };
+            const start = res.netWorth[from] * def[from];
+            const end = res.netWorth[to] * def[to];
+            rows.push({
+                year: y + 1, from,
+                age: hasAge ? P.ageAt(plan, P.ymAdd(plan.settings.start, from)) : null,
+                takeHome: sum((m) => F.earned[m] - F.withheld[m]),
+                spent: sum((m) => F.spent[m] + F.skimmed[m]),
+                growth: sum((m) => F.growth[m]),
+                interest: sum((m) => F.interest[m]),
+                change: end - start,
+                worth: end,
+            });
+        }
+        if (yearSort.key) {
+            const k = yearSort.key;
+            rows.sort((a, b) => (yearSort.dir === 'asc' ? a[k] - b[k] : b[k] - a[k]));
+        }
+        return { rows, hasAge };
+    }
+
+    function yearTable(plan, res, def) {
+        const { rows, hasAge } = yearRows(plan, res, def);
+        const sorted = (key) => (yearSort.key === key ? ' is-sorted' : '');
+        const num = (key, v, o = {}) => `<td class="is-num${sorted(key)}${o.negative ? ' is-negative' : ''}">${esc(money(v, o.sign ? { sign: true } : undefined))}</td>`;
+        return `<table class="data-table table--md">
+            <caption class="sr-only">The plan year by year</caption>
+            <thead><tr>
+                <th scope="col" class="is-sticky">Year</th>
+                ${hasAge ? '<th scope="col" class="is-num">Age</th>' : ''}
+                ${sortHeader('takeHome', 'Take-home pay')}${sortHeader('spent', 'Spent')}${sortHeader('growth', 'Growth')}
+                ${sortHeader('interest', 'Interest')}${sortHeader('change', 'Net change')}${sortHeader('worth', 'Net worth at end')}
+            </tr></thead>
+            <tbody>${rows.map((r) => `<tr>
+                <th scope="row" class="is-sticky"><span class="year-cell">Y${r.year}<span>${esc(label(plan, r.from))}</span></span></th>
+                ${hasAge ? `<td class="is-num">${r.age == null ? '—' : esc(String(r.age))}</td>` : ''}
+                ${num('takeHome', r.takeHome)}${num('spent', r.spent)}${num('growth', r.growth, { negative: r.growth < -0.5 })}
+                ${num('interest', r.interest)}${num('change', r.change, { sign: true, negative: r.change < -0.5 })}
+                ${num('worth', r.worth, { negative: r.worth < -0.5 })}
+            </tr>`).join('')}</tbody>
+        </table>`;
+    }
+
+    function balancesTable(plan, res, def) {
         const months = res.months;
         const points = [0];
         for (let k = 12; k <= months; k += 12) points.push(k);
@@ -428,42 +492,53 @@
         // Debts show as negatives; an overdrawn account is one too.
         const cell = (v, neg) => {
             const shown = neg ? -v : v;
-            return `<td class="${shown < -0.5 ? 'is-negative' : ''}">${escapeHtml(Fmt.money(shown))}</td>`;
+            return td(shown, { negative: shown < -0.5 });
         };
-        const nameCell = (n) => `<td><span class="cell-name"><span class="role-tile role-tile--sm" data-role="${D.roleOf(n)}">${iconSvg(P.iconOf(n))}</span>${escapeHtml(n.name)}</span></td>`;
-        let html = `<table class="outlook-table"><caption class="sr-only">Balances</caption><thead><tr><th>Balance</th>${points.map((k) => `<th>${escapeHtml(label(plan, k))}</th>`).join('')}</tr></thead><tbody>`;
+        const nameCell = (n) => `<th scope="row" class="is-sticky"><span class="cell-name"><span class="role-tile role-tile--sm" data-role="${D.roleOf(n)}">${iconSvg(P.iconOf(n))}</span>${esc(n.name)}</span></th>`;
+        let html = `<table class="data-table table--md"><caption class="sr-only">Balances</caption><thead><tr><th scope="col" class="is-sticky">Balance</th>${
+            points.map((k) => `<th scope="col" class="is-num">${esc(label(plan, k))}</th>`).join('')}</tr></thead><tbody>`;
         for (const n of holders) {
             const b = res.nodes[n.id].balance;
             const neg = D.roleOf(n) === 'debt';
             html += `<tr>${nameCell(n)}${points.map((k) => cell(b[k] * def[k], neg)).join('')}</tr>`;
         }
         if (res.unassigned.some((v) => v > 0.005)) {
-            html += `<tr><td>Unassigned</td>${points.map((k) => cell(res.unassigned[k] * def[k], false)).join('')}</tr>`;
+            html += `<tr><th scope="row" class="is-sticky">Unassigned</th>${points.map((k) => cell(res.unassigned[k] * def[k], false)).join('')}</tr>`;
         }
-        html += `<tr class="is-total"><td>Net worth</td>${points.map((k) => `<td>${escapeHtml(Fmt.money(res.netWorth[k] * def[k]))}</td>`).join('')}</tr></tbody></table>`;
+        html += `<tr class="is-total"><th scope="row" class="is-sticky">Net worth</th>${points.map((k) => td(res.netWorth[k] * def[k], { negative: res.netWorth[k] < -0.5 })).join('')}</tr></tbody></table>`;
+        return html;
+    }
 
+    function linksTable(plan, res, def) {
+        const months = res.months;
         const linksSorted = plan.links
             .map((l) => ({ l, r: res.links[l.id] }))
             .filter((x) => x.r)
             .sort((a, b) => b.r.total - a.r.total);
-        html += `<table class="outlook-table"><caption class="sr-only">Money moved</caption><thead><tr><th>Money moved</th><th>Rule</th><th>Total</th><th>Average a month</th><th>First</th><th>Last</th></tr></thead><tbody>`;
+        let html = `<table class="data-table table--md"><caption class="sr-only">Money moved</caption><thead><tr><th scope="col" class="is-sticky">Money moved</th>
+            <th scope="col">Rule</th><th scope="col" class="is-num">Total</th><th scope="col" class="is-num">Average a month</th><th scope="col">First</th><th scope="col">Last</th></tr></thead><tbody>`;
         for (const { l, r } of linksSorted) {
             const from = Store.node(l.from);
             const to = Store.node(l.to);
-            const flowsDef = flows(r.flow, def);
-            const total = flowsDef.reduce((a, b) => a + b, 0);
+            let total = 0;
+            for (let m = 0; m < r.flow.length; m++) total += r.flow[m] * def[m + 1];
             const first = r.flow.findIndex((v) => v > 0.005);
             let lastIdx = -1;
             for (let m = r.flow.length - 1; m >= 0; m--) if (r.flow[m] > 0.005) { lastIdx = m; break; }
-            html += `<tr><td>${escapeHtml(from.name)} → ${escapeHtml(to.name)}</td>
-                <td>${escapeHtml(D.linkShort(l, from))}</td>
-                <td>${escapeHtml(Fmt.money(total))}</td>
-                <td>${escapeHtml(Fmt.money(total / months))}</td>
-                <td>${first >= 0 ? escapeHtml(label(plan, first)) : 'Never'}</td>
-                <td>${lastIdx >= 0 ? escapeHtml(label(plan, lastIdx)) : 'Never'}</td></tr>`;
+            html += `<tr><th scope="row" class="is-sticky">${esc(from.name)} → ${esc(to.name)}</th>
+                <td>${esc(D.linkShort(l, from))}</td>
+                ${td(total)}${td(total / months)}
+                <td>${first >= 0 ? esc(label(plan, first)) : '<span class="is-muted">Never</span>'}</td>
+                <td>${lastIdx >= 0 ? esc(label(plan, lastIdx)) : '<span class="is-muted">Never</span>'}</td></tr>`;
         }
         html += '</tbody></table>';
-        tableWrap.innerHTML = html;
+        return html;
+    }
+
+    function renderTables(plan, res, def) {
+        if (tableView === 'balances') tableWrap.innerHTML = balancesTable(plan, res, def);
+        else if (tableView === 'links') tableWrap.innerHTML = linksTable(plan, res, def);
+        else tableWrap.innerHTML = yearTable(plan, res, def);
     }
 
     // ── Render ─────────────────────────────────────────────────────────────
@@ -472,13 +547,17 @@
         const plan = Store.state.plan;
         const { activeId } = Store.state;
         const name = activeId ? Store.planName(activeId) : '';
-        planBtn.querySelector('.plan-pick-name').textContent = name;
-        planBtn.setAttribute('aria-label', `Plan: ${name}`);
-        root.querySelectorAll('[data-view]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === view)));
+        planName.textContent = name;
+        root.querySelector('[data-act="plan"]').setAttribute('aria-label', `Plan to analyze: ${name}`);
+        root.querySelectorAll('[data-tab]').forEach((b) => {
+            const on = b.dataset.tab === view;
+            b.setAttribute('aria-selected', String(on));
+            b.tabIndex = on ? 0 : -1;
+        });
         root.querySelectorAll('[data-years]').forEach((b) => b.setAttribute('aria-pressed', String(!!plan && Number(b.dataset.years) === plan.settings.years)));
-        // The Net worth chart needs no row above it: its tooltip names every band.
-        chartTop.hidden = view === 'worth';
+        root.querySelectorAll('[data-table]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.table === tableView)));
         spanBtn.hidden = view !== 'sankey';
+        tableViews.hidden = view !== 'table';
         pane.classList.toggle('is-sankey', view === 'sankey');
     }
 
@@ -492,6 +571,7 @@
         // module and its run; the run that follows draws it.
         if (plan.nodes.some((n) => !res.nodes[n.id])) return;
         const def = deflator(plan, res.months);
+        renderStats(plan, res, def);
         const isTable = view === 'table';
         pane.hidden = isTable;
         tableWrap.hidden = !isTable;
@@ -503,20 +583,37 @@
 
     // ── Input ──────────────────────────────────────────────────────────────
 
+    function showView(next) {
+        view = next;
+        Prefs.set(PREFS.view, view);
+        Store.setScrub(null);
+        render();
+    }
+
     root.addEventListener('click', (e) => {
-        const v = e.target.closest('[data-view]');
-        if (v) {
-            view = v.dataset.view;
-            Prefs.set(PREFS.view, view);
-            Store.setScrub(null);
-            render();
-            return;
-        }
+        const tab = e.target.closest('[data-tab]');
+        if (tab) { showView(tab.dataset.tab); return; }
         const y = e.target.closest('[data-years]');
         if (y) {
             const years = Number(y.dataset.years);
             sankeyYear = -1;
             Store.edit((plan) => { plan.settings.years = years; });
+            return;
+        }
+        const t = e.target.closest('[data-table]');
+        if (t) {
+            tableView = t.dataset.table;
+            Prefs.set(PREFS.table, tableView);
+            render();
+            return;
+        }
+        const sort = e.target.closest('[data-sort]');
+        if (sort) {
+            const key = sort.dataset.sort;
+            const next = yearSort.key !== key ? 'asc' : yearSort.dir === 'asc' ? 'desc' : null;
+            yearSort = next ? { key, dir: next } : { key: null, dir: null };
+            render();
+            root.querySelector(`[data-sort="${key}"]`)?.focus();
             return;
         }
         const act = e.target.closest('[data-act]');
@@ -527,6 +624,7 @@
                 UI.menu(act, tabs.map((id) => ({
                     label: Store.planName(id),
                     icon: id === activeId ? 'check' : 'file',
+                    chosen: id === activeId,
                     onSelect: () => Store.openPlan(id),
                 })));
                 return;
@@ -539,13 +637,24 @@
                 const items = sankeySpans(plan, res.months).map((s) => ({
                     label: s.label,
                     icon: s.year === current.year ? 'check' : 'calendar-blank',
+                    chosen: s.year === current.year,
                     onSelect: () => { sankeyYear = s.year; render(); },
                 }));
                 if (items.length > 1) items.splice(items.length - 1, 0, 'sep');
-                UI.menu(act, items);
+                UI.menu(act, items, { align: 'right' });
                 return;
             }
         }
+    });
+
+    // Arrow keys move along the tabs, as Ant's Tabs do.
+    root.querySelector('.tabs-nav').addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+        e.preventDefault();
+        const i = VIEWS.findIndex(([v]) => v === view);
+        const next = VIEWS[(i + (e.key === 'ArrowRight' ? 1 : VIEWS.length - 1)) % VIEWS.length][0];
+        showView(next);
+        root.querySelector(`[data-tab="${next}"]`).focus();
     });
 
     // Redraw when the chart's box changes size (window resize, the navigation
@@ -560,7 +669,7 @@
         });
     }).observe(box);
 
-    // Goals redraw the Net worth chart, which flags the ones reached.
+    // Goals redraw the Net worth chart, which flags the ones met.
     Store.on((c) => {
         if (c.type === 'results' || c.type === 'goals' || c.type === 'workspace') render();
         else if (!showing()) return;

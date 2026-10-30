@@ -36,7 +36,7 @@
     else root.PrismWeb = Object.assign(root.PrismWeb || {}, api);
 }(typeof self !== 'undefined' ? self : this, function (Plan, ApiError) {
 
-    const MAX_PLANS = 100;
+    const MAX_PLANS = 15;
 
     function planMeta(p) {
         return { id: p.id, name: p.name, updatedAt: p.updatedAt, modules: p.nodes.length };

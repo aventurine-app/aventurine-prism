@@ -14,9 +14,9 @@
 //   3. Income arrives and is split along their links. Money keeps
 //      moving through spending and modifiers until it comes to rest. An
 //      account keeps whatever arrives.
-//   4. Scheduled moves out of account balances run (withdrawals, sweeps,
-//      "everything above"), upstream accounts first, so a transfer made early
-//      in the pass is seen by the accounts below it in the same month.
+//   4. Scheduled moves out of account balances run (withdrawals, shares,
+//      sweeps), upstream accounts first, so a transfer made early in the pass
+//      is seen by the accounts below it in the same month.
 //   5. The month's balances are recorded.
 //
 // Rates. An account's rate is an effective annual rate (APY): a 4% account
@@ -40,8 +40,22 @@
 // even past zero: the account goes negative (and earns nothing while it is)
 // rather than the payment falling short, and the plan is flagged `overdrawn`
 // from the first month it ends below zero. The other ways out of a balance
-// (a share of it, everything above an amount, the rest) are measured against
-// what it holds, so they take nothing from an empty or overdrawn account.
+// (a share of it, the rest) are measured against what it holds, so they take
+// nothing from an empty or overdrawn account.
+//
+// Minimum balance. An account's Keep at least is a floor for those other ways
+// out: a share or the rest is measured against only what is over it, so a
+// checking account that keeps $4,000 splits each paycheck and leaves the
+// $4,000 alone. An account below its minimum keeps what arrives until it is
+// back up to it. A fixed amount is still drawn in full (a bill is paid), and
+// the plan is flagged `below-minimum` from the first month an account that had
+// reached its minimum ends below it.
+//
+// Expense costs. An expense may have a cost of its own, on a schedule like
+// income's (every month, a yearly lump, once) and rising by its inflation rate
+// each year from when it starts. A link set to the cost pays exactly what falls
+// due that month: it is a fixed amount whose size and timing come from the
+// expense, so it overdraws, charges a card and falls short like any fixed one.
 //
 // Paying debts. A payment never exceeds what is owed: once a debt is paid off,
 // the money its links would have sent stays with the payer and falls through
@@ -64,10 +78,6 @@
 // counts toward net worth. So the change in net worth always equals
 //   income - withholding + match + cash back + growth - interest - spent - taxes/fees
 // and the test suite checks that identity on every scenario.
-//
-// People. A person moves no money and their links carry none. Each person's
-// result is a `worth` series: the balances of the accounts their modules'
-// money reaches, less the debts it reaches (plan.js, personReach).
 
 (function (root, factory) {
     const isNode = typeof module === 'object' && module.exports;
@@ -89,8 +99,8 @@
     const MAX_ARRIVALS_PER_MONTH = 20000;
 
     // Evaluation order inside one basis: fixed amounts first, then percentages
-    // (each of the full amount), then "above", then the rest.
-    const MODE_ORDER = { fixed: 1, percent: 2, above: 3, rest: 4 };
+    // (each of the full amount), then the rest.
+    const MODE_ORDER = { fixed: 1, percent: 2, rest: 3 };
 
     // Share of a card's limit past which carrying a balance is a red flag.
     // (1% to 10% is the ideal range; only the red flag is reported.)
@@ -119,9 +129,12 @@
             const from = byId.get(link.from);
             const to = byId.get(link.to);
             if (!from || !to || !from.outs[link.basis]) continue;
+            // A link paying an expense's cost is a fixed amount set by the expense.
+            const pays = link.mode === 'cost';
             const L = {
                 id: link.id, link, from, to,
-                mode: link.mode, basis: link.basis, when: link.when,
+                mode: pays ? 'fixed' : link.mode, costOf: pays ? to : null,
+                basis: link.basis, when: link.when,
                 value: link.value, month: link.month, growth: link.growth || 0,
                 dateIdx: link.date ? idxOf(link.date) : null,
                 startIdx: link.start ? idxOf(link.start) : -Infinity,
@@ -174,10 +187,15 @@
         let cal = startMonth;
 
         const activeAt = (L) => t >= L.startIdx && t <= L.endIdx;
-        const firesNow = (L) => L.when === 'monthly'
-            || (L.when === 'yearly' && cal === L.month)
-            || (L.when === 'once' && t === L.dateIdx);
+        const costDue = (s) => scheduled(s, s.params.cost || 0, t, cal);
+        const firesNow = (L) => {
+            if (L.costOf) return costDue(L.costOf) > EPS;
+            return L.when === 'monthly'
+                || (L.when === 'yearly' && cal === L.month)
+                || (L.when === 'once' && t === L.dateIdx);
+        };
         const fixedValue = (L) => {
+            if (L.costOf) return costDue(L.costOf);
             const years = Math.floor((t - Math.max(0, L.startIdx)) / 12);
             return L.growth ? L.value * Math.pow(1 + L.growth / 100, years) : L.value;
         };
@@ -242,10 +260,8 @@
                     want = fixedValue(L) - L.given;
                 } else if (L.mode === 'percent') {
                     want = base * L.value / 100;
-                } else if (L.mode === 'rest') {
-                    want = remaining;
                 } else {
-                    continue;   // 'above' only applies to a balance
+                    want = remaining;
                 }
                 want = capToDebt(L, want);
                 if (want <= EPS) continue;
@@ -410,7 +426,11 @@
         }
 
         function withdraw(s) {
-            const base = s.bal;
+            // What a share or the rest may take: the balance over the account's
+            // minimum (see Minimum balance above).
+            const floor = s.params.minBalance || 0;
+            const spare = () => Math.max(0, s.bal - floor);
+            const base = spare();
             for (const L of s.outs.balance) {
                 if (!activeAt(L) || !firesNow(L)) continue;
                 let want;
@@ -421,13 +441,12 @@
                         L.given = 0;
                         break;
                     case 'percent': want = base * L.value / 100; break;
-                    case 'above':   want = Math.max(0, s.bal - L.value); break;
-                    default:        want = s.bal;
+                    default:        want = spare();
                 }
                 // A fixed amount is drawn in full, past zero if need be (see
-                // Overdrawing above); the rest take only what the balance holds.
+                // Overdrawing above); the rest take only what is spare.
                 const held = capToDebt(L, want);
-                const give = L.mode === 'fixed' ? held : Math.min(held, Math.max(0, s.bal));
+                const give = L.mode === 'fixed' ? held : Math.min(held, spare());
                 if (L.mode === 'fixed') L.given = give;
                 if (give > EPS) {
                     s.bal -= give;
@@ -505,7 +524,7 @@
 
             // 3. Income.
             for (const s of sources) {
-                const gross = sourceGross(s, t, cal);
+                const gross = scheduled(s, s.params.amount, t, cal);
                 if (gross <= EPS) continue;
                 const pretax = gross - allocate(s, 'pretax', gross);
                 const taxable = gross - pretax;
@@ -566,8 +585,6 @@
             s.pretax = series();
             s.produced = series();
             s.unplaced = series();
-            s.startIdx = params.start ? idxOf(params.start) : 0;
-            s.endIdx = params.end ? idxOf(params.end) : Infinity;
         }
         if (role === 'account') {
             s.balance = new Float64Array(months + 1);
@@ -585,6 +602,10 @@
             s.matchedThisYear = 0;
             s.capped = 0;
             s.cappedFirst = -1;
+        }
+        if (role === 'source' || role === 'expense') {
+            s.startIdx = params.start ? idxOf(params.start) : 0;
+            s.endIdx = params.end ? idxOf(params.end) : Infinity;
         }
         if (role === 'expense') {
             s.inflow = series();
@@ -619,17 +640,20 @@
         return s;
     }
 
-    function sourceGross(s, t, cal) {
+    /** What falls due in month `t` of an `amount` on module `s`'s schedule:
+     *  an income's gross pay, or an expense's cost. */
+    function scheduled(s, amount, t, cal) {
         const p = s.params;
-        if (p.per === 'once') return t === s.startIdx ? p.amount : 0;
+        if (!amount) return 0;
+        if (p.per === 'once') return t === s.startIdx ? amount : 0;
         if (t < s.startIdx || t > s.endIdx) return 0;
         const years = Math.floor((t - Math.max(0, s.startIdx)) / 12);
         const g = p.growth ? Math.pow(1 + p.growth / 100, years) : 1;
         if (p.per === 'year') {
-            if (p.payMonth) return cal === p.payMonth ? p.amount * g : 0;
-            return (p.amount / 12) * g;
+            if (p.payMonth) return cal === p.payMonth ? amount * g : 0;
+            return (amount / 12) * g;
         }
-        return p.amount * (Catalog.PER_MONTH[p.per] || 1) * g;
+        return amount * (Catalog.PER_MONTH[p.per] || 1) * g;
     }
 
     /** Upstream-first order of the modules, so a transfer is seen downstream
@@ -707,11 +731,25 @@
 
     const sum = (arr) => { let x = 0; for (let i = 0; i < arr.length; i++) x += arr[i]; return x; };
 
+    /** The first index where `balance` ends below `floor` after having been at
+     *  or over it, or -1. An account still filling up to its minimum has not
+     *  dipped below it. */
+    function firstDipBelow(balance, floor) {
+        let reached = false;
+        for (let k = 0; k < balance.length; k++) {
+            if (balance[k] >= floor - 0.005) reached = true;
+            else if (reached) return k;
+        }
+        return -1;
+    }
+
     function buildResults(r) {
         const { months, states, linkStates, totals } = r;
         const nodes = Object.create(null);
         const warnings = [];
         const milestones = [];
+        // Expenses whose own cost some link pays.
+        const costPaid = new Set(linkStates.filter((L) => L.costOf).map((L) => L.to.id));
 
         for (const s of states) {
             const out = { role: s.role, kind: s.kind, outflow: s.outflow };
@@ -745,6 +783,14 @@
                 if (k >= 0) {
                     warnings.push({ code: 'overdrawn', nodeId: s.id, amount: -Math.min(...s.balance), month: Math.max(0, k - 1) });
                 }
+                const floor = s.params.minBalance || 0;
+                const dip = floor > 0 ? firstDipBelow(s.balance, floor) : -1;
+                if (dip >= 0) {
+                    warnings.push({ code: 'below-minimum', nodeId: s.id, amount: floor, month: Math.max(0, dip - 1) });
+                }
+            }
+            if (s.role === 'expense' && s.params.cost > 0 && !costPaid.has(s.id)) {
+                warnings.push({ code: 'cost-unpaid', nodeId: s.id, amount: s.params.cost });
             }
             if (s.role === 'account' && s.capped > 0.005) {
                 warnings.push({ code: 'cap', nodeId: s.id, amount: s.capped, month: s.cappedFirst });
@@ -774,19 +820,6 @@
                 const pct = shares.filter((L) => L.mode === 'percent').reduce((a, L) => a + L.value, 0);
                 if (pct > 100 + 1e-9) warnings.push({ code: 'over-100', nodeId: s.id, basis, amount: pct });
             }
-        }
-
-        const byId = new Map(states.map((s) => [s.id, s]));
-        for (const s of states) {
-            if (s.role !== 'person') continue;
-            const worth = new Float64Array(months + 1);
-            for (const id of Plan.personReach(r.plan, s.id)) {
-                const held = byId.get(id);
-                if (!held || (held.role !== 'account' && held.role !== 'debt')) continue;
-                const sign = held.role === 'debt' ? -1 : 1;
-                for (let k = 0; k <= months; k++) worth[k] += sign * held.balance[k];
-            }
-            nodes[s.id].worth = worth;
         }
 
         const links = Object.create(null);

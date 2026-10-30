@@ -1,8 +1,8 @@
 /* ============================================================================
-   goals.css — the Goals workspace (goals-board.js): a card per goal, in a
-   solid colour of the user's choosing, its rule written as a sentence of
-   buttons. The page frame (.board-body)
-   is shared with Compare.
+   goals.css — the Goals workspace (goals-board.js), as an Ant Design page:
+   the goal list (an avatar in the goal's colour, its rule as a sentence, its
+   progress and status), the table of every goal against every plan, and the
+   goal editor (a modal form). The page frame is components.css's .page.
    ============================================================================ */
 
 .goals-board,
@@ -11,76 +11,57 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    background: var(--surface1);
 }
 
-/* ── Page frame ─────────────────────────────────────────────────────────── */
-.board-body {
-    flex: 1;
-    min-height: 0;
-    padding: var(--space-20) var(--space-24) var(--space-24);
-}
-
-/* The page's action (Add New Goal), above the cards. */
-.board-bar { display: flex; margin-bottom: var(--space-16); }
-
-/* ── Goal cards ─────────────────────────────────────────────────────────── */
-.board-goals {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-12);
-    max-width: 880px;
-    margin: 0 0 var(--space-32);
-    padding: 0;
-    list-style: none;
-}
-/* Each card is a solid colour of the user's choosing (data-color): Aventurine
-   Manage's Gemstone palette (its themes.css), the same eight stones in the
-   same order. White text keeps 5.2:1 or better on every card and 7:1 on the
-   darker controls inside it (WCAG formula), the same in both themes. Lapis,
-   garnet, tanzanite and rhodolite are Manage's own light-surface stops;
-   tourmaline, tiger's eye, amber and emerald are too light for white text
-   there (3.4 to 4.2:1), so they are deepened in OKLCH, hue kept, chroma
-   eased only as far as the sRGB gamut needs. */
+/* ── Goal colours ───────────────────────────────────────────────────────────
+ * Each goal wears a colour of the user's choosing (data-color): Aventurine
+ * eight of Ant Design's preset palettes (style.css section 1), one hue each.
+ * The stone names stay as the stored keys and labels; each stone is now an Ant
+ * hue: lapis blue, tourmaline cyan, tiger's eye gold, garnet red, tanzanite
+ * purple, amber orange, rhodolite magenta, emerald green.
+ *
+ * The fill is a fixed light-palette step, written as a hex because it must not
+ * follow the theme: white sits on it in both themes and keeps 5.4:1 or better
+ * (WCAG formula). That is step 7 for blue, red and magenta, 8 for cyan, orange
+ * and green, 9 for gold (gold-8 is 4.4:1), and 6 for purple. Gold and orange
+ * are 7.4 apart in OKLab, where the stones they replace were 4.7. */
 :root {
-    --goal-lapis:      #1a49ae;
-    --goal-tourmaline: #047691;   /* Manage #0086a5, deepened */
-    --goal-tigers-eye: #9c5e05;   /* Manage #bd771d, deepened */
-    --goal-garnet:     #b00d14;
-    --goal-tanzanite:  #623faf;
-    --goal-amber:      #b05003;   /* Manage #c55f18, deepened */
-    --goal-rhodolite:  #9645a0;
-    --goal-emerald:    #017c58;   /* Manage #099e71, deepened */
-    /* What sits on a card: white, and darker washes of its colour. */
+    --goal-lapis:      #0958d9;   /* blue-7 */
+    --goal-tourmaline: #006d75;   /* cyan-8 */
+    --goal-tigers-eye: #874d00;   /* gold-9 */
+    --goal-garnet:     #cf1322;   /* red-7 */
+    --goal-tanzanite:  #722ed1;   /* purple-6 */
+    --goal-amber:      #ad4e00;   /* orange-8 */
+    --goal-rhodolite:  #c41d7f;   /* magenta-7 */
+    --goal-emerald:    #237804;   /* green-8 */
+    /* What sits on a goal's colour: white. */
     --goal-ink: #fff;
-    --goal-shade: rgba(0, 0, 0, 0.18);
-    --goal-shade-strong: rgba(0, 0, 0, 0.3);
-    --goal-line: rgba(255, 255, 255, 0.3);
 }
 
-/* A goal's colour where it marks a chart (Analyze's Net worth flags):
-   Manage's Gemstone chart stops as they are, its light set on the light
-   theme and its dark set (re-picked for the dark surface) on the dark. Each
-   clears 3:1 against its chart's surface. */
+/* A goal's colour where it marks a chart (Analyze's Net worth flags): the
+   palette step itself, so it follows the theme. The light theme takes the
+   fill's step, except cyan, gold, orange and green, one lighter (each still
+   3.4:1 or better on white); the dark theme takes Ant's dark step 7, 3.4:1 or
+   better on the dark surface. */
 :root {
-    --goal-lapis-mark:      #1a49ae;
-    --goal-tourmaline-mark: #0086a5;
-    --goal-tigers-eye-mark: #bd771d;
-    --goal-garnet-mark:     #b00d14;
-    --goal-tanzanite-mark:  #623faf;
-    --goal-amber-mark:      #c55f18;
-    --goal-rhodolite-mark:  #9645a0;
-    --goal-emerald-mark:    #099e71;
+    --goal-lapis-mark:      var(--blue-7);
+    --goal-tourmaline-mark: var(--cyan-7);
+    --goal-tigers-eye-mark: var(--gold-8);
+    --goal-garnet-mark:     var(--red-7);
+    --goal-tanzanite-mark:  var(--purple-6);
+    --goal-amber-mark:      var(--orange-7);
+    --goal-rhodolite-mark:  var(--magenta-7);
+    --goal-emerald-mark:    var(--green-7);
 }
 html[data-theme="dark"] {
-    --goal-lapis-mark:      #3365cc;
-    --goal-tourmaline-mark: #169dbf;
-    --goal-tigers-eye-mark: #c07d2c;
-    --goal-garnet-mark:     #be342f;
-    --goal-tanzanite-mark:  #775ac5;
-    --goal-amber-mark:      #c55f19;
-    --goal-rhodolite-mark:  #a051aa;
-    --goal-emerald-mark:    #00a475;
+    --goal-lapis-mark:      var(--blue-7);
+    --goal-tourmaline-mark: var(--cyan-7);
+    --goal-tigers-eye-mark: var(--gold-7);
+    --goal-garnet-mark:     var(--red-7);
+    --goal-tanzanite-mark:  var(--purple-7);
+    --goal-amber-mark:      var(--orange-7);
+    --goal-rhodolite-mark:  var(--magenta-7);
+    --goal-emerald-mark:    var(--green-7);
 }
 
 [data-color="lapis"]      { --goal-color: var(--goal-lapis); }
@@ -92,161 +73,100 @@ html[data-theme="dark"] {
 [data-color="rhodolite"]  { --goal-color: var(--goal-rhodolite); }
 [data-color="emerald"]    { --goal-color: var(--goal-emerald); }
 
-/* The content keeps clear of the target at the card's left, so no text is
-   ever read over it. Sized to the app's controls: 28px buttons, 13px words. */
-.goal-card {
-    position: relative;
-    isolation: isolate;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-8);
-    padding: var(--space-12) var(--space-16) var(--space-12) 80px;
-    border-radius: var(--radius-panel);
+/* ── The goal list ──────────────────────────────────────────────────────── */
+.goals-body { padding-block: var(--space-4); }
+.goal-row { flex-wrap: wrap; gap: var(--space-12) var(--space-24); }
+.goal-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--border-radius-lg);
     background: var(--goal-color, var(--goal-lapis));
     color: var(--goal-ink);
 }
-/* The target, large and faint, cut off by the card's left edge. */
-.goal-wm {
-    position: absolute;
-    z-index: -1;
-    top: 50%;
-    left: -26px;
-    width: 104px;
-    height: 104px;
-    color: var(--goal-ink);
-    opacity: 0.16;
-    transform: translateY(-50%);
-    pointer-events: none;
-}
-.goal-wm .icon { width: 100%; height: 100%; }
-/* A goal just added: a ring that fades, so the eye finds it. */
-.goal-card.is-new { animation: goal-new 1.6s ease; }
-@keyframes goal-new {
-    from { box-shadow: 0 0 0 3px var(--accent-ring); }
-    to { box-shadow: 0 0 0 3px transparent; }
-}
-/* On a coloured card the accent focus ring would vanish into it; white does not. */
-.goal-card :focus-visible { outline: 2px solid var(--goal-ink); outline-offset: 2px; }
-
-.goal-card-head { display: flex; align-items: center; gap: var(--space-4); }
-/* The name reads as a title, and edits in place. */
-.goal-name {
-    flex: 1;
-    min-width: 0;
-    height: 28px;
-    margin-left: calc(-1 * var(--space-8));
-    padding: 0 var(--space-8);
-    border: var(--border-width) solid transparent;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--goal-ink);
-    font-size: var(--size-body);
-    font-weight: var(--weight-semibold);
-    transition: border-color 0.15s ease, background-color 0.15s ease;
-}
-.goal-name:hover { border-color: var(--goal-line); }
-.goal-name:focus { border-color: var(--goal-ink); background: var(--goal-shade); outline: none; }
-.goal-name::selection { background: rgba(255, 255, 255, 0.35); }
-/* The card's own buttons: its colour, and delete. */
-.goal-tool {
-    display: grid;
-    place-items: center;
-    flex: none;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--goal-ink);
-    cursor: pointer;
-    transition: background-color 0.15s ease;
-}
-.goal-tool .icon { width: 16px; height: 16px; }
-.goal-tool:hover,
-.goal-tool[aria-expanded="true"] { background: var(--goal-shade); }
-.goal-tool:active { background: var(--goal-shade-strong); }
-
-/* ── The rule: a sentence whose parts are buttons ───────────────────────── */
-.rule {
+.goal-avatar .icon { width: 20px; height: 20px; }
+.goal-text { min-width: 0; }
+.goal-text .list-item-title,
+.goal-text .list-item-desc { overflow-wrap: anywhere; }
+.goal-progress {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-8);
-    margin: 0;
-    font-size: var(--size-small);
+    flex-direction: column;
+    gap: 2px;
+    flex: 0 1 220px;
+    min-width: 160px;
 }
-.rule-word { color: var(--goal-ink); }
-.rule-tok {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-4);
-    height: 28px;
-    padding: 0 var(--space-8) 0 10px;
-    border: var(--border-width) solid var(--goal-line);
-    border-radius: var(--radius-sm);
-    background: var(--goal-shade);
-    color: var(--goal-ink);
-    font-size: var(--size-small);
-    font-weight: var(--weight-semibold);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-    cursor: pointer;
-    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+.goal-progress-note { color: var(--color-text-tertiary); font-size: var(--font-size-sm); }
+.goal-status {
+    display: flex;
+    justify-content: flex-end;
+    flex: 0 1 260px;
+    min-width: 0;
 }
-.rule-tok:hover { border-color: rgba(255, 255, 255, 0.6); background: var(--goal-shade-strong); }
-.rule-tok:active { background: rgba(0, 0, 0, 0.36); }
-.rule-tok[aria-expanded="true"] { border-color: var(--goal-ink); box-shadow: 0 0 0 1px var(--goal-ink); }
-.rule-tok-caret { width: 12px; height: 12px; color: var(--goal-ink); opacity: 0.8; }
-/* The measure leads the sentence: white, in the card's colour. */
-.rule-tok[data-tok="metric"] { border-color: var(--goal-ink); background: var(--goal-ink); color: var(--goal-color); }
-.rule-tok[data-tok="metric"]:hover { background: rgba(255, 255, 255, 0.88); }
-.rule-tok[data-tok="metric"] .rule-tok-caret { color: var(--goal-color); opacity: 1; }
+/* A goal just saved: its row is tinted, then fades back, so the eye finds it. */
+.goal-row.is-new { animation: goal-new 1.6s var(--motion-ease-out); }
+@keyframes goal-new {
+    from { background: var(--control-item-bg-active); }
+    to { background: transparent; }
+}
 
-/* The panels a target, an age and a colour open (UI.popover gives the surface). */
-.rule-pop { width: 280px; }
-.rule-units { display: flex; }
-.rule-units .segctl-btn { flex: 1; justify-content: center; }
-.rule-pop-field { display: flex; align-items: center; gap: var(--space-8); color: var(--text-secondary); font-size: var(--size-small); }
-.rule-pop-field .field-affix { flex: 1; }
-.rule-pop-hint { margin: 0; color: var(--text-tertiary); font-size: var(--size-micro); line-height: var(--lh-normal); }
-.color-pop { width: auto; min-width: 0; }
-.swatches { display: grid; grid-template-columns: repeat(4, 32px); gap: var(--space-8); }
+/* The goal's colour, as a dot beside its name in the table. */
+.goal-cell-name { display: inline-flex; align-items: center; gap: var(--space-8); }
+.goal-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--goal-color, var(--goal-lapis)); }
+
+/* ── The goal editor: Ant's vertical Form in a Modal ─────────────────────── */
+.goal-editor { width: 560px; }
+.goal-preview { margin-bottom: var(--space-20); }
+.form-item { margin-bottom: var(--space-16); min-width: 0; }
+.form-label {
+    display: block;
+    padding-bottom: var(--space-8);
+    color: var(--color-text);
+    font-size: var(--font-size);
+    line-height: var(--line-height);
+}
+.form-item > .field-input,
+.form-item > .field-select,
+.form-item > .field-affix,
+.form-item > .field-month { width: 100%; }
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 var(--space-16);
+}
+.form-explain { margin: var(--space-4) 0 0; color: var(--color-error-text); font-size: var(--font-size); }
+.form-hint { margin: var(--space-4) 0 0; color: var(--color-text-tertiary); font-size: var(--font-size); }
+
+/* The colours: a row of round swatches, the chosen one ticked and ringed. */
+.swatches { display: flex; flex-wrap: wrap; gap: var(--space-8); }
 .swatch {
     display: grid;
     place-items: center;
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     padding: 0;
     border: 0;
     border-radius: 50%;
     background: var(--goal-color);
     color: var(--goal-ink);
     cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition: transform var(--motion-duration-mid), box-shadow var(--motion-duration-mid);
 }
-.swatch .icon { width: 16px; height: 16px; visibility: hidden; }
-.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--surface1), 0 0 0 4px var(--text-primary); }
-.swatch[aria-pressed="true"] .icon { visibility: visible; }
+.swatch .icon { width: 14px; height: 14px; visibility: hidden; }
+.swatch[aria-checked="true"] { box-shadow: 0 0 0 2px var(--color-bg-elevated), 0 0 0 4px var(--goal-color); }
+.swatch[aria-checked="true"] .icon { visibility: visible; }
 .swatch:hover { transform: scale(1.1); }
-.swatch:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 3px; }
+.swatch:focus-visible { outline: 4px solid var(--color-primary-border); outline-offset: 3px; }
 
-/* With no goals, the list gives up its room to this. */
-.board-goals:empty { display: none; }
-.board-empty {
-    max-width: 880px;
-    padding: var(--space-20);
-    border: var(--border-width) dashed var(--border);
-    border-radius: var(--radius-panel);
-    text-align: center;
+@media (max-width: 720px) {
+    .form-row { grid-template-columns: minmax(0, 1fr); }
+    .goal-status { justify-content: flex-start; }
 }
-.board-empty-title { margin: 0; color: var(--text-primary); font-size: var(--size-h3); font-weight: var(--weight-semibold); }
-.board-empty-text { margin: var(--space-4) 0 0; color: var(--text-secondary); font-size: var(--size-small); }
-
 
 @media (prefers-reduced-motion: reduce) {
-    .goal-name, .goal-tool, .rule-tok, .swatch { transition: none; }
+    .swatch { transition: none; }
     .swatch:hover { transform: none; }
-    .goal-card.is-new { animation: none; }
+    .goal-row.is-new { animation: none; }
 }

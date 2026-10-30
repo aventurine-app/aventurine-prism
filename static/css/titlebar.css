@@ -1,16 +1,17 @@
 /* ============================================================================
-   titlebar.css — the bar across the top of the app: the app's name, where
-   the user is (the workspace and its plan) and the signed-in user. Pure black
-   in both themes, 40px.
+   titlebar.css — the bar across the top of the app, as Ant Design Pro's dark
+   header: the app's name, whether the plans are saved, and the signed-in
+   user. Pure black in both themes.
    ============================================================================ */
 
-/* The bar is black in both themes, so what sits on it uses light inks of its
+/* The bar is dark in both themes, so what sits on it uses light inks of its
    own rather than the theme's text colours. */
 :root {
     --titlebar-bg: #000;
-    --titlebar-ink: var(--color-base-300);
-    --titlebar-ink-strong: var(--color-base-100);
-    --titlebar-frost: rgba(255, 255, 255, 0.10);
+    --titlebar-ink: rgba(255, 255, 255, 0.65);
+    --titlebar-ink-strong: rgba(255, 255, 255, 0.85);
+    --titlebar-hover: rgba(255, 255, 255, 0.12);
+    --titlebar-edge: transparent;
 }
 
 .titlebar {
@@ -21,28 +22,28 @@
     height: var(--titlebar-height);
     flex-shrink: 0;
     background: var(--titlebar-bg);
+    border-bottom: var(--line-width) solid var(--titlebar-edge);
     color: var(--titlebar-ink);
     user-select: none;
 }
-/* As wide as the navigation below, so the title starts where the workspace does. */
+/* As wide as the navigation below. */
 .titlebar-lead {
     display: flex;
     align-items: center;
+    gap: var(--space-12);
     width: var(--sidebar-width);
     flex-shrink: 0;
+    padding-left: var(--space-20);
     overflow: hidden;
     white-space: nowrap;
-    transition: width 0.18s ease;
+    transition: width var(--motion-duration-mid) var(--motion-ease-in-out);
 }
-
-/* Starts where the navigation's icons do (its padding plus an item's). The
-   collapsed rail has no room for it. */
+/* The collapsed rail is too narrow for the name. */
 .titlebar-name {
-    padding-left: calc(var(--space-8) + 10px);
-    color: var(--titlebar-ink-strong);
-    font-size: var(--size-small);
-    font-weight: var(--weight-bold);
-    transition: opacity 0.18s ease;
+    color: #fff;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-strong);
+    transition: opacity var(--motion-duration-mid);
 }
 :root.has-rail .titlebar-name { opacity: 0; }
 
@@ -51,45 +52,40 @@
     min-width: var(--space-48);
 }
 
-/* ── Where the user is: the workspace, and the plan open in it ──────────── */
-.titlebar-title {
-    display: flex;
-    align-items: center;
-    gap: var(--space-8);
-    min-width: 0;
-    padding-left: var(--space-16);
+/* Whether the plans are saved: a status dot and a word. */
+.titlebar-save {
+    align-self: center;
+    min-width: 88px;
+    margin-right: var(--space-8);
     color: var(--titlebar-ink);
-    font-size: var(--size-small);
-    font-weight: var(--weight-semibold);
+    font-size: var(--font-size);
     white-space: nowrap;
 }
-.titlebar-sep { width: 12px; height: 12px; flex: none; opacity: 0.6; }
-.titlebar-plan { overflow: hidden; color: var(--titlebar-ink-strong); text-overflow: ellipsis; }
 
-/* The signed-in user, at the bar's right edge: a profile icon and the email. */
+/* The signed-in user, at the bar's right edge: a profile icon and the email,
+   a text button on the dark bar. */
 .titlebar-user {
     display: inline-flex;
     align-items: center;
     align-self: center;
-    gap: 6px;
-    height: 28px;
-    max-width: 240px;
+    gap: var(--space-8);
+    height: var(--control-height);
+    max-width: 260px;
     margin-right: var(--space-12);
     padding: 0 var(--space-8);
     border: 0;
-    border-radius: var(--radius-control);
+    border-radius: var(--border-radius);
     background: transparent;
-    color: var(--titlebar-ink);
-    font-size: var(--size-small);
-    font-weight: var(--weight-semibold);
+    color: var(--titlebar-ink-strong);
+    font-size: var(--font-size);
     cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    transition: background-color var(--motion-duration-mid), color var(--motion-duration-mid);
 }
 .titlebar-user .icon { width: 20px; height: 20px; flex: none; }
 .titlebar-user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.titlebar-user:hover { background: var(--titlebar-frost); color: var(--titlebar-ink-strong); }
-.titlebar-user:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: -2px; }
+.titlebar-user:hover { background: var(--titlebar-hover); color: #fff; }
+.titlebar-user:focus-visible { outline: 4px solid rgba(255, 255, 255, 0.4); outline-offset: -2px; }
 
 @media (prefers-reduced-motion: reduce) {
-    .titlebar-user { transition: none; }
+    .titlebar-lead, .titlebar-name, .titlebar-user { transition: none; }
 }

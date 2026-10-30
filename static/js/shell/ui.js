@@ -89,7 +89,8 @@
 
     // ── Menu ───────────────────────────────────────────────────────────────
 
-    /** items: [{ label, icon, onSelect, danger, disabled }] or 'sep'. */
+    /** items: [{ label, icon, onSelect, danger, disabled, chosen }] or 'sep'.
+     *  `chosen` marks the current pick of a menu that chooses one. */
     function menu(anchor, items, { align = 'left' } = {}) {
         closePop();
         const at = pointFor(anchor, align);
@@ -108,6 +109,7 @@
             b.className = 'menu-item';
             b.setAttribute('role', 'menuitem');
             if (it.danger) b.dataset.danger = '';
+            if (it.chosen) b.classList.add('is-chosen');
             b.disabled = !!it.disabled;
             b.innerHTML = `${it.icon ? iconSvg(it.icon) : ''}<span>${escapeHtml(it.label)}</span>`;
             b.addEventListener('click', () => {
@@ -272,6 +274,8 @@
     // ── Month picker ───────────────────────────────────────────────────────
 
     const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    // The grid's width in months (ui.css, .month-pop-grid), as Ant's month panel has.
+    const MONTH_COLUMNS = 3;
 
     /** A year stepper over a grid of months. `value` is 'YYYY-MM' or null;
      *  onPick receives 'YYYY-MM', or null from the clear button. */
@@ -297,7 +301,7 @@
                     const on = chosen && chosen.y === year && chosen.m === i + 1;
                     return `<button class="month-pop-cell" type="button" data-m="${i + 1}" aria-pressed="${!!on}">${m}</button>`;
                 }).join('')}</div>
-                ${clearLabel ? `<button class="button-ghost month-pop-clear" type="button" data-clear>${iconSvg('x')}${escapeHtml(clearLabel)}</button>` : ''}`;
+                ${clearLabel ? `<div class="month-pop-foot"><button class="button-link button-sm month-pop-clear" type="button" data-clear>${escapeHtml(clearLabel)}</button></div>` : ''}`;
         }
 
         function pick(v) {
@@ -322,7 +326,7 @@
             const cell = e.target.closest('[data-m]');
             if (!cell) return;
             const m = Number(cell.dataset.m);
-            const move = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 4, ArrowUp: -4 }[e.key];
+            const move = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: MONTH_COLUMNS, ArrowUp: -MONTH_COLUMNS }[e.key];
             if (!move) return;
             e.preventDefault();
             const next = m + move;
@@ -383,8 +387,9 @@
     }
 
     /** Build a throwaway dialog. `body` is a DOM node; resolves with what
-     *  `finish` was called with. */
-    function dialog({ title, body, actions }) {
+     *  `finish` was called with. `icon` ('warning' | 'danger') puts Modal.confirm's
+     *  exclamation beside the title. */
+    function dialog({ title, body, actions, icon = null }) {
         return new Promise((resolve) => {
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay';
@@ -396,6 +401,10 @@
                     <div class="modal-footer"></div>
                 </div>`;
             overlay.querySelector('.modal-title').textContent = title;
+            if (icon) {
+                overlay.querySelector('.modal-header').insertAdjacentHTML('afterbegin',
+                    iconSvg('warning-circle', { cls: `modal-title-icon${icon === 'danger' ? ' is-danger' : ''}` }));
+            }
             overlay.querySelector('.modal-body').appendChild(body);
             let result = null;
             const footer = overlay.querySelector('.modal-footer');
@@ -435,9 +444,10 @@
         return dialog({
             title,
             body: p,
+            icon: danger ? 'danger' : 'warning',
             actions: [
                 { label: 'Cancel', className: 'button-secondary', value: () => false },
-                { label: confirmLabel, className: danger ? 'button-danger' : 'button-primary', value: () => true, primary: true },
+                { label: confirmLabel, className: danger ? 'button-danger button-danger--solid' : 'button-primary', value: () => true, primary: true },
             ],
         }).then((v) => v === true);
     }
@@ -454,7 +464,7 @@
             toastEl.setAttribute('role', 'status');
             document.body.appendChild(toastEl);
         }
-        const icon = type === 'error' ? 'warning-circle' : type === 'success' ? 'check-circle' : 'info';
+        const icon = { error: 'x-circle', success: 'check-circle', warning: 'warning-circle' }[type] || 'info';
         toastEl.dataset.type = type;
         toastEl.innerHTML = `${iconSvg(icon)}<span></span>`;
         toastEl.querySelector('span').textContent = message;

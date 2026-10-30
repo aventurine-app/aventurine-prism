@@ -10,7 +10,9 @@
 // and the goals to measure it by. Pure, like the engine: no DOM, no clock, no
 // randomness.
 //
-//   evaluate(plan, results, goals, { real })   one status per goal, read off a run
+//   evaluate(plan, results, goals, { real })   one status per goal, read off a
+//                                              run, with how far toward it the
+//                                              plan gets by its deadline
 //
 // The measures, at each balance point k (0..months, the moment month k-1 ends,
 // where the net worth series is recorded):
@@ -27,8 +29,7 @@
 // A goal is met at the first point its rule holds. With a deadline it is on
 // time when that point is at or before the deadline's. A rule that reads a
 // year of income or expenses in a plan that has none is `blocked` (there is
-// nothing to compare), as is an age deadline in a plan without a person whose
-// age is set.
+// nothing to compare), as is an age deadline in a plan whose age is not set.
 //
 // With `real`, money is measured in the plan's first month's money (deflated
 // at the plan's inflation); an amount in a rule is then taken in today's
@@ -119,11 +120,30 @@
 
     /** Why a goal cannot be measured in this plan, or null. */
     function blockedBy(plan, goal, s) {
-        if (goal.due === 'age' && !Plan.goalDate(plan, goal)) return Plan.goalPerson(plan) ? 'no-age' : 'no-person';
+        if (goal.due === 'age' && !Plan.goalDate(plan, goal)) return 'no-age';
         for (const [metric, series] of [[goal.metric, s.value], [goal.unit === 'amount' ? null : goal.of, s.of]]) {
             if (YEARLY.has(metric) && !series.some((v) => Math.abs(v) > EPS)) return `no-${metric}`;
         }
         return null;
+    }
+
+    const clamp01 = (v) => Math.min(1, Math.max(0, v));
+
+    /** How close a rule's measure comes to its target at point k, 0..1. One
+     *  that must reach at least its target: the share of the target reached.
+     *  One that must fall to at most it: the share of the way down to it from
+     *  the highest the measure stood up to k. */
+    function towards(goal, s, k) {
+        const v = s.value[k];
+        const t = s.target[k];
+        if (goal.op === 'lte') {
+            if (v <= t + EPS) return 1;
+            let peak = v;
+            for (let i = 0; i < k; i++) peak = Math.max(peak, s.value[i]);
+            return peak - t > EPS ? clamp01((peak - v) / (peak - t)) : 0;
+        }
+        if (v >= t - EPS) return 1;
+        return t > EPS ? clamp01(v / t) : 0;
     }
 
     /** One goal's status from a run.
@@ -134,7 +154,11 @@
      *              plan) or 'open' (not met, no deadline or one past the plan)
      *    at        the point the figures are read at: when met, else the end
      *    value, target  the two sides of the rule at `at`
-     *    blocked   'no-person' | 'no-age' | 'no-income' | 'no-expenses', or null */
+     *    progress  how far toward its target the plan gets by the deadline
+     *              (by the end of the run when the deadline is past it), 0..1:
+     *              1 when met in time; null when blocked
+     *    progressAt  the point that progress is read at
+     *    blocked   'no-age' | 'no-income' | 'no-expenses', or null */
     function evaluateOne(plan, res, def, goal) {
         const s = sides(plan, res, def, goal);
         const n = res.months;
@@ -150,7 +174,9 @@
         if (month != null) status = byIdx == null || month <= Math.max(0, byIdx) ? 'reached' : 'late';
         else status = byIdx != null && byIdx <= n ? 'behind' : 'open';
         const at = month != null ? month : n;
-        return { id: goal.id, month, byIdx, status, at, value: s.value[at], target: s.target[at], blocked };
+        const progressAt = byIdx == null ? n : Math.max(0, Math.min(n, byIdx));
+        const progress = blocked ? null : status === 'reached' ? 1 : towards(goal, s, progressAt);
+        return { id: goal.id, month, byIdx, status, at, value: s.value[at], target: s.target[at], progress, progressAt, blocked };
     }
 
     function evaluate(plan, res, goals, { real = false } = {}) {
