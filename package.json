@@ -1,7 +1,7 @@
 {
-  "name": "aventurine-prism",
+  "name": "aventurine-planner",
   "version": "0.1.0",
-  "description": "Aventurine Prism: a private financial outlook simulator that runs in the browser. Plans are stored in the visitor's own browser.",
+  "description": "Aventurine Planner: a private financial outlook simulator that runs in the browser. Plans are stored in the visitor's own browser.",
   "private": true,
   "author": "Aventurine <chatgpt.flattered848@passmail.net>",
   "homepage": "https://aventurine-app.com",

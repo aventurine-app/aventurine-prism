@@ -1,6 +1,6 @@
 // ─── auth.js ────────────────────────────────────────────────────────────────
 // Signing in without a password. The person types their email; if it has access
-// to Prism (the same rule as access.js) we email a one-time link; opening it
+// to Aventurine Planner (the same rule as access.js) we email a one-time link; opening it
 // starts a session.
 //
 // Choices that matter:

@@ -47,7 +47,7 @@ function sizeOf(dir) {
 if (require.main === module) {
     build();
     const { files, bytes } = sizeOf(DIST_DIR);
-    console.log(`Built Aventurine Prism ${readVersion()} to ${DIST_DIR}: ${files} files, ${(bytes / 1024).toFixed(0)} KB`);
+    console.log(`Built Aventurine Planner ${readVersion()} to ${DIST_DIR}: ${files} files, ${(bytes / 1024).toFixed(0)} KB`);
 }
 
 module.exports = { build, DIST_DIR };

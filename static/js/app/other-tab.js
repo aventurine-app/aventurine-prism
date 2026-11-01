@@ -19,7 +19,7 @@
         root.innerHTML = `
             <div class="lock-card" role="status" aria-live="polite">
                 <span class="role-tile role-tile--lg role-tile--accent">${iconSvg('copy')}</span>
-                <h1 class="lock-title">Prism is open in another tab</h1>
+                <h1 class="lock-title">Aventurine Planner is open in another tab</h1>
                 <p class="lock-note">Plans can be edited in one tab at a time. Close the other tab and your plans will open here.</p>
             </div>`;
         api('GET', '/api/ready').then((r) => {

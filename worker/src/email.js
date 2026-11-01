@@ -2,7 +2,7 @@
 // Sends the sign-in email through Resend's HTTP API. Isolated here so changing
 // provider means changing this file only.
 
-const SUBJECT = 'Your Aventurine Prism sign-in link';
+const SUBJECT = 'Your Aventurine Planner sign-in link';
 
 export class EmailError extends Error {}
 
@@ -10,10 +10,10 @@ const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&l
 
 /** The message body. `link` is built by us from APP_ORIGIN and a random token. */
 export function loginMessage(link, minutes) {
-    const text = `Open this link to sign in to Aventurine Prism:\n\n${link}\n\n`
+    const text = `Open this link to sign in to Aventurine Planner:\n\n${link}\n\n`
         + `It works once and expires in ${minutes} minutes. If you did not ask for it, you can ignore this email.`;
-    const html = `<p>Open this link to sign in to Aventurine Prism:</p>`
-        + `<p><a href="${escapeHtml(link)}">Sign in to Aventurine Prism</a></p>`
+    const html = `<p>Open this link to sign in to Aventurine Planner:</p>`
+        + `<p><a href="${escapeHtml(link)}">Sign in to Aventurine Planner</a></p>`
         + `<p>It works once and expires in ${minutes} minutes. If you did not ask for it, you can ignore this email.</p>`;
     return { subject: SUBJECT, text, html };
 }

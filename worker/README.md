@@ -1,4 +1,4 @@
-# Prism worker: sign-in, billing and access
+# Aventurine Planner worker: sign-in, billing and access
 
 One Cloudflare Worker serves the whole app and decides who may open it. A
 visitor signs in by email link; Paddle tells the worker who has paid; the app's
@@ -92,7 +92,7 @@ is redirected to it.
 
 In the sandbox dashboard:
 
-1. **Catalog → Products**: create "Aventurine Prism" with three recurring
+1. **Catalog → Products**: create "Aventurine Planner" with three recurring
    prices: monthly ($7.99), monthly with a 14-day trial, and yearly ($74.99).
    Note the `pri_…` ids; the website's pricing buttons need them.
 2. **Developer tools → Authentication → Client-side token**: for Paddle.js on

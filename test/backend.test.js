@@ -162,7 +162,7 @@ test('cancelling the file picker imports nothing', async () => {
 test('importing something that is not a plan is refused with a reason', async () => {
     const notJson = await setup({ openResult: 'hello' });
     assert.deepEqual(await notJson.call('POST', '/api/plans/import'),
-        { status: 422, body: { ok: false, error: 'not an Aventurine Prism plan file' } });
+        { status: 422, body: { ok: false, error: 'not an Aventurine Planner plan file' } });
 
     const notAPlan = await setup({ openResult: JSON.stringify({ format: 'citrine-plan', plan: { junk: true } }) });
     assert.equal((await notAPlan.call('POST', '/api/plans/import')).status, 422);

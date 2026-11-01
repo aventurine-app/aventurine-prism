@@ -1,4 +1,4 @@
-# Aventurine Prism
+# Aventurine Planner
 
 A private financial outlook simulator that runs in your browser, from the makers
 of Aventurine.
@@ -23,7 +23,7 @@ The navigation on the left holds four workspaces:
   each spends, earns, owes and pays in tax), then ranks every plan.
 
 Your plans stay in your browser. They are stored on your own device and never
-sent to a server, and Prism does not connect to your bank. Export a plan to a
+sent to a server, and Aventurine Planner does not connect to your bank. Export a plan to a
 plain JSON file to keep a copy or move it to another browser.
 
 ## Run it

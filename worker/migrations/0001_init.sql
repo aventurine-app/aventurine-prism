@@ -1,4 +1,4 @@
--- Aventurine Prism: billing state mirrored from Paddle, plus sign-in state.
+-- Aventurine Planner: billing state mirrored from Paddle, plus sign-in state.
 --
 -- Times are integer milliseconds since the epoch (UTC). Paddle ids are stored
 -- as given. Nothing here holds a plan: plans never leave the user's browser.

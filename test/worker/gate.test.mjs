@@ -231,7 +231,7 @@ test('another hostname is sent to the real one', async (t) => {
     t.after(site.restore);
     const worker = createWorker({ now: () => site.clock.now });
     const response = await worker.fetch(
-        new Request('https://aventurine-prism.someone.workers.dev/static/js/app/store.js?x=1'), site.env, { waitUntil() {} },
+        new Request('https://aventurine-planner.someone.workers.dev/static/js/app/store.js?x=1'), site.env, { waitUntil() {} },
     );
     assert.equal(response.status, 308);
     assert.equal(response.headers.get('Location'), `${ORIGIN}/static/js/app/store.js?x=1`);

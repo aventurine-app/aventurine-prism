@@ -1,5 +1,5 @@
 // ─── index.js ───────────────────────────────────────────────────────────────
-// The front door of Aventurine Prism. One Worker serves the whole site at the
+// The front door of Aventurine Planner. One Worker serves the whole site at the
 // app's origin and decides, per request, who may have what:
 //
 //   /api/paddle/webhook     Paddle only (signature checked)       paddle.js

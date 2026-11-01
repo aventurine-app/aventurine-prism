@@ -13,7 +13,7 @@
 (function () {
     const { ApiError, PlanFiles } = window.PrismWeb;
 
-    const PLAN_TYPES = [{ description: 'Aventurine Prism Plan', accept: { 'application/json': ['.json'] } }];
+    const PLAN_TYPES = [{ description: 'Aventurine Planner Plan', accept: { 'application/json': ['.json'] } }];
     const IMPORT_ACCEPT = '.json,.prism,.citrine-plan,application/json';
 
     function download({ name, text }) {

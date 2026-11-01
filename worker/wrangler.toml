@@ -1,10 +1,10 @@
-# Aventurine Prism: sign-in, Paddle webhooks and access control.
+# Aventurine Planner: sign-in, Paddle webhooks and access control.
 #
 # One Worker serves the whole app. `dist/` (from `npm run build`) is bound as
 # ASSETS, and run_worker_first makes the Worker see every request, so nothing
 # in dist/ is reachable without passing through src/index.js.
 
-name = "aventurine-prism"
+name = "aventurine-planner"
 main = "src/index.js"
 compatibility_date = "2026-08-01"
 
@@ -48,9 +48,9 @@ crons = ["17 4 * * *"]
 # use this exact origin. For `wrangler dev` use http://127.0.0.1:8787 and open
 # that exact address in the browser. This is the worker's workers.dev address;
 # switch to https://app.aventurine-app.com once that domain is set up (README).
-APP_ORIGIN = "https://aventurine-prism.aventurine-app.workers.dev"
+APP_ORIGIN = "https://aventurine-planner.aventurine-app.workers.dev"
 # The verified sending domain in Resend (DNS records at the registrar).
-EMAIL_FROM = "Aventurine Prism <signin@aventurine-app.com>"
+EMAIL_FROM = "Aventurine Planner <signin@aventurine-app.com>"
 # Paddle's customer portal link, where the billing button sends customers. The
 # same for everyone (Paddle signs them in by emailing a code) and it does not
 # expire. From the customer portal settings in Paddle. Public, not a secret.

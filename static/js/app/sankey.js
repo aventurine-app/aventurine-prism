@@ -3,7 +3,7 @@
 // ─── sankey.js ──────────────────────────────────────────────────────────────
 // The outlook's Sankey: where a span's money came from and where it went,
 // drawn after Aventurine Manage's Cash Flow report (widgets/cashflow-sankey.js
-// in aventurine-lodestar). Four columns:
+// in aventurine-manage). Four columns:
 //
 //   sources → Money in → groups (Spending, Accounts, …) → each module
 //

@@ -106,7 +106,7 @@ export function createSite({ complimentary = OWNER, files, rateLimit, origin = O
             },
         },
         APP_ORIGIN: origin,
-        EMAIL_FROM: 'Prism <signin@example.test>',
+        EMAIL_FROM: 'Aventurine Planner <signin@example.test>',
         PADDLE_PORTAL_URL: PORTAL_URL,
         PADDLE_WEBHOOK_SECRET: WEBHOOK_SECRET,
         RESEND_API_KEY: resendKey,

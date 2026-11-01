@@ -16,8 +16,8 @@
 
     function explain(me) {
         const sub = me.subscription;
-        if (!sub) return ['No active subscription', `There is no Prism subscription for ${me.email}.`];
-        if (sub.status === 'paused') return ['Subscription paused', 'Your subscription is paused. Resume it from billing to keep using Prism.'];
+        if (!sub) return ['No active subscription', `There is no Aventurine Planner subscription for ${me.email}.`];
+        if (sub.status === 'paused') return ['Subscription paused', 'Your subscription is paused. Resume it from billing to keep using Aventurine Planner.'];
         if (sub.status === 'canceled') {
             return ['Subscription ended', 'Your subscription has ended. Your plans are still saved in this browser; subscribe again to open them.'];
         }

@@ -2,7 +2,7 @@
 
 // ─── plan-files.js ──────────────────────────────────────────────────────────
 // The exported plan file: plain JSON the user keeps, so it must stay readable
-// without Aventurine Prism. Pure functions only; saving and picking the file
+// without Aventurine Planner. Pure functions only; saving and picking the file
 // is file-dialogs.js.
 //
 //   { format: 'citrine-plan', version: 1, exportedAt, plan }
@@ -43,7 +43,7 @@
         try {
             parsed = JSON.parse(text);
         } catch {
-            throw new ApiError('not an Aventurine Prism plan file', 422);
+            throw new ApiError('not an Aventurine Planner plan file', 422);
         }
         return parsed && parsed.format === PLAN_FILE_FORMAT ? parsed.plan : parsed;
     }

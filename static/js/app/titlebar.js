@@ -24,7 +24,7 @@
         const sig = `${name}|${planName}`;
         if (sig === drawn) return;
         drawn = sig;
-        document.title = `${planName || name} | Aventurine Prism`;
+        document.title = `${planName || name} | Aventurine Planner`;
     }
 
     // ── Signed-in user ─────────────────────────────────────────────────────

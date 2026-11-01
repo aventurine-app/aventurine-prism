@@ -68,7 +68,7 @@ try {
     let r = await req('/');
     check('signed out, / redirects to sign-in', r.status === 302 && r.headers.get('location') === '/auth/login', `${r.status}`);
     r = await req('/auth/login');
-    check('the sign-in page is public', r.status === 200 && (await r.text()).includes('Sign in to Prism'));
+    check('the sign-in page is public', r.status === 200 && (await r.text()).includes('Sign in to Aventurine Planner'));
     r = await req('/static/js/app/store.js');
     check('app code is refused when signed out', r.status === 401);
     r = await req('/static/css/style.css');
@@ -82,7 +82,7 @@ try {
     check('the complimentary address signs in', owner.status === 200 && owner.cookie.startsWith('prism_session='), JSON.stringify(owner));
     r = await req('/', { cookie: owner.cookie });
     const page = await r.text();
-    check('and receives the app', r.status === 200 && page.includes('<title>Aventurine Prism</title>') && r.headers.get('cache-control') === 'private, no-cache', `${r.status} ${r.headers.get('cache-control')}`);
+    check('and receives the app', r.status === 200 && page.includes('<title>Aventurine Planner</title>') && r.headers.get('cache-control') === 'private, no-cache', `${r.status} ${r.headers.get('cache-control')}`);
     r = await req('/static/js/app/store.js', { cookie: owner.cookie });
     check('and its code', r.status === 200 && (await r.text()).includes('window.Store'));
 

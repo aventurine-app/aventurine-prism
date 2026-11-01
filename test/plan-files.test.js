@@ -23,7 +23,7 @@ test('parsing unwraps a plan file, and passes a bare plan through', () => {
 });
 
 test('parsing refuses text that is not JSON or is too large', () => {
-    assert.throws(() => PlanFiles.parse('not json'), { status: 422, message: 'not an Aventurine Prism plan file' });
+    assert.throws(() => PlanFiles.parse('not json'), { status: 422, message: 'not an Aventurine Planner plan file' });
     assert.throws(() => PlanFiles.parse(' '.repeat(PlanFiles.MAX_IMPORT_BYTES + 1)), { status: 422 });
     assert.throws(() => PlanFiles.parse(null), { status: 422 });
 });
