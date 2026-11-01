@@ -105,7 +105,7 @@ In the sandbox dashboard:
    - Copy its secret (`pdl_ntfset_…`; later, Events → Notifications → the destination's menu → Edit destination → the copy icon):
      `npx wrangler secret put PADDLE_WEBHOOK_SECRET --config worker/wrangler.toml`
 4. **Checkout → Checkout settings**: set the default payment link to the
-   website's pricing page (`https://aventurine-app.com/prism.html`) and approve
+   website's pricing page (`https://aventurine-app.com/aventurine-planner.html`) and approve
    the website's domain for checkout.
 5. Turn the customer portal on and put its link (`https://…customer-portal.paddle.com/cpl_…`)
    in `PADDLE_PORTAL_URL` in `wrangler.toml`. It is one link for every
