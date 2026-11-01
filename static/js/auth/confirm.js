@@ -6,7 +6,6 @@
 // address bar and history, and only sent when the person presses the button.
 
 (function () {
-    const note = document.getElementById('confirm-note');
     const error = document.getElementById('confirm-error');
     const button = document.getElementById('confirm-button');
     const retry = document.getElementById('confirm-retry');
@@ -16,7 +15,6 @@
     history.replaceState(null, '', location.pathname);
 
     function fail(message) {
-        note.hidden = true;
         error.textContent = message;
         error.hidden = false;
         button.hidden = true;
