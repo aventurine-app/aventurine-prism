@@ -158,5 +158,7 @@ html[data-theme="dark"] .auth-page {
     font-size: var(--font-size);
 }
 .auth-foot a { color: var(--color-link); text-decoration: none; }
+.auth-foot a.auth-link-underline { text-decoration: underline; }
+.auth-sent-title { display: block; margin-bottom: var(--space-8); font-weight: 600; }
 .auth-foot a:hover { color: var(--color-link-hover); }
 .auth-foot a:focus-visible { outline: 4px solid var(--color-primary-border); outline-offset: 1px; border-radius: var(--border-radius-sm); }

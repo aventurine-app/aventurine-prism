@@ -33,6 +33,7 @@
         button.classList.add('is-busy');
         const r = await authPost('/api/auth/verify', { token });
         if (r.status === 200) {
+            try { sessionStorage.setItem('signed-in', '1'); } catch { /* the app then opens where it was left */ }
             location.replace('/');
             return;
         }

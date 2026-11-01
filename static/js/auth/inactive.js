@@ -44,6 +44,7 @@
             return;
         }
         if (me.access) {
+            try { sessionStorage.setItem('signed-in', '1'); } catch { /* the app then opens where it was left */ }
             location.replace('/');
             return;
         }

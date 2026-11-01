@@ -511,10 +511,17 @@
         // Plans are small; loading every one up front gives the navigation its
         // names, makes switching plans instant and lets Compare run them all.
         await Promise.all([...state.tabs.map(loadPlan), loadGoals()]);
+        // Signing in starts on the first plan, not wherever the last visit ended.
+        let signedIn = false;
+        try {
+            signedIn = sessionStorage.getItem('signed-in') === '1';
+            sessionStorage.removeItem('signed-in');
+        } catch { /* no session storage: the app opens where it was left */ }
         if (!state.tabs.length) {
             await newPlan();
         } else {
-            await openPlan(r.body.active || state.tabs[0]);
+            if (signedIn) setWorkspace('plans');
+            await openPlan(signedIn ? state.tabs[0] : (r.body.active || state.tabs[0]));
         }
         return true;
     }
